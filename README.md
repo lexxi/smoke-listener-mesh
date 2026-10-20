@@ -9,7 +9,7 @@ Experimentelles, akustisches Zusatz-Benachrichtigungssystem für **unveränderte
 | Version | Funktion | Status |
 | --- | --- | --- |
 | v0.3.1 | I²S-Mikrofon, Ton-/Gruppen-Diagnose | Auf Tischaufbau erprobt |
-| v0.4.0 | Zwei ESP32-C3 senden/empfangen ESP-NOW-Testbroadcasts | Noch nicht praktisch bestätigt |
+| v0.4.0 | Zwei ESP32-C3 senden/empfangen ESP-NOW-Testbroadcasts | Erfolgreich getestet |\n| v0.5.0 | Paketweiterleitung, TTL, Duplikaterkennung, Heartbeats | Implementiert, noch nicht getestet |
 
 ## Hardware (Prototyp)
 
@@ -36,7 +36,7 @@ Nur mit USB und Mikrofon testen, **keinen Akku parallel anschließen**.
 ## Firmware
 
 - [Audio-Diagnose v0.3.1](firmware/smoke-listener/smoke-listener.ino)
-- [ESP-NOW-Funktest v0.4.0](firmware/mesh-test/mesh-test.ino)
+- [ESP-NOW-Funktest v0.4.0](firmware/mesh-test/mesh-test.ino)\n- [Experimentelle ESP-NOW-Weiterleitung v0.5.0](firmware/mesh-v0.5.0/mesh-v0.5.0.ino)
 
 Beide Sketche sind unabhängig und können in der Arduino IDE mit Espressif-Arduino-Core betrieben werden. Zusätzliche Libraries sind nicht nötig; der Core stellt I²S und ESP-NOW bereit. Die Funk-Testpakete sind unverschlüsselt und dürfen **keine Sicherheitsalarme auslösen**.
 
@@ -44,4 +44,4 @@ Beide Sketche sind unabhängig und können in der Arduino IDE mit Espressif-Ardu
 
 Siehe [Testprotokoll](docs/test-results.md) und [Hardwarehinweise](docs/hardware.md).
 
-Als nächstes: ESP-NOW auf zwei Geräten bestätigen; robuste Audioerkennung mit tatsächlichen späteren Rauchmeldern validieren; Versorgung und Laufzeit messen; danach Weiterleitungsprotokoll mit Duplikatunterdrückung, TTL und Ausfallanzeige entwerfen.
+Als nächstes: v0.5.0 auf zwei Geräten testen, danach mit einem dritten Gerät die Weiterleitung nachweisen; robuste Audioerkennung mit tatsächlichen späteren Rauchmeldern validieren; Versorgung und Laufzeit messen; danach Weiterleitungsprotokoll mit Duplikatunterdrückung, TTL und Ausfallanzeige entwerfen.
