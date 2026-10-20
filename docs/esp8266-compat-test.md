@@ -15,3 +15,7 @@ Flash [c3-compat-v0.1.0.ino](../firmware/c3-compat-v0.1.0/c3-compat-v0.1.0.ino) 
 **Both test nodes** should be within 1 meter; serial monitor 115200 at both. Expect periodic `[TX]`, plus `[RX]` messages if interoperability succeeds. TX `status=0` is only enqueue success, not proof of receipt. Record both logs. This is a compatibility test, not a relay or coverage proof.
 
 The passive v0.5.1 logger will intentionally **not** display these compatibility frames because the packet format is different. To avoid conflicting measurements, keep the separate tests distinct.
+
+## RSSI (C3-Firmware v0.1.1)
+
+Der ESP32-C3 zeigt bei jedem von ihm empfangenen ESP8266-Paket `rssi=-NN dBm`. Beispiel: `[RX] from=2C:3A:E8:3D:93:FE ... rssi=-68 dBm`. Die RSSI-Angabe gehört zur Funkstrecke **ESP8266 → C3**. Der Standard-ESP-NOW-Empfangscallback des ESP8266 liefert dagegen keine RX-Metadaten mit RSSI; dessen Firmware bleibt daher unverändert. Für die Gegenrichtung kann man einen ESP32-C3 als passiven Messpunkt einsetzen oder einen aufwendigeren ESP8266-Wi-Fi-Sniffer getrennt entwickeln. Die Funkmessung ist noch auf Hardware zu verifizieren.
