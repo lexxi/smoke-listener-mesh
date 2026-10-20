@@ -165,7 +165,18 @@ void setup() {
   Serial.begin(115200);
   delay(1500);
   Serial.println("\nSmoke Listener Mesh v0.5.1 | AUTHENTICATED RADIO TEST ONLY");
-  bool emptyKey=true;\n  for(uint8_t b : MESH_SECRET_KEY) if(b!=0) {emptyKey=false;break;}\n  if(emptyKey) {Serial.println("ERROR: Replace the all-zero example secret key!");return;}\n  nodeId=ESP.getEfuseMac();
+  bool emptyKey = true;
+  for (uint8_t b : MESH_SECRET_KEY) {
+    if (b != 0) {
+      emptyKey = false;
+      break;
+    }
+  }
+  if (emptyKey) {
+    Serial.println("ERROR: Replace the all-zero example secret key!");
+    return;
+  }
+  nodeId = ESP.getEfuseMac();
   bootNonce=((uint64_t)esp_random()<<32)|esp_random();
   Serial.printf("Node=%s boot=%s network=%08lX\n",
     idString(nodeId).c_str(),idString(bootNonce).c_str(),(unsigned long)MESH_NETWORK_ID);
