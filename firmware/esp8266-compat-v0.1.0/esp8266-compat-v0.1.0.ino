@@ -2,6 +2,7 @@
 #include <ESP8266WiFi.h>
 extern "C" {
 #include <espnow.h>
+#include <user_interface.h>
 }
 
 // ESP8266 <-> ESP32-C3 interoperability LAB TEST.
