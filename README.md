@@ -45,3 +45,8 @@ Beide Sketche sind unabhängig und können in der Arduino IDE mit Espressif-Ardu
 Siehe [Testprotokoll](docs/test-results.md) und [Hardwarehinweise](docs/hardware.md).
 
 Als nächstes: v0.5.1 auf drei Geräten testen, danach den Relay-Weg eindeutig nachweisen; robuste Audioerkennung mit tatsächlichen späteren Rauchmeldern validieren; Versorgung und Laufzeit messen; danach Weiterleitungsprotokoll mit Duplikatunterdrückung, TTL und Ausfallanzeige entwerfen.
+
+
+## Passiver Funklogger
+
+Für den vierten ESP32-C3: [Logger-Firmware](firmware/mesh-logger-v0.1.0/mesh-logger-v0.1.0.ino), [Windows-CSV-Recorder](scripts/mesh_serial_logger.py), [Anleitung](docs/mesh-logger.md). Noch nicht auf Hardware getestet; der private Netzwerkschlüssel bleibt lokal.
