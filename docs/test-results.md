@@ -24,3 +24,7 @@ Zwei ESP32-C3 SuperMini mit identischer Broadcast-Testfirmware auf Funkkanal 6. 
 - Audio-C3 läuft durchgehend: erheblicher Strombedarf, 18650-Laufzeit ungeprüft.
 - Für sicherheitskritischen Betrieb nicht geeignet; keine garantierte Zustellung durch ESP-NOW.
 - v0.4.0 ESP-NOW erfolgreich mit zwei ESP32-C3 getestet; Broadcast ist **noch kein Mesh**. Aussagekraft auf kurzen Funktionstest begrenzt.
+
+## v0.5.0 – Mesh-Protokoll in Entwicklung
+
+Ein gemeinsamer Sketch mit Chip-ID als Ursprung, Sequenznummer, TTL=3, Duplikat-Cache (48 Einträge), zufällig verzögerter Weiterleitung (30–119 ms) und Heartbeats alle 15 Sekunden ist im Repository. **Nicht auf Hardware oder über drei Hops verifiziert.** Broadcasts sind unverschlüsselt, nicht authentifiziert und nicht zustellgarantiert. TTL zählt Übertragungsstufen; die Prüfanordnung mit nur zwei Knoten beweist kein Relay. Es gibt noch keine Paket-ACKs, Heartbeat-Ausfallwertung, dauerhafte Sequenznummern, ausfallsichere Stromversorgung oder Integration mit der Audioerkennung. Nur Labortests.
