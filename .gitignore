@@ -1,0 +1,4 @@
+**/mesh_secrets.h
+*.bin
+*.elf
+*.map
