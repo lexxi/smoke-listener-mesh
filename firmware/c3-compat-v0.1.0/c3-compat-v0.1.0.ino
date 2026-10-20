@@ -19,28 +19,28 @@ volatile uint32_t rxCount=0;
 uint32_t sequence=0,lastTx=0;
 uint32_t myId=0;
 
-void receivePacket(const uint8_t *mac,const uint8_t *data,int len) {
+void receivePacket(const uint8_t *mac,const uint8_t *data,int len,int rssi) {
   if(len!=sizeof(TestPacket))return;
   TestPacket p;
   memcpy(&p,data,sizeof(p));
   if(p.magic!=MAGIC || p.senderId==myId)return;
   rxCount++;
-  Serial.printf("[RX] from=%02X:%02X:%02X:%02X:%02X:%02X id=%08lX seq=%lu uptime=%lu\n",
+  Serial.printf("[RX] from=%02X:%02X:%02X:%02X:%02X:%02X id=%08lX seq=%lu uptime=%lu rssi=%d dBm\n",
    mac[0],mac[1],mac[2],mac[3],mac[4],mac[5],
-   (unsigned long)p.senderId,(unsigned long)p.sequence,(unsigned long)p.uptimeMs);
+   (unsigned long)p.senderId,(unsigned long)p.sequence,(unsigned long)p.uptimeMs,rssi);
 }
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
 void onRx(const esp_now_recv_info_t *info,const uint8_t *data,int len) {
-  if(info)receivePacket(info->src_addr,data,len);
+  if(info)receivePacket(info->src_addr,data,len,info->rx_ctrl ? info->rx_ctrl->rssi : 0);
 }
 #else
 void onRx(const uint8_t *mac,const uint8_t *data,int len) {
-  receivePacket(mac,data,len);
+  receivePacket(mac,data,len,0);
 }
 #endif
 void setup(){
   Serial.begin(115200);delay(1200);
-  Serial.println("\nESP32-C3 ESP-NOW compatibility test v0.1.0");
+  Serial.println("\nESP32-C3 ESP-NOW compatibility test v0.1.1 (RSSI)");
   WiFi.mode(WIFI_STA); WiFi.disconnect();
   myId=(uint32_t)ESP.getEfuseMac();
   esp_err_t err=esp_wifi_set_channel(CHANNEL,WIFI_SECOND_CHAN_NONE);
