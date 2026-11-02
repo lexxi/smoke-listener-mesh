@@ -271,8 +271,8 @@ void beginAP() {
   esp_now_deinit();
   ready=false;
   WiFi.mode(WIFI_AP);
-  String mac=WiFi.macAddress();mac.replace(":","");
-  String ssid="SmokeMesh-"+mac.substring(mac.length()-6);
+  // Use the stable eFuse-derived node ID: WiFi.macAddress() can return zeros in AP mode.
+  String ssid="SmokeListener-"+idString(nodeId).substring(10);
   if(!WiFi.softAP(ssid.c_str(),MESH_CONFIG_AP_PASSWORD,CHANNEL)) {
     Serial.println("[CONFIG] AP failed, restarting");ESP.restart();return;
   }
