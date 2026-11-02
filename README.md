@@ -50,3 +50,17 @@ Als nächstes: v0.5.1 auf drei Geräten testen, danach den Relay-Weg eindeutig n
 ## Passiver Funklogger
 
 Für den vierten ESP32-C3: [Logger-Firmware](firmware/mesh-logger-v0.1.0/mesh-logger-v0.1.0.ino), [Windows-CSV-Recorder](scripts/mesh_serial_logger.py), [Anleitung](docs/mesh-logger.md). Noch nicht auf Hardware getestet; der private Netzwerkschlüssel bleibt lokal.
+
+## XIAO ESP32-C3: WLAN-Konfiguration (v0.5.4)
+
+Die Firmware [mesh-v0.5.4](firmware/mesh-v0.5.4/mesh-v0.5.4.ino) unterstützt einen temporären WLAN-Access-Point zum Ändern des Knotennamens ohne erneutes Flashen. **Vor dem ersten Flashen** die lokale Datei `firmware/mesh-v0.5.4/mesh_secrets.h` aus der Beispielkonfiguration erstellen bzw. die vorhandene private Datei aus v0.5.3 übernehmen und um folgende Konstante ergänzen:
+
+```cpp
+static constexpr char MESH_CONFIG_AP_PASSWORD[] = "HIER_EIGENES_STARKES_PASSWORT";
+```
+
+**Passwortanforderung der aktuellen Implementierung: mindestens 12 Zeichen** (WPA2-AP technisch: maximal 63 Zeichen). Das Beispielpasswort `CHANGE-TO-PRIVATE-LONG-PASSWORD` wird von v0.5.4 ausdrücklich abgelehnt. Der Passwortwert wird beim Kompilieren in die Firmware eingebaut; eine nachträgliche Änderung erfordert derzeit erneutes Flashen. Den realen Schlüssel und das AP-Passwort **niemals committen**.
+
+Zum Konfigurieren den bereits laufenden XIAO **ohne RESET** mit dem BOOT-Taster ca. 5 Sekunden gedrückt halten. Das Gerät startet einen AP `SmokeMesh-XXXXXX` auf Kanal 6; nach Verbindung `http://192.168.4.1` im Browser öffnen und einen Namen aus 1–24 ASCII-Zeichen (Buchstaben, Ziffern, Minuszeichen, Unterstrich) speichern. Der Name bleibt in NVS erhalten. Während des AP-Modus ist ESP-NOW pausiert; nach 5 Minuten ohne Webzugriff erfolgt ein Neustart zurück ins Mesh. Nach einem Speichervorgang bei Bedarf den AP auslaufen lassen oder die Stromversorgung neu starten.
+
+**Fehlersuche:** `[CONFIG] ERROR: set private AP password first` bedeutet, dass das Passwort fehlt, das unveränderte Beispielpasswort eingetragen ist oder weniger als 12 Zeichen umfasst. Lokale `mesh_secrets.h` im **v0.5.4-Verzeichnis** prüfen, korrigieren und neu flashen. Die Firmware ist experimentell und muss vor einem flächendeckenden Update an einem einzelnen XIAO getestet werden.
