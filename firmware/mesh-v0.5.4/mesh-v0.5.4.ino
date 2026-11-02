@@ -264,6 +264,10 @@ void configSave() {
 }
 void beginAP() {
   if(apMode)return;
+  String pw=MESH_CONFIG_AP_PASSWORD;
+  if(pw.length()<12 || pw=="CHANGE-TO-PRIVATE-LONG-PASSWORD") {
+    Serial.println("[CONFIG] ERROR: set private AP password first");return;
+  }
   esp_now_deinit();
   ready=false;
   WiFi.mode(WIFI_AP);
