@@ -146,13 +146,13 @@ void printOtaPreflight() {
   const esp_partition_t *running=esp_ota_get_running_partition();
   const esp_partition_t *next=esp_ota_get_next_update_partition(nullptr);
   const esp_partition_t *boot=esp_ota_get_boot_partition();
-  Serial.printf("[OTA] PREFLIGHT running=%s size=%lu subtype=%u\\n",
+  Serial.printf("[OTA] PREFLIGHT running=%s size=%lu subtype=%u\n",
     running?running->label:"(none)",(unsigned long)(running?running->size:0),
     (unsigned)(running?running->subtype:0));
-  Serial.printf("[OTA] PREFLIGHT next=%s size=%lu subtype=%u\\n",
+  Serial.printf("[OTA] PREFLIGHT next=%s size=%lu subtype=%u\n",
     next?next->label:"(none)",(unsigned long)(next?next->size:0),
     (unsigned)(next?next->subtype:0));
-  Serial.printf("[OTA] PREFLIGHT boot=%s\\n",boot?boot->label:"(none)");
+  Serial.printf("[OTA] PREFLIGHT boot=%s\n",boot?boot->label:"(none)");
   if(!running || !next || !boot || running==next ||
      next->type!=ESP_PARTITION_TYPE_APP || next->size<1000000) {
     Serial.println("[OTA] PREFLIGHT FAIL: no separate suitable OTA app slot");
@@ -160,7 +160,7 @@ void printOtaPreflight() {
   }
   esp_ota_img_states_t state=ESP_OTA_IMG_UNDEFINED;
   esp_err_t result=esp_ota_get_state_partition(running,&state);
-  Serial.printf("[OTA] PREFLIGHT image_state_result=%d image_state=%d\\n",(int)result,(int)state);
+  Serial.printf("[OTA] PREFLIGHT image_state_result=%d image_state=%d\n",(int)result,(int)state);
   if(result==ESP_OK && state==ESP_OTA_IMG_PENDING_VERIFY) {
     Serial.println("[OTA] PREFLIGHT FAIL: running image still pending validation");
     return;
