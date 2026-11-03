@@ -13,6 +13,7 @@
 #include <freertos/queue.h>
 #include "mesh_secrets.h"
 #include "ota_auth.h"
+#include "ota_version.h"
 
 // v0.6.1: signed release, strict version checks, opt-in inactive OTA slot STAGING.
 // Boot activation deliberately DISABLED; flashing requires local serial arming.
@@ -224,7 +225,12 @@ void authReceive(const OtaFrame &f) {
   authRx.next++;
   if(authRx.next==authRx.total) {
     authRx.verified=releaseVerify(authRx.data+2,authRx.length-2,
-      nodeId,authRx.expectedSize,authRx.expectedHash);
+      nodeId,authRx.expectedSize,authRx.expectedHash,authRx.version);
+    if(authRx.verified && !newerFirmwareVersion(authRx.version,CURRENT_FW_VERSION)) {
+      authRx.verified=false;
+      Serial.printf("[AUTH] REJECT downgrade_or_same_version signed=%s running=%s\n",
+        authRx.version.c_str(),CURRENT_FW_VERSION);
+    }
     Serial.printf("[AUTH] RESULT source=%s SIGNATURE_%s NO_FLASH\n",
       idString(f.origin).c_str(),authRx.verified?"OK":"FAIL");
     authReply(f,authRx.verified?1:2);
@@ -242,7 +248,7 @@ struct ImageReceiver {
   const esp_partition_t *otaPartition=nullptr;
   mbedtls_sha256_context hash;
 } imgRx;
-bool imgActive=false, imgWaitSerial=false, imgBegin=true;
+bool imgActive=false, imgWaitSerial=false, imgBegin=true, imgStage=false;
 uint64_t imgTarget=0;
 uint32_t imgSession=0, imgSize=0, imgSentAt=0, imgStartedAt=0, imgRetries=0;
 uint16_t imgTotal=0, imgIndex=0;
@@ -287,7 +293,8 @@ void imageRetry() {
   f.total=imgTotal;f.index=imgBegin?0:imgIndex;
   f.ttl=INITIAL_TTL;f.attempt=++imgAttempts;
   if(imgAttempts>1)imgRetries++;
-  if(imgBegin){memcpy(f.data,&imgSize,sizeof(imgSize));memcpy(f.data+4,imgSha,32);}
+  if(imgBegin){memcpy(f.data,&imgSize,sizeof(imgSize));memcpy(f.data+4,imgSha,32);
+    f.data[36]=imgStage?1:0;}
   else memcpy(f.data,imgPayload,OTA_BYTES);
   if(!otaSign(f,f.hmac)){imageStop("hmac");return;}
   imgSentAt=millis();
@@ -303,9 +310,10 @@ void imageReceive(const OtaFrame &f) {
     if(f.kind==IMG_RESULT) {
       if(imgBegin || imgIndex+1!=imgTotal || f.index!=imgIndex)return;
       if(f.data[0]==1){
-        Serial.printf("[IMAGE] DONE target=%s bytes=%lu blocks=%u retries=%lu duration_ms=%lu SHA256_OK NO_FLASH\n",
+        Serial.printf("[IMAGE] DONE target=%s bytes=%lu blocks=%u retries=%lu duration_ms=%lu SHA256_OK %s BOOT_UNCHANGED\n",
           idString(imgTarget).c_str(),(unsigned long)imgSize,(unsigned)imgTotal,
-          (unsigned long)imgRetries,(unsigned long)(millis()-imgStartedAt));
+          (unsigned long)imgRetries,(unsigned long)(millis()-imgStartedAt),
+          imgStage?"STAGED_APP1":"NO_FLASH");
         imgActive=false;
       } else imageStop("target_sha256_mismatch");
       return;
@@ -323,12 +331,20 @@ void imageReceive(const OtaFrame &f) {
   }
   if(f.kind==IMG_BEGIN) {
     uint32_t length=0;memcpy(&length,f.data,4);
+    if(f.data[36]>1)return;
+    bool stageRequested=f.data[36]==1;
     // FAIL CLOSED: only this origin may stream exactly the signed image.
     if(!authRx.active || !authRx.verified || authRx.origin!=f.origin ||
        (uint32_t)(millis()-authRx.lastActivity)>=120000UL ||
        length!=authRx.expectedSize ||
        memcmp(f.data+4,authRx.expectedHash,32)!=0) {
       Serial.println("[IMAGE] REJECT missing_or_mismatched_device_signature");
+      return;
+    }
+    if(stageRequested &&
+       (!flashArmed || (uint32_t)(millis()-flashArmedAt)>=FLASH_ARM_WINDOW_MS)) {
+      flashArmed=false;
+      Serial.println("[IMAGE] REJECT target_not_locally_armed_for_flash");
       return;
     }
     if(!length || length>1310720UL ||
@@ -339,15 +355,31 @@ void imageReceive(const OtaFrame &f) {
     if(imgRx.active && !imgRx.complete && (imgRx.origin!=f.origin || imgRx.session!=f.session) &&
        (uint32_t)(millis()-imgRx.lastActivity)<120000UL)return;
     if(!imgRx.active || imgRx.origin!=f.origin || imgRx.session!=f.session) {
-      if(imgRx.active && !imgRx.complete)mbedtls_sha256_free(&imgRx.hash);
+      if(imgRx.active && !imgRx.complete) {
+        mbedtls_sha256_free(&imgRx.hash);
+        if(imgRx.otaOpen){esp_ota_abort(imgRx.otaHandle);imgRx.otaOpen=false;}
+      }
       imgRx.active=true;imgRx.complete=false;imgRx.valid=false;
       imgRx.origin=f.origin;imgRx.session=f.session;imgRx.total=f.total;
       imgRx.size=length;imgRx.count=0;imgRx.next=0;
+      imgRx.stage=stageRequested;imgRx.otaOpen=false;
+      imgRx.otaPartition=slot;
       memcpy(imgRx.shaExpected,f.data+4,32);
+      if(stageRequested) {
+        flashArmed=false; // one-time local authorization is consumed
+        esp_err_t e=esp_ota_begin(slot,length,&imgRx.otaHandle);
+        if(e!=ESP_OK) {
+          imgRx.active=false;
+          Serial.printf("[IMAGE] FLASH_BEGIN_FAIL err=%d BOOT_UNCHANGED\n",(int)e);
+          return;
+        }
+        imgRx.otaOpen=true;
+      }
       mbedtls_sha256_init(&imgRx.hash);
       if(mbedtls_sha256_starts(&imgRx.hash,0)!=0){imgRx.active=false;return;}
-      Serial.printf("[IMAGE] BEGIN from=%s bytes=%lu blocks=%u NO_FLASH\n",
-        idString(f.origin).c_str(),(unsigned long)length,(unsigned)f.total);
+      Serial.printf("[IMAGE] BEGIN from=%s bytes=%lu blocks=%u mode=%s BOOT_UNCHANGED\n",
+        idString(f.origin).c_str(),(unsigned long)length,(unsigned)f.total,
+        imgRx.stage?"FLASH_STAGE":"RAM_ONLY");
     } else if(length!=imgRx.size || memcmp(imgRx.shaExpected,f.data+4,32)!=0)return;
     imgRx.lastActivity=millis();imageReply(f,IMG_ACK,0);return;
   }
@@ -364,7 +396,20 @@ void imageReceive(const OtaFrame &f) {
   const uint32_t remaining=imgRx.size-imgRx.count;
   const size_t length=remaining<OTA_BYTES?remaining:OTA_BYTES;
   if(!length || mbedtls_sha256_update(&imgRx.hash,f.data,length)!=0){
-    mbedtls_sha256_free(&imgRx.hash);imgRx.active=false;return;
+    mbedtls_sha256_free(&imgRx.hash);
+    if(imgRx.otaOpen){esp_ota_abort(imgRx.otaHandle);imgRx.otaOpen=false;}
+    imgRx.active=false;return;
+  }
+  if(imgRx.stage) {
+    esp_err_t e=esp_ota_write(imgRx.otaHandle,f.data,length);
+    if(e!=ESP_OK) {
+      mbedtls_sha256_free(&imgRx.hash);
+      if(imgRx.otaOpen){esp_ota_abort(imgRx.otaHandle);imgRx.otaOpen=false;}
+      imgRx.active=false;
+      Serial.printf("[IMAGE] FLASH_WRITE_FAIL index=%u err=%d BOOT_UNCHANGED\n",
+        (unsigned)f.index,(int)e);
+      imageReply(f,IMG_RESULT,2);return;
+    }
   }
   imgRx.count+=length;imgRx.next++;
   if(imgRx.next==imgRx.total) {
@@ -375,9 +420,23 @@ void imageReceive(const OtaFrame &f) {
     uint8_t diff=0;
     for(size_t i=0;i<32;i++)diff|=actual[i]^imgRx.shaExpected[i];
     imgRx.valid=imgRx.valid && diff==0;
+    if(imgRx.stage && imgRx.otaOpen) {
+      if(imgRx.valid) {
+        esp_err_t e=esp_ota_end(imgRx.otaHandle);
+        imgRx.otaOpen=false;
+        if(e!=ESP_OK) {
+          imgRx.valid=false;
+          Serial.printf("[IMAGE] FLASH_IMAGE_INVALID err=%d BOOT_UNCHANGED\n",(int)e);
+        }
+      } else {
+        esp_ota_abort(imgRx.otaHandle);
+        imgRx.otaOpen=false;
+      }
+    }
     imgRx.complete=true;
-    Serial.printf("[IMAGE] RESULT bytes=%lu SHA256_%s NO_FLASH\n",
-      (unsigned long)imgRx.count,imgRx.valid?"OK":"FAIL");
+    Serial.printf("[IMAGE] RESULT bytes=%lu SHA256_%s %s BOOT_UNCHANGED\n",
+      (unsigned long)imgRx.count,imgRx.valid?"OK":"FAIL",
+      imgRx.stage?"FLASH_STAGE":"RAM_ONLY");
     imageReply(f,IMG_RESULT,imgRx.valid?1:2);
   } else {
     if(imgRx.next%256==0)
@@ -439,7 +498,20 @@ void printOtaPreflight() {
 
 void handleCommand(String command) {
   command.trim();
-  if(command.startsWith("AUTH BEGIN ")) {
+  if(command.equalsIgnoreCase("FLASH ARM")) {
+    if(imgRx.active && !imgRx.complete){
+      Serial.println("[FLASH] ERROR receive_in_progress");return;
+    }
+    flashArmed=true;flashArmedAt=millis();
+    Serial.println("[FLASH] ARMED local_serial_only window=300s one_shot BOOT_UNCHANGED");
+  } else if(command.equalsIgnoreCase("FLASH DISARM")) {
+    flashArmed=false;Serial.println("[FLASH] DISARMED");
+  } else if(command.equalsIgnoreCase("FLASH STATUS")) {
+    Serial.printf("[FLASH] running=%s armed=%u window_valid=%u staged_valid=%u BOOT_UNCHANGED\n",
+      CURRENT_FW_VERSION,(unsigned)flashArmed,
+      (unsigned)(flashArmed && (uint32_t)(millis()-flashArmedAt)<FLASH_ARM_WINDOW_MS),
+      (unsigned)(imgRx.complete && imgRx.valid && imgRx.stage));
+  } else if(command.startsWith("AUTH BEGIN ")) {
     if(authActive || imgActive || otaActive || !ready || apMode) {
       Serial.println("[AUTH] ERROR busy");return;
     }
@@ -488,6 +560,10 @@ void handleCommand(String command) {
     String target=value.substring(0,first);
     String sizeText=value.substring(first+1,second);
     String digest=value.substring(second+1);digest.trim();
+    bool stageRequested=false;
+    if(digest.endsWith(" STAGE")) {
+      digest.remove(digest.length()-6);stageRequested=true;
+    }
     if(sizeText.length()<1 || sizeText.length()>7){
       Serial.println("[IMAGE] ERROR size");return;
     }
@@ -505,13 +581,14 @@ void handleCommand(String command) {
        !imageHex(digest,sha,32)) {
       Serial.println("[IMAGE] ERROR target/size/digest");return;
     }
-    imgTarget=node;imgSize=length;memcpy(imgSha,sha,32);
+    imgTarget=node;imgSize=length;imgStage=stageRequested;memcpy(imgSha,sha,32);
     imgTotal=(length+OTA_BYTES-1)/OTA_BYTES;
     imgSession=esp_random();if(!imgSession)imgSession=1;
     imgIndex=0;imgAttempts=0;imgRetries=0;
     imgBegin=true;imgWaitSerial=false;imgActive=true;imgStartedAt=millis();
-    Serial.printf("[IMAGE] START target=%s size=%lu blocks=%u NO_FLASH\n",
-      idString(node).c_str(),(unsigned long)length,(unsigned)imgTotal);
+    Serial.printf("[IMAGE] START target=%s size=%lu blocks=%u mode=%s BOOT_UNCHANGED\n",
+      idString(node).c_str(),(unsigned long)length,(unsigned)imgTotal,
+      imgStage?"FLASH_STAGE":"RAM_ONLY");
     imageRetry();
   } else if(command.startsWith("IMG DATA ")) {
     if(!imgActive || !imgWaitSerial || imgBegin){
@@ -602,7 +679,7 @@ void handleCommand(String command) {
   } else if(command.equalsIgnoreCase("OTA STOP")) {
     otaActive=false;Serial.println("[OTA] STOP");
   } else if(command.equalsIgnoreCase("HELP")) {
-    Serial.println("[CONFIG] Commands: NAME GET | NAME SET <name> | NAME RESET | OTA PREFLIGHT | AUTH BEGIN <16hex> <len> | AUTH DATA <192hex> | AUTH STOP | IMG BEGIN <16hex> <size> <sha256> | IMG DATA <192hex> | IMG STOP | OTA TEST <16hex> [1..4096] | OTA STATS | OTA DEBUG ON/OFF | OTA STOP | HELP");
+    Serial.println("[CONFIG] Commands: NAME GET | NAME SET <name> | NAME RESET | OTA PREFLIGHT | FLASH ARM/DISARM/STATUS | AUTH BEGIN <16hex> <len> | AUTH DATA <192hex> | AUTH STOP | IMG BEGIN <16hex> <size> <sha256> [STAGE] | IMG DATA <192hex> | IMG STOP | OTA TEST <16hex> [1..4096] | OTA STATS | OTA DEBUG ON/OFF | OTA STOP | HELP");
   } else if(command.length()) {
     Serial.println("[CONFIG] ERROR unknown command (send HELP)");
   }
@@ -991,8 +1068,10 @@ void loop() {
      (uint32_t)(millis()-imgSentAt)>=OTA_ACK_TIMEOUT_MS)imageRetry();
   if(imgRx.active && !imgRx.complete &&
      (uint32_t)(millis()-imgRx.lastActivity)>=120000UL) {
-    mbedtls_sha256_free(&imgRx.hash);imgRx.active=false;
-    Serial.println("[IMAGE] RECEIVE_TIMEOUT NO_FLASH");
+    mbedtls_sha256_free(&imgRx.hash);
+    if(imgRx.otaOpen){esp_ota_abort(imgRx.otaHandle);imgRx.otaOpen=false;}
+    imgRx.active=false;
+    Serial.println("[IMAGE] RECEIVE_TIMEOUT BOOT_UNCHANGED");
   }
   uint32_t now=millis();
   for(OtaRelay &item:otaRelays) {
