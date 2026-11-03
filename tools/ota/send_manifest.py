@@ -5,7 +5,6 @@ Requires v0.6.0 gateway and target. No OTA flash writing.
 After PASS, invoke send_image.py with same manifest/image and same gateway.
 """
 import argparse
-import datetime as dt
 import json
 import re
 import sys
@@ -17,6 +16,22 @@ from prepare_transfer import build_plan
 from sign_release import canonical_bytes
 
 BLOCK=96
+
+
+def corrupt_signature_for_negative_test(payload: bytes) -> bytes:
+    """Corrupt ONLY a DER signature byte, never the on-disk manifest.
+
+    Flip a bit in the last signature byte, retaining all wire lengths and
+    the DER envelope so the device reaches cryptographic verification.
+    """
+    data=bytearray(payload)
+    if len(data)<8 or int.from_bytes(data[:2],"little")!=len(data):
+        raise ValueError("Invalid manifest wire envelope")
+    siglen=data[4+int.from_bytes(data[2:4],"little")]
+    if siglen<68 or siglen>80 or 5+int.from_bytes(data[2:4],"little")+siglen!=len(data):
+        raise ValueError("Invalid DER signature boundary")
+    data[-1]^=1
+    return bytes(data)
 
 
 def encode_manifest(path: Path) -> bytes:
@@ -39,14 +54,20 @@ def main():
     p.add_argument("--manifest",type=Path,required=True)
     p.add_argument("--public-key",type=Path,required=True)
     p.add_argument("--timeout",type=float,default=120)
+    p.add_argument("--test-invalid-signature",action="store_true",
+                   help="Corrupt signature IN MEMORY after local verification; PASS only if target rejects it")
     p.add_argument("--baud",type=int,default=115200)
     args=p.parse_args()
     try:
         plan=build_plan(args.image,args.manifest,args.public_key)
         payload=encode_manifest(args.manifest)
+        if args.test_invalid_signature:
+            payload=corrupt_signature_for_negative_test(payload)
     except (ValueError,KeyError,TypeError,OSError) as e:
         p.exit(2,f"ERROR: signed manifest validation: {e}\n")
     count=(len(payload)+BLOCK-1)//BLOCK
+    if args.test_invalid_signature:
+        print("NEGATIVE TEST: modified signature bytes in RAM; expecting target rejection")
     print(f"Verified release {plan['version']}, target {plan['target']}, "
           f"manifest {len(payload)} bytes/{count} packets; NO_FLASH")
     try:
@@ -74,8 +95,16 @@ def main():
                     port.flush()
                     expected+=1
                 if "[AUTH] PASS" in line and "VERIFIED_ON_DEVICE" in line:
+                    if args.test_invalid_signature:
+                        print("FAIL: target accepted deliberately corrupted signature!",file=sys.stderr)
+                        return 1
                     print("PASS: ECDSA P-256 signature verified by target (no flash).")
                     return 0
+                if "[AUTH] FAIL signature_rejected" in line:
+                    if args.test_invalid_signature:
+                        print("PASS: target REJECTED corrupted signature; no flash.")
+                        return 0
+                    return 1
                 if "[AUTH] FAIL" in line or "[AUTH] ERROR" in line:
                     return 1
             port.write(b"AUTH STOP\n")
