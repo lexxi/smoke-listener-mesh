@@ -1,7 +1,8 @@
 param(
     [string]$Gateway = "COM12",
     [string]$TargetPort = "COM15",
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$Restage
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,11 +15,14 @@ Push-Location $repo
 try {
     $arguments = @($script, "--gateway", $Gateway, "--target-port", $TargetPort)
     if ($DryRun) { $arguments += "--dry-run" }
-    else { $arguments += "--activate" }
+    else {
+        $arguments += "--activate"
+        if (-not $Restage) { $arguments += "--activate-only" }
+    }
 
     & $python @arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "OTA activation FAILED or state uncertain (exit code $LASTEXITCODE). Inspect log/ and BOOT STATUS before reboot."
+        throw "OTA activation STOPPED/FAILED (exit code $LASTEXITCODE). If RAM authorization was lost, new staging is necessary on v0.6.6. No automatic retransfer. Inspect BOOT STATUS before reboot."
     }
 } finally {
     Pop-Location
