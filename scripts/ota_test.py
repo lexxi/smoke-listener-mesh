@@ -34,7 +34,7 @@ def main():
             # Opening a serial port can reset some boards. Allow the C3 to boot.
             time.sleep(3)
             port.reset_input_buffer()
-            command = f"OTA TEST {args.target.upper()} {args.blocks}\n".encode("ascii")
+            command = f"OTA TEST {args.target.upper()}{' ' + str(args.blocks) if args.blocks != 16 else ''}\n".encode("ascii")
             port.write(command)
             port.flush()
             deadline = time.monotonic() + args.timeout
