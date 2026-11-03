@@ -108,7 +108,7 @@ Ziel: Firmware vom PC über den angeschlossenen Logger-C3 an ausgewählte
 Mesh-Knoten schicken, **ohne an den Zielknoten den BOOT-Taster zu drücken**.
 Dabei sollen auch Relay-Verbindungen funktionieren.
 
-**Stand 03.11.2026: noch nicht nutzbar.** v0.5.5 enthält keinen
+**Stand 03.11.2026: OTA-Transport-Prototyp v0.5.6 eingecheckt, noch nicht kompiliert oder auf Hardware getestet.** v0.5.5 enthält keinen
 OTA-Empfänger. Für die spätere OTA-fähige Firmware ist mindestens **ein**
 USB-Flash pro Gerät erforderlich. Die Flash-Partitionierung, eine
 authentifizierte und verlusttolerante Übertragung mit Ziel-Bestätigung,
@@ -116,7 +116,11 @@ Firmware-Signaturprüfung und Rückfallverhalten sind vor dem ersten
 drahtlosen Firmware-Flash zu implementieren und mit einem Testgerät zu prüfen.
 
 Die technische Checkliste und die Meilensteine stehen in
-[docs/mesh-ota.md](docs/mesh-ota.md).
+[docs/mesh-ota.md](docs/mesh-ota.md). Der erste **RAM-only-Transporttest**
+steht in [Firmware v0.5.6](firmware/mesh-v0.5.6/mesh-v0.5.6.ino)
+mit [Testanleitung](docs/mesh-v0.5.6.md) und
+[Windows-Testskript](scripts/ota_test.py). Er überträgt nur 16 synthetische
+Datenblöcke, nicht eine echte Firmware; **kein Flash-Schreibzugriff**.
 Ein **rein lokales Prüftool**, das keine Firmware schreibt, steht unter
 [tools/ota/check_image.py](tools/ota/check_image.py). Beispiel (OTA-Slotgröße
 **nur als Beispiel**, den tatsächlich eingestellten Wert einsetzen):
