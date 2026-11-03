@@ -135,6 +135,9 @@ String serialLine;
 constexpr size_t MAX_NAME_LENGTH=24;
 constexpr char CURRENT_FW_VERSION[]="0.6.6";
 constexpr uint32_t FLASH_ARM_WINDOW_MS=300000UL;
+constexpr uint32_t BOOT_ARM_WINDOW_MS=60000UL;
+bool bootVerified=false,bootArmed=false,meshPeerVerified=false;
+uint32_t bootArmedAt=0;
 uint32_t flashArmedAt=0;
 bool flashArmed=false;
 constexpr uint16_t AUTH_MAX_CHUNKS=6;
@@ -226,6 +229,7 @@ void authReceive(const OtaFrame &f) {
     // Accept a new session only if the old one is complete or has timed out.
     if(authRx.active && authRx.next<authRx.total &&
        (uint32_t)(millis()-authRx.lastActivity)<120000UL)return;
+    bootVerified=false;bootArmed=false;
     authRx=AuthRx{};
     authRx.active=true;authRx.origin=f.origin;authRx.session=f.session;
     authRx.total=f.total;
@@ -556,13 +560,14 @@ void printBootDiagnostics() {
 // Re-send a freshly signed upgrade manifest and stage its matching image in the same
 // boot session before running BOOT VERIFY. A reset clears the authorization.
 void verifyStagedImageReadback() {
+  bootVerified=false;
   const esp_partition_t *running=esp_ota_get_running_partition();
   const esp_partition_t *slot=esp_ota_get_next_update_partition(nullptr);
   if(!running || !slot || running==slot || !ready || apMode ||
      !authRx.verified || !imgRx.complete || !imgRx.valid || !imgRx.stage ||
      imgRx.origin!=authRx.origin ||
      imgRx.size!=authRx.expectedSize ||
-     imgRx.size>slot->size ||
+     imgRx.size>slot->size || imgRx.otaPartition!=slot ||
      !newerFirmwareVersion(authRx.version,CURRENT_FW_VERSION)) {
     Serial.println("[BOOT] VERIFY FAIL session_or_partition_not_verified BOOT_UNCHANGED");
     return;
@@ -601,7 +606,46 @@ void verifyStagedImageReadback() {
   }
   Serial.printf("[BOOT] VERIFY PASS signed=%s bytes=%lu slot=%s SHA256_OK BOOT_UNCHANGED\n",
     authRx.version.c_str(),(unsigned long)imgRx.size,slot->label);
-  Serial.println("[BOOT] ACTIVATE DISABLED: installed bootloader rollback and app confirmation not proven");
+  bootVerified=true;
+  Serial.println("[BOOT] VERIFY COMPLETE. Boot selection unchanged; local arming is separate.");
+}
+
+void activateStagedSlot() {
+  bool validArm=bootArmed && (uint32_t)(millis()-bootArmedAt)<BOOT_ARM_WINDOW_MS;
+  bootArmed=false;
+  if(!validArm || !bootVerified) {
+    Serial.println("[BOOT] ACTIVATE REFUSED missing_arm_or_verification BOOT_UNCHANGED");
+    return;
+  }
+#if !defined(CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE) || !CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
+  Serial.println("[BOOT] ACTIVATE REFUSED rollback_not_enabled BOOT_UNCHANGED");
+  return;
+#endif
+  const esp_partition_t *running=esp_ota_get_running_partition();
+  const esp_partition_t *next=esp_ota_get_next_update_partition(nullptr);
+  esp_ota_img_states_t runningState=ESP_OTA_IMG_UNDEFINED;
+  if(!running || !next || next==running ||
+     esp_ota_get_boot_partition()!=running ||
+     esp_ota_get_state_partition(running,&runningState)!=ESP_OK ||
+     (runningState!=ESP_OTA_IMG_VALID && runningState!=ESP_OTA_IMG_UNDEFINED)) {
+    Serial.println("[BOOT] ACTIVATE REFUSED running_slot_state BOOT_UNCHANGED");
+    return;
+  }
+  // Fresh readback immediately before changing the boot selection.
+  verifyStagedImageReadback();
+  if(!bootVerified) {
+    Serial.println("[BOOT] ACTIVATE REFUSED readback_failed BOOT_UNCHANGED");
+    return;
+  }
+  esp_err_t err=esp_ota_set_boot_partition(next);
+  if(err!=ESP_OK) {
+    Serial.printf("[BOOT] ACTIVATE FAILED esp_ota_set_boot_partition=%d\n",(int)err);
+    return;
+  }
+  bootVerified=false;
+  Serial.printf("[BOOT] ACTIVATE SUCCESS next_boot=%s running=%s NO_AUTO_REBOOT\n",
+    next->label,running->label);
+  Serial.println("[BOOT] WARNING: reboot requires physical operator; rollback not tested");
 }
 
 void handleCommand(String command) {
@@ -610,6 +654,30 @@ void handleCommand(String command) {
     printBootDiagnostics();
   } else if(command.equalsIgnoreCase("BOOT VERIFY")) {
     verifyStagedImageReadback();
+  } else if(command.equalsIgnoreCase("BOOT ARM")) {
+    if(!bootVerified || !ready || apMode) {
+      Serial.println("[BOOT] ARM FAIL requires fresh BOOT VERIFY");
+      return;
+    }
+    bootArmed=true;
+    bootArmedAt=millis();
+    Serial.println("[BOOT] ARMED local_serial_only window=60s one_shot");
+  } else if(command.equalsIgnoreCase("BOOT DISARM")) {
+    bootArmed=false;
+    Serial.println("[BOOT] DISARMED");
+  } else if(command.equalsIgnoreCase("BOOT ACTIVATE")) {
+    activateStagedSlot();
+  } else if(command.equalsIgnoreCase("BOOT CONFIRM")) {
+    const esp_partition_t *running=esp_ota_get_running_partition();
+    esp_ota_img_states_t state=ESP_OTA_IMG_UNDEFINED;
+    if(!ready || !meshPeerVerified || !running ||
+       esp_ota_get_state_partition(running,&state)!=ESP_OK ||
+       state!=ESP_OTA_IMG_PENDING_VERIFY) {
+      Serial.println("[BOOT] CONFIRM REFUSED requires PENDING_VERIFY and authenticated mesh RX");
+      return;
+    }
+    esp_err_t e=esp_ota_mark_app_valid_cancel_rollback();
+    Serial.printf("[BOOT] CONFIRM %s err=%d\n",e==ESP_OK?"OK":"FAIL",(int)e);
   } else if(command.equalsIgnoreCase("FLASH ARM")) {
     if(imgRx.active && !imgRx.complete){
       Serial.println("[FLASH] ERROR receive_in_progress");return;
@@ -791,7 +859,7 @@ void handleCommand(String command) {
   } else if(command.equalsIgnoreCase("OTA STOP")) {
     otaActive=false;Serial.println("[OTA] STOP");
   } else if(command.equalsIgnoreCase("HELP")) {
-    Serial.println("[CONFIG] Commands: NAME GET | NAME SET <name> | NAME RESET | OTA PREFLIGHT | BOOT STATUS | FLASH ARM/DISARM/STATUS | AUTH BEGIN <16hex> <len> | AUTH DATA <192hex> | AUTH STOP | IMG BEGIN <16hex> <size> <sha256> [STAGE] | IMG DATA <192hex> | IMG STOP | OTA TEST <16hex> [1..4096] | OTA STATS | OTA DEBUG ON/OFF | OTA STOP | HELP");
+    Serial.println("[CONFIG] Commands: NAME GET | NAME SET <name> | NAME RESET | OTA PREFLIGHT | BOOT STATUS | BOOT VERIFY | BOOT ARM/DISARM/ACTIVATE/CONFIRM | FLASH ARM/DISARM/STATUS | AUTH BEGIN <16hex> <len> | AUTH DATA <192hex> | AUTH STOP | IMG BEGIN <16hex> <size> <sha256> [STAGE] | IMG DATA <192hex> | IMG STOP | OTA TEST <16hex> [1..4096] | OTA STATS | OTA DEBUG ON/OFF | OTA STOP | HELP");
   } else if(command.length()) {
     Serial.println("[CONFIG] ERROR unknown command (send HELP)");
   }
@@ -911,6 +979,7 @@ void processRx(const RxEvent &event) {
   if(p.origin==nodeId) return;
   if(alreadySeen(p)) { duplicateCount++; return; }
   rxCount++;
+  meshPeerVerified=true;
   String sourceName=packetName(p);
   Serial.printf("[RX] name=%s origin=%s via=%s boot=%s seq=%lu ttl=%u hops=%u type=%s rssi=%d dBm channel=%u AUTH=OK\n",
       sourceName.length()?sourceName.c_str():"(unset)",
@@ -1111,7 +1180,7 @@ void setup() {
   server.on("/name",HTTP_POST,configSave);
   Serial.begin(115200);
   delay(1500);
-  Serial.println("\nSmoke Listener Mesh v0.6.6 | BOOT ACTIVATION DEVELOPMENT; BOOT SWITCH DISABLED");
+  Serial.println("\nSmoke Listener Mesh v0.6.6 | GUARDED OTA BOOT ACTIVATION; NO AUTO REBOOT");
   bool emptyKey = true;
   for (uint8_t b : MESH_SECRET_KEY) {
     if (b != 0) {
@@ -1124,7 +1193,7 @@ void setup() {
     return;
   }
   nodeId = ESP.getEfuseMac();
-  Serial.printf("[FW] version=%s signed_readback=1 ota_boot_activation=DISABLED\n",CURRENT_FW_VERSION);
+  Serial.printf("[FW] version=%s signed_readback=1 ota_boot_activation=LOCAL_NO_AUTO_REBOOT\n",CURRENT_FW_VERSION);
   if(prefs.begin("smoke-mesh",true)) {
     nodeName=prefs.getString("name","");
     prefs.end();
@@ -1151,6 +1220,10 @@ void setup() {
   if(e!=ESP_OK){Serial.printf("ERROR: add peer %d\n",(int)e);return;}
   ready=true;
   Serial.println("ESP-NOW ready; HMAC authenticated TEST/HEARTBEAT only");
+  const esp_partition_t *rpart=esp_ota_get_running_partition();
+  esp_ota_img_states_t rstate=ESP_OTA_IMG_UNDEFINED;
+  if(rpart && esp_ota_get_state_partition(rpart,&rstate)==ESP_OK && rstate==ESP_OTA_IMG_PENDING_VERIFY)
+    Serial.println("[BOOT] PENDING_VERIFY: manual BOOT CONFIRM required after authenticated mesh packet");
   sendLocal(TEST);
   lastHeartbeat=millis();
 }
