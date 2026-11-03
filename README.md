@@ -1,28 +1,27 @@
 # Smoke Listener Mesh
 
-Experimentelles, akustisches Zusatz-Benachrichtigungssystem für **unveränderte, eigenständig funktionierende Rauchwarnmelder** mit ESP32-C3, INMP441 und perspektivisch ESP-NOW-Weiterleitung.
+Experimenteller ESP32-C3-basierter Mesh-Zusatz für die **akustische Erkennung unveränderter Rauchwarnmelder**. Derzeit sind Mikrofon-Prototypen, ESP-NOW-Heartbeats, authentifizierte Funkweiterleitung, ein serieller Dauerlogger und ein lokales Web-Dashboard vorhanden. **Die Audio-Alarmdetektion ist noch nicht mit der aktuellen Mesh-Firmware zu einem validierten Gesamtsystem integriert.**
 
-> **Sicherheitsgrenze:** Dieses Hobbyprojekt ist **keine Brandmeldeanlage**, kein zertifizierter Rauchwarnmelder und kein Ersatz für normgerechte Rauchwarnmelder. Alarm-Erkennung, Funkübertragung und Energieversorgung können ausfallen. Original-Rauchmelder niemals öffnen, elektrisch anzapfen oder verändern. Keine sicherheitsrelevante Alarmierung von diesem Prototyp abhängig machen.
+> **Sicherheit:** Keine Brandmeldeanlage, kein zertifizierter Rauchwarnmelder und kein Ersatz für normgerechte Rauchwarnmelder. Ein `HEARTBEAT` sagt nur etwas über den beobachteten Funkkontakt aus, nicht über die Funktion des Mikrofons oder die Erkennung eines Brandalarms. Niemals als alleinigen Alarmweg verwenden. Rauchwarnmelder nicht öffnen oder verändern.
 
-## Entwicklungsstand
+## Aktueller Stand (03.11.2026)
 
-| Version | Funktion | Status |
+| Komponente | Version | Stand |
 | --- | --- | --- |
-| v0.3.1 | I²S-Mikrofon, Ton-/Gruppen-Diagnose | Auf Tischaufbau erprobt |
-| v0.4.0 | Zwei ESP32-C3 senden/empfangen ESP-NOW-Testbroadcasts | Erfolgreich getestet |\n| v0.5.0 | Paketweiterleitung, TTL, Duplikaterkennung, Heartbeats | Auf drei ESP32 beobachtet |\n| v0.5.1 | Vollständige Herkunfts-ID, direkte Sender-MAC, HMAC-SHA256 für TEST/HEARTBEAT | Eingecheckt, **noch nicht auf Hardware getestet** |
+| Mikrofon-/Ton-Diagnose | v0.3.1 | Pieptöne im Tisch- und Entfernungstest erkannt; keine vollständige produktive Alarmerkennung |
+| ESP-NOW und Weiterleitung | v0.4.0–v0.5.x | Broadcasts, TTL, Duplikatunterdrückung, Heartbeats |
+| Mesh-Firmware | **v0.5.5** | Protokoll 3, HMAC-SHA256, signierter Knotenname; zwei Knoten getestet und 03.11. im Gebäudelog beobachtet |
+| Serieller Logger | `scripts/logging.py` | Fortlaufendes Mitschreiben ohne Zeitlimit, Reconnect |
+| Web-Dashboard | **v0.3.0** | Knotenstatus, USB-Logger-Erkennung, Relay-Wege und getrennte Testläufe; auf Windows gestartet |
+| Hardwaregehäuse | geplant | C3, INMP441, Buzzer, 18650-Akku, Antenne; mechanische Maße noch offen |
 
-## Hardware (Prototyp)
+Frühere Implementierungen und Dokumente bleiben zur Nachvollziehbarkeit im Repository. Der **aktuelle Einstiegspunkt** ist `firmware/mesh-v0.5.5/mesh-v0.5.5.ino`, nicht v0.5.1.
 
-- ESP32-C3 SuperMini, Arduino IDE: **ESP32C3 Dev Module**, USB CDC On Boot enabled
-- Rundes INMP441-kompatibles I²S-Mikrofon (6 Pins)
-- 18650 Li-Ion und HW-373/TC4056-Lademodul mit Schutzschaltung (geplant; aktuell **USB-Versorgung**)
-- HW-187 Mini360 ist **nicht** als 3,3-V-Versorgung aus einer einzelnen 18650 geeignet
-- Ein passender stromsparender **3,3-V-Buck-Boost-Regler** ist noch offen
-- Optional aktiver Buzzer, später Funk-Weiterleitung
+## Hardware
 
-## Mikrofon-Verdrahtung
+Aktueller Testaufbau: ESP32-C3 SuperMini mit INMP441 (I²S), USB-Stromversorgung. Für den späteren Knoten vorgesehen: **Buzzer, 18650-Li-Ion-Akku, Lade-/Schutzelektronik, geregelte 3,3-V-Versorgung und geeignete 2,4-GHz-Antenne**. Antennenanschluss und Buzzer-Treiber sind abhängig von der konkreten Hardware noch zu prüfen.
 
-| Mikrofon | ESP32-C3 |
+| INMP441 | ESP32-C3 |
 | --- | --- |
 | SCK | GPIO6 |
 | WS | GPIO3 |
@@ -31,67 +30,83 @@ Experimentelles, akustisches Zusatz-Benachrichtigungssystem für **unveränderte
 | VDD | 3V3 |
 | GND | GND |
 
-Nur mit USB und Mikrofon testen, **keinen Akku parallel anschließen**.
+**Akku nicht ungeprüft an den 3V3-Pin anschließen.** Ein TP4056-artiges Lademodul allein stellt keine geregelten 3,3 V bereit. Der vorhandene HW-187 MINI360 eignet sich nicht als 3,3-V-Regler für den gesamten Spannungsbereich einer einzelnen 18650. Details unter [Hardware und Verdrahtung](docs/hardware.md).
 
-## Firmware
+## Firmware v0.5.5 flashen
 
-- [Audio-Diagnose v0.3.1](firmware/smoke-listener/smoke-listener.ino)
-- [ESP-NOW-Funktest v0.4.0](firmware/mesh-test/mesh-test.ino)\n- [Experimentelle ESP-NOW-Weiterleitung v0.5.0](firmware/mesh-v0.5.0/mesh-v0.5.0.ino)\n- [Authentifizierter Labortest v0.5.1](firmware/mesh-v0.5.1/mesh-v0.5.1.ino) – [Setup-Anleitung](docs/mesh-v0.5.1.md)
+1. In `firmware/mesh-v0.5.5/` die private Datei `mesh_secrets.h` aus der vorhandenen v0.5.4-Konfiguration übernehmen. [Beispiel](firmware/mesh-v0.5.5/mesh_secrets.h.example). Geheimschlüssel und AP-Passwort **nicht committen**.
+2. `firmware/mesh-v0.5.5/mesh-v0.5.5.ino` mit der Arduino IDE öffnen. Board: **ESP32C3 Dev Module**, USB CDC On Boot einschalten.
+3. Alle miteinander kommunizierenden Mesh-Geräte auf v0.5.5 aktualisieren. **Protokoll 3 ist nicht kompatibel mit v0.5.4 (Protokoll 2)**.
+4. Serielle Ausgabe prüfen: `[RX] name=... origin=... via=... hops=... AUTH=OK`, `[TX]`, `[RELAY]`, `[STATS]`.
 
-Beide Sketche sind unabhängig und können in der Arduino IDE mit Espressif-Arduino-Core betrieben werden. Zusätzliche Libraries sind nicht nötig; der Core stellt I²S und ESP-NOW bereit. Die Funk-Testpakete sind unverschlüsselt und dürfen **keine Sicherheitsalarme auslösen**.
+**Namen einstellen:** Bei laufendem Knoten BOOT ungefähr 5 Sekunden halten, mit dem Konfigurations-WLAN `SmokeListener-XXXXXX` verbinden, dann `http://192.168.4.1` öffnen. Namen mit 1–24 ASCII-Zeichen (Buchstaben, Ziffern, `-`, `_`) speichern. Das WLAN-AP-Passwort muss privat gesetzt sein und mindestens 12 Zeichen haben. Der AP unterbricht ESP-NOW vorübergehend; nach ungefähr fünf Minuten ohne Webzugriff erfolgt ein Neustart. Namen bleiben bei normalem Flashen üblicherweise in NVS, **nicht** bei vollständigem Flash-Erase. Der übertragene Knotenname ist **authentifiziert, aber nicht verschlüsselt**.
 
-## Ergebnisse und Planung
+## Knoten und Standorte
 
-Siehe [Testprotokoll](docs/test-results.md) und [Hardwarehinweise](docs/hardware.md).
+Die bekannte Zuordnung steht in [`config/nodes.csv`](config/nodes.csv):
 
-Als nächstes: v0.5.1 auf drei Geräten testen, danach den Relay-Weg eindeutig nachweisen; robuste Audioerkennung mit tatsächlichen späteren Rauchmeldern validieren; Versorgung und Laufzeit messen; danach Weiterleitungsprotokoll mit Duplikatunterdrückung, TTL und Ausfallanzeige entwerfen.
+| MAC-Endung | Standort in CSV | Zuletzt im Log beobachteter Name / Funktion |
+| --- | --- | --- |
+| `7E:E3:A0` | FZRaum | `Keller_Abgang` |
+| `7F:45:94` | Kueche | `Kueche` |
+| `7C:63:10` | 1OG | **aktuell USB-Logger** |
+| `7D:FE:58` | Garage | `Garage` |
+| `7E:D3:20` | PC-Logger | früherer Logger, aktuell nicht im Mesh aktiv |
 
+Ein Standort aus `nodes.csv` und ein vom Gerät gesendeter Name sind **unterschiedliche Daten**. Der Webservice zeigt beides an. Die Rolle des USB-Loggers wird dynamisch aus dessen `[TX]`-Zeilen ermittelt.
 
-## Passiver Funklogger
+## Seriellen Dauerlogger starten (Windows)
 
-Für den vierten ESP32-C3: [Logger-Firmware](firmware/mesh-logger-v0.1.0/mesh-logger-v0.1.0.ino), [Windows-CSV-Recorder](scripts/mesh_serial_logger.py), [Anleitung](docs/mesh-logger.md). Noch nicht auf Hardware getestet; der private Netzwerkschlüssel bleibt lokal.
-
-## XIAO ESP32-C3: WLAN-Konfiguration (v0.5.4)
-
-Die Firmware [mesh-v0.5.4](firmware/mesh-v0.5.4/mesh-v0.5.4.ino) unterstützt einen temporären WLAN-Access-Point zum Ändern des Knotennamens ohne erneutes Flashen. **Vor dem ersten Flashen** die lokale Datei `firmware/mesh-v0.5.4/mesh_secrets.h` aus der Beispielkonfiguration erstellen bzw. die vorhandene private Datei aus v0.5.3 übernehmen und um folgende Konstante ergänzen:
-
-```cpp
-static constexpr char MESH_CONFIG_AP_PASSWORD[] = "HIER_EIGENES_STARKES_PASSWORT";
-```
-
-**Passwortanforderung der aktuellen Implementierung: mindestens 12 Zeichen** (WPA2-AP technisch: maximal 63 Zeichen). Das Beispielpasswort `CHANGE-TO-PRIVATE-LONG-PASSWORD` wird von v0.5.4 ausdrücklich abgelehnt. Der Passwortwert wird beim Kompilieren in die Firmware eingebaut; eine nachträgliche Änderung erfordert derzeit erneutes Flashen. Den realen Schlüssel und das AP-Passwort **niemals committen**.
-
-Zum Konfigurieren den bereits laufenden XIAO **ohne RESET** mit dem BOOT-Taster ca. 5 Sekunden gedrückt halten. Das Gerät startet einen AP `SmokeListener-XXXXXX` (die letzten sechs Hex-Zeichen der stabilen Hardware-Node-ID, unabhängig von der WLAN-MAC-Anzeige im AP-Modus) auf Kanal 6; nach Verbindung `http://192.168.4.1` im Browser öffnen und einen Namen aus 1–24 ASCII-Zeichen (Buchstaben, Ziffern, Minuszeichen, Unterstrich) speichern. Der Name bleibt in NVS erhalten. Während des AP-Modus ist ESP-NOW pausiert; nach 5 Minuten ohne Webzugriff erfolgt ein Neustart zurück ins Mesh. Nach einem Speichervorgang bei Bedarf den AP auslaufen lassen oder die Stromversorgung neu starten.
-
-**Fehlersuche:** `[CONFIG] ERROR: set private AP password first` bedeutet, dass das Passwort fehlt, das unveränderte Beispielpasswort eingetragen ist oder weniger als 12 Zeichen umfasst. Lokale `mesh_secrets.h` im **v0.5.4-Verzeichnis** prüfen, korrigieren und neu flashen. Die Firmware ist experimentell und muss vor einem flächendeckenden Update an einem einzelnen XIAO getestet werden.
-
-## Dauerlogger, Knotennamen und Standortanalyse (v0.5.5)
-
-**Hinweis:** v0.5.5 ist eine neue, experimentelle Protokollversion (Protocol 3; Pakete mit authentifiziertem 24-Byte-Namensfeld). **Nicht kompatibel mit v0.5.4 (Protocol 2).** Alle fünf Knoten müssen mit v0.5.5 und demselben privaten Mesh-Netzwerkschlüssel geflasht werden. Zuerst auf zwei Geräten testen, danach die anderen drei aktualisieren. Namen bleiben beim normalen Flashen im NVS gespeichert; bei Flash-Erase gehen sie verloren. Der Name wird nicht verschlüsselt: Andere Funkteilnehmer können ihn ggf. mitlesen, ohne das HMAC-Geheimnis zu kennen. Nie sicherheitskritische Alarmierung von diesem Prototyp abhängig machen.
-
-Firmware: [mesh-v0.5.5.ino](firmware/mesh-v0.5.5/mesh-v0.5.5.ino). Im privaten Verzeichnis `firmware/mesh-v0.5.5/` die bisherige `mesh_secrets.h` aus v0.5.4 übernehmen (einschließlich privatem WLAN-AP-Passwort). Kein Passwort und keinen geheimen Schlüssel ins Git-Repository übernehmen.
-
-Der Gerätename wird weiterhin über den WLAN-Konfigurationsmodus per BOOT-Taster gesetzt (5 Sekunden halten, Weboberfläche auf `http://192.168.4.1`). Jeder gesendete TEST/HEARTBEAT enthält jetzt den Namen, der durch das HMAC geschützt und beim Relay unverändert mitgeführt wird. RX zeigt `name=<Name>` zusammen mit `origin=<ID>` und `via=<MAC>`. Der Name ist eine frei vergebbare Beschriftung, die unveränderliche Node-ID bleibt die technisch maßgebliche Identität.
-
-### Seriell dauerhaft mitschreiben
-
-Im Repository-Stammverzeichnis auf Windows:
+Im **Repository-Stammverzeichnis**:
 
 ```powershell
 py -m pip install pyserial
-py .\scripts\logging.py --port COM5
+py .\scripts\logging.py --port COM15
 ```
 
-Der neue Logger läuft **ohne Zeitlimit** (`--hours 0` ist Standard), beendet sich per Strg+C, erstellt eine Zeitstempel-`.log`-Datei im Unterverzeichnis `log/`, schreibt jede Zeile unmittelbar und versucht bei einer USB-Trennung nach 5 Sekunden erneut zu verbinden. Optional `--hours 6` für zeitbegrenzte Tests oder `--out log\mein-test.log`. COM-Port ggf. anpassen; Arduino Serial Monitor schließen. Windows-Energiesparmodus und automatische Neustarts können die Erfassung dennoch unterbrechen. Der Logger selbst läuft nicht nach einem Windows-Neustart automatisch wieder an.
+COM-Port entsprechend dem eigenen System anpassen. Ausgabe standardmäßig nach `log/mesh_YYYYMMDD_HHMMSS.log`. Ohne `--hours` läuft der Logger unbegrenzt und wird mit `Strg+C` beendet. Mit `--hours 6` ist ein begrenzter Test möglich, mit `--out PFAD` ein frei gewählter Dateiname. Bei USB-Unterbrechung wird die Verbindung standardmäßig alle fünf Sekunden erneut versucht. Für einen **neuen Testlauf** einen **neuen Logdateinamen** verwenden. Der Arduino Serial Monitor darf den Port nicht parallel öffnen.
 
-Falls lokal bereits ein **anderes** `log\logging.py` vorhanden ist, dieses nicht mit dem neuen Repository-Skript verwechseln; für Dauerbetrieb ausdrücklich `scripts\logging.py` aufrufen.
+Wenn der Logger aus `scripts/` heraus gestartet wird, kann die Datei in `scripts/log/` liegen. Der Webservice erkennt beide Orte.
 
-### MAC, Name und Standort
+## Smoke Mesh Monitor v0.3.0
 
-`config/nodes.csv` enthält alle fünf bekannten MAC-Adressen; der PC-Logger ist `AC:27:6E:7E:D3:20`. Die vier verteilten Standorte (2× Keller, EG, 1. OG) sind **noch nicht einzelnen MACs zugeordnet**. Die Spalten `name` und `location` dort lokal ergänzen. Eine leere Zeile niemals als bestätigte Zuordnung interpretieren.
+Ein zweites PowerShell-Fenster öffnen; den seriellen Logger **weiterlaufen lassen**:
+
+```powershell
+cd C:\pyprojects\smoke-listener-mesh
+git pull origin main
+py -m pip install -r .\web\requirements.txt
+py .\web\app.py
+```
+
+Im Browser: **http://127.0.0.1:8088**
+
+Der Webservice öffnet den COM-Port **nicht** selbst. Er liest die vorhandenen `mesh_*.log`-Dateien aus `log/`, `logs/` oder `scripts/log/` und speichert ausgewertete Einträge lokal in `web/data/mesh.db` (in `.gitignore` ausgeschlossen).
+
+Funktionen:
+- Automatisch erkannte Logger-Rolle aus `[TX]`; externe Knoten aus authentifizierten `[RX]`-Einträgen.
+- Erreichbarkeit: **Online** bis 45 Sekunden, **überfällig** bis 120 Sekunden, danach **Offline**. Bei historischen Tests ist das kein historischer Erreichbarkeitsstatus.
+- Angezeigter Name, MAC, Standort, letzter Empfang, Hops, RSSI der **letzten Funkstrecke**, direkte und über Relay empfangene Pakete.
+- Schematische Bereichsübersicht, Relay-Tabelle, letzte Meldungen.
+- **Testlauf-Auswahl:** standardmäßig zuletzt geänderte Logdatei; ältere Dateien separat auswählbar. Statistiken werden pro ausgewählter Datei berechnet, nicht aus allen historischen Logs gemischt.
+
+Die Webanwendung läuft standardmäßig nur auf `127.0.0.1` und **hat keine Anmeldung**. `--host 0.0.0.0` nur in einem geschützten lokalen Netz verwenden. Für den Prototyp ist kein öffentlicher Internetzugang vorgesehen.
+
+Ausführliche Anleitung und Grenzen: [`web/README.md`](web/README.md).
+
+### Log auswerten ohne Weboberfläche
 
 ```powershell
 py .\scripts\analyze_mesh_log.py .\log\mesh_YYYYMMDD_HHMMSS.log --nodes .\config\nodes.csv
 ```
 
-Das Skript zählt je Ursprung eindeutige RX-Ereignisse, direkte und Relay-Empfänge, mittleren RSSI bei Direktempfang, Sequenzlücken im beobachteten Bereich und verschiedene Boot-IDs. RSSI bei einem Relay ist der **letzte Hop**, keine Messung der Funkstrecke zum ursprünglichen Knoten. Die lokal gepflegte Standortzuordnung funktioniert auch rückwirkend für Logs aus v0.5.4 ohne Namensübertragung.
+Die Auswertung kann empfangene Pakete, direkt/Relay, beobachtete Sequenzlücken und RSSI bei **Direktempfang** zusammenfassen. Aus den Paketen allein lässt sich keine Ende-zu-Ende-Zustellgarantie ableiten.
+
+## Testergebnisse und offene Aufgaben
+
+- **03.11.2026:** Zwei-Knoten-Test mit Abstand rund 1 m: Knotenname `Kueche`, `AUTH=OK`, `hops=0` und erfolgreiche `[RELAY]`-Ausgaben sichtbar.
+- **03.11.2026:** Mehrknoten-Log: `Keller_Abgang`, `Garage` und `Kueche` wurden von `1OG` als Logger empfangen; sowohl direkte (`hops=0`) als auch weitergeleitete (`hops=1` und `hops=2`) Pakete beobachtet.
+- **Noch nicht nachgewiesen:** Ein Quellknoten ist ausschließlich über Relay erreichbar. Dazu Relay aus-/einschalten und Direktpfad separat ausschließen.
+- **Noch offen:** Audio-Erkennung in die aktuelle Mesh-Firmware integrieren und mit unterschiedlichen Alarmmustern prüfen; Energieverbrauch und 18650-Laufzeit messen; Buzzer, Antenne, Ladeelektronik und 3D-Gehäuse fertig entwickeln; Langzeittest je Testlauf systematisch dokumentieren.
+
+Weitere historische Messergebnisse: [`docs/test-results.md`](docs/test-results.md). Ältere Unterlagen zu [v0.5.1](docs/mesh-v0.5.1.md) und zum [passiven Logger](docs/mesh-logger.md) beschreiben frühere Entwicklungsstände.
