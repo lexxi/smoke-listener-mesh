@@ -24,7 +24,7 @@ def main():
     a.out.write_text(
         '#pragma once\n'
         '// PUBLIC KEY ONLY; generated from signing-public.pem. Never embed the private key.\n'
-        'static const char OTA_PUBLISHER_PUBLIC_KEY_PEM[] = R"PUBKEY(\n'
+        'static const char OTA_PUBLISHER_PUBLIC_KEY_PEM[] = R"PUBKEY('
         + pem.rstrip("\n") + '\n)PUBKEY";\n',encoding="utf-8")
     print(f"Public verifier key exported to {a.out}")
 
