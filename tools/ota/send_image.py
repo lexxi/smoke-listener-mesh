@@ -64,7 +64,7 @@ def run():
                 if "[IMAGE] START" in line:
                     started = True
                 if "[IMAGE] DONE" in line:
-                    required = "STAGED_APP1" if args.flash_stage else "NO_FLASH"
+                    required = "STAGED_INACTIVE" if args.flash_stage else "NO_FLASH"
                     if (not started or "SHA256_OK" not in line or
                             required not in line or
                             f"bytes={plan['size']}" not in line):
