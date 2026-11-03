@@ -9,3 +9,6 @@ log/
 # Local dashboard runtime data
 /web/data/
 **/__pycache__/
+
+# Generated pinned public verification key (per local release authority)
+**/ota_public_key.h
