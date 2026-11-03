@@ -25,8 +25,9 @@ Frühere Implementierungen und Dokumente bleiben zur Nachvollziehbarkeit im Repo
 - **Vorbereitung echter OTA-Updates:** [Firmware-Signaturwerkzeug](docs/ota-signing.md) für zielgebundene, mit ECDSA-P-256 signierte Firmwaremanifeste hinzugefügt. Der Empfänger und der eigentliche Flash-Workflow fehlen noch.
 - **Echte Image-Datei (Offline-Vorbereitung):** [signierte Firmware in 96-Byte-Transferblöcke aufbereiten](docs/ota-real-image-preparation.md), inklusive Signatur- und SHA-256-Prüfung am PC und manipulationsbezogener Unittests. **Noch keine Übertragung der Datei über Funk und kein OTA-Flashen.**
 - **v0.5.9 (Quellcode, Build/Hardwaretest noch offen):** [Echte Firmwaredateien über USB und ESP-NOW streamen](docs/mesh-v0.5.9.md), inklusive SHA-256-Prüfung auf dem Empfänger. **Keine Flash-Schreibzugriffe, Signaturprüfung noch nicht auf dem ESP32.**
-- **v0.6.0 (Quellcode, Hardwaretest offen):** [ECDSA-P-256-Signaturprüfung direkt am Zielgerät](docs/mesh-v0.6.0.md) für ein signiertes Firmwaremanifest; passender öffentlicher Schlüssel wird lokal generiert. **Flash-Schreiben bleibt gesperrt.**
-- **Echtes OTA-Flashen noch nicht implementiert.** v0.5.6 kann v0.5.7 **nicht drahtlos installieren**. Eine spätere dafür freigegebene Version benötigt mindestens eine USB-Erstinstallation je Knoten. Details: [OTA-Roadmap](docs/mesh-ota.md).
+- **v0.6.0 (auf Kueche und 1OG getestet):** [Signaturprüfung direkt am Zielgerät](docs/mesh-v0.6.0.md): ein gültiges ECDSA-P-256-Manifest wurde akzeptiert, eine absichtlich manipulierte Signatur abgelehnt. **Kein Flash-Schreiben.**
+- **v0.6.1 (neu, noch NICHT kompiliert oder hardwaregetestet):** [Downgrade-Prüfung und ausdrücklich freizugebendes Schreiben in den inaktiven OTA-App-Slot](docs/mesh-v0.6.1.md). **Keine Bootumschaltung und kein automatischer Rollback.** Nicht ohne die dokumentierten Tests produktiv verwenden.
+- **Vollständige automatische OTA-Installation ist noch nicht fertig.** Es fehlen kontrollierte Bootaktivierung, Bootbestätigung, Recovery und Rollback. Details: [OTA-Roadmap](docs/mesh-ota.md).
 
 ## Hardware
 
