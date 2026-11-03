@@ -28,3 +28,16 @@ Zwei ESP32-C3 SuperMini mit identischer Broadcast-Testfirmware auf Funkkanal 6. 
 ## v0.5.0 – Mesh-Protokoll in Entwicklung
 
 Ein gemeinsamer Sketch mit Chip-ID als Ursprung, Sequenznummer, TTL=3, Duplikat-Cache (48 Einträge), zufällig verzögerter Weiterleitung (30–119 ms) und Heartbeats alle 15 Sekunden ist im Repository. **Nicht auf Hardware oder über drei Hops verifiziert.** Broadcasts sind unverschlüsselt, nicht authentifiziert und nicht zustellgarantiert. TTL zählt Übertragungsstufen; die Prüfanordnung mit nur zwei Knoten beweist kein Relay. Es gibt noch keine Paket-ACKs, Heartbeat-Ausfallwertung, dauerhafte Sequenznummern, ausfallsichere Stromversorgung oder Integration mit der Audioerkennung. Nur Labortests.
+
+
+## v0.5.5 – Test mit zwei Geräten (03.11.2026)
+
+ESP32-C3 mit etwa 1 m Abstand. Im seriellen Log von `1OG` waren sechs empfangene Heartbeats von `Kueche` (`seq=1–6` nach Zählerstand) sichtbar, davon fünf im vorliegenden Logausschnitt (`seq=2–6`). Die Pakete zeigten `AUTH=OK`, `hops=0`, `ttl=3` und RSSI zwischen −31 und −44 dBm. Der Empfänger protokollierte für diese Pakete `[RELAY] ... status=0`. Das belegt Empfang, Namensübertragung und Auslösen der Weiterleitung, **nicht** die Zustellung an einen dritten Knoten.
+
+## v0.5.5 – Gebäude-Log und Dashboard (03.11.2026)
+
+USB-Logger aktuell `1OG` (MAC-Endung `7C:63:10`), früherer PC-Logger `7E:D3:20` außer Betrieb. Im bereitgestellten Ausschnitt des Logs `mesh_20261103_101709.log` sind authentifizierte Heartbeats von `Kueche`, `Garage` und `Keller_Abgang` zu sehen. Es treten direkte Empfänge (`hops=0`), Ein-Hop-Relays (`hops=1`) und Zwei-Hop-Relays (`hops=2`) auf. Der `via`-Wert ist die letzte sendende MAC-Adresse vor dem Logger. Die Zuordnung `FZRaum` in `config/nodes.csv` und der Funkname `Keller_Abgang` bezeichnen denselben Knoten mit MAC-Endung `7E:E3:A0`; das sind unterschiedliche Beschriftungsfelder.
+
+Das lokale Dashboard **v0.3.0** liest die Logdateien ohne Zugriff auf den seriellen Port ein, ermittelt den aktiven USB-Logger aus `[TX]` und begrenzt Statistiken auf einen ausgewählten Testlauf (eine Logdatei). Der Nutzer hat den Start und die Anzeige des Dashboards unter Windows bestätigt; dies ist kein formaler Softwaretest.
+
+**Offen:** Ein *ausschließlich über Relay* erreichbarer Knoten wurde noch nicht belastbar nachgewiesen. Dazu muss der Direktpfad nachweislich ausfallen, während die Verbindung mit aktivem Zwischenknoten wieder funktioniert. Die gemessene RSSI-Zahl bei Relay-Empfang ist nur die Signalstärke der letzten Funkstrecke.
