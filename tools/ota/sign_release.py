@@ -52,7 +52,11 @@ def make_key(args: argparse.Namespace) -> None:
     target = Path(args.private_key)
     if target.exists():
         raise ValueError("Refusing to overwrite existing private key")
+    pub_path = Path(args.public_key)
+    if pub_path.exists():
+        raise ValueError("Public key destination already exists")
     target.parent.mkdir(parents=True, exist_ok=True)
+    pub_path.parent.mkdir(parents=True, exist_ok=True)
     secret = ec.generate_private_key(ec.SECP256R1())
     private = secret.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
                                    serialization.NoEncryption())
@@ -62,9 +66,6 @@ def make_key(args: argparse.Namespace) -> None:
         out.write(private)
     public = secret.public_key().public_bytes(serialization.Encoding.PEM,
                                                 serialization.PublicFormat.SubjectPublicKeyInfo)
-    pub_path = Path(args.public_key)
-    if pub_path.exists():
-        raise ValueError("Public key destination already exists")
     pub_path.write_bytes(public)
     print(f"Private signing key: {target} (DO NOT COMMIT / SHARE)")
     print(f"Public verification key: {pub_path}")
