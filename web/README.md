@@ -47,3 +47,9 @@ Andere Log-Verzeichnisse lassen sich mit `--log-dir PFAD` ergänzen.
 Die Anwendung erkennt die MAC des aktuell über USB angeschlossenen Logger-C3 aus dem jüngsten `[TX]`-Eintrag aller erfassten Logs. Dieser Knoten erhält die Rolle `logger` und seinen Erreichbarkeitsstatus aus dem letzten TX-Zeitstempel. Andere Knoten behalten ihre aus `[RX]` ermittelten Statuswerte. Ein gestoppter Logger wird nach 120 Sekunden als offline geführt. Zum Umstellen auf einen anderen Logger sind keine Konfigurationsänderungen nötig; dessen neue `[TX]`-Meldungen werden automatisch erkannt.
 
 Nach `git pull` den Webservice neu starten, da er ohne automatischen Code-Reload läuft. Die bereits vorhandenen Logs werden beim Start neu eingelesen, damit auch ältere TX-Zeilen in SQLite übernommen werden.
+
+## Dashboard v0.3.0: Testläufe getrennt
+
+Ein Logfile `mesh_*.log` entspricht einem Testlauf. Standardmäßig verwendet das Dashboard **nur die zuletzt geänderte Datei** für alle RX-Paketzahlen, Relay-Statistiken, Ereignisse und die automatische Logger-Erkennung aus `[TX]`. Die Auswahl **Testlauf** zeigt archivierte Logs separat, ohne die SQLite-Datenbank löschen zu müssen. Über **Aktuellen Log anzeigen** gelangst du zur automatischen Auswahl zurück. Archivierte Knoten werden nach ihrer heutigen Erreichbarkeit als offline dargestellt; das ist keine historische Online-Auswertung.
+
+Wichtig: Die Lauftrennung erfolgt derzeit **pro Datei**, nicht anhand von Start-/Stop-Markierungen innerhalb derselben Datei. Den Logger für einen neuen Test am besten mit einem neuen Dateinamen starten. Ein einfacher Regressionstest steht in `tests/test_web_sessions.py` (`py -m unittest discover -s tests -p test_web_sessions.py`).
