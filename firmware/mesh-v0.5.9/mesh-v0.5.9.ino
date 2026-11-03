@@ -219,7 +219,7 @@ void imageReceive(const OtaFrame &f) {
     const esp_partition_t *slot=esp_ota_get_next_update_partition(nullptr);
     const esp_partition_t *running=esp_ota_get_running_partition();
     if(!slot || !running || slot==running || length>slot->size)return;
-    if(imgRx.active && (imgRx.origin!=f.origin || imgRx.session!=f.session) &&
+    if(imgRx.active && !imgRx.complete && (imgRx.origin!=f.origin || imgRx.session!=f.session) &&
        (uint32_t)(millis()-imgRx.lastActivity)<120000UL)return;
     if(!imgRx.active || imgRx.origin!=f.origin || imgRx.session!=f.session) {
       if(imgRx.active && !imgRx.complete)mbedtls_sha256_free(&imgRx.hash);
