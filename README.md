@@ -102,6 +102,29 @@ py .\scripts\analyze_mesh_log.py .\log\mesh_YYYYMMDD_HHMMSS.log --nodes .\config
 
 Die Auswertung kann empfangene Pakete, direkt/Relay, beobachtete Sequenzlücken und RSSI bei **Direktempfang** zusammenfassen. Aus den Paketen allein lässt sich keine Ende-zu-Ende-Zustellgarantie ableiten.
 
+## Firmware drahtlos aktualisieren: ESP-NOW-OTA (in Entwicklung)
+
+Ziel: Firmware vom PC über den angeschlossenen Logger-C3 an ausgewählte
+Mesh-Knoten schicken, **ohne an den Zielknoten den BOOT-Taster zu drücken**.
+Dabei sollen auch Relay-Verbindungen funktionieren.
+
+**Stand 03.11.2026: noch nicht nutzbar.** v0.5.5 enthält keinen
+OTA-Empfänger. Für die spätere OTA-fähige Firmware ist mindestens **ein**
+USB-Flash pro Gerät erforderlich. Die Flash-Partitionierung, eine
+authentifizierte und verlusttolerante Übertragung mit Ziel-Bestätigung,
+Firmware-Signaturprüfung und Rückfallverhalten sind vor dem ersten
+drahtlosen Firmware-Flash zu implementieren und mit einem Testgerät zu prüfen.
+
+Die technische Checkliste und die Meilensteine stehen in
+[docs/mesh-ota.md](docs/mesh-ota.md).
+Ein **rein lokales Prüftool**, das keine Firmware schreibt, steht unter
+[tools/ota/check_image.py](tools/ota/check_image.py). Beispiel (OTA-Slotgröße
+**nur als Beispiel**, den tatsächlich eingestellten Wert einsetzen):
+
+```powershell
+py .\tools\ota\check_image.py .\firmware.bin --ota-slot-bytes 0x140000
+```
+
 ## Testergebnisse und offene Aufgaben
 
 - **03.11.2026:** Zwei-Knoten-Test mit Abstand rund 1 m: Knotenname `Kueche`, `AUTH=OK`, `hops=0` und erfolgreiche `[RELAY]`-Ausgaben sichtbar.
