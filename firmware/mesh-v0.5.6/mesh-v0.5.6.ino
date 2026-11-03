@@ -47,16 +47,17 @@ struct __attribute__((packed)) OtaFrame {
   uint64_t origin,target;
   uint32_t session;
   uint16_t index,total;
+  uint8_t attempt;
   uint8_t data[OTA_BYTES];
   uint8_t ttl,reserved;
   uint8_t hmac[32];
 };
-static_assert(sizeof(OtaFrame)==164,"OTA packet size <=250");
+static_assert(sizeof(OtaFrame)==165,"OTA packet size <=250");
 struct OtaCache {
   uint64_t origin=0;
   uint32_t session=0;
   uint16_t index=0;
-  uint8_t kind=0;
+  uint8_t kind=0, attempt=0;
   bool used=false;
 };
 struct OtaRelay {
@@ -334,10 +335,11 @@ bool otaVerify(const OtaFrame &f) {
 bool otaSeen(const OtaFrame &f) {
   for(const OtaCache &item:otaCache)
     if(item.used && item.origin==f.origin && item.session==f.session &&
-       item.index==f.index && item.kind==f.kind)return true;
+       item.index==f.index && item.kind==f.kind &&
+       item.attempt==f.attempt)return true;
   OtaCache &item=otaCache[otaCursor++%128];
   item.origin=f.origin;item.session=f.session;
-  item.index=f.index;item.kind=f.kind;item.used=true;
+  item.index=f.index;item.kind=f.kind;item.attempt=f.attempt;item.used=true;
   return false;
 }
 void otaSend(const OtaFrame &f) {
@@ -367,8 +369,9 @@ void sendOtaChunk() {
   if(!otaSign(frame,frame.hmac)) {
     otaActive=false;Serial.println("[OTA] HMAC_FAILED");return;
   }
-  otaAttempts++;otaSentAt=millis();
-  otaSend(frame);
+  otaAttempts++;frame.attempt=otaAttempts;
+  if(!otaSign(frame,frame.hmac)) {otaActive=false;return;}
+  otaSentAt=millis();otaSend(frame);
   Serial.printf("[OTA] CHUNK target=%s index=%u/%u attempt=%u\n",
     idString(otaTarget).c_str(),(unsigned)(otaIndex+1),
     (unsigned)OTA_TOTAL,(unsigned)otaAttempts);
@@ -409,7 +412,7 @@ void receiveOta(const OtaFrame &frame) {
   ack.magic=MAGIC;ack.protocol=OTA_PROTO;ack.kind=OTA_ACK;
   ack.networkId=MESH_NETWORK_ID;ack.origin=nodeId;ack.target=frame.origin;
   ack.session=frame.session;ack.index=frame.index;
-  ack.total=OTA_TOTAL;ack.ttl=INITIAL_TTL;
+  ack.total=OTA_TOTAL;ack.ttl=INITIAL_TTL;ack.attempt=frame.attempt;
   if(otaSign(ack,ack.hmac))otaSend(ack);
 }
 
