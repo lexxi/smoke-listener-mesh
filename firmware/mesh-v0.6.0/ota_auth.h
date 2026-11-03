@@ -69,7 +69,7 @@ inline bool releaseVerify(const uint8_t *blob,size_t length,
   char id[17];
   snprintf(id,sizeof(id),"%08lX%08lX",
     (unsigned long)(deviceId>>32),(unsigned long)deviceId);
-  const String tail="\",\"target\":\""+String(id)+"\",\"version\":\"";
+  const String tail=",\"target\":\""+String(id)+"\",\"version\":\"";
   if(!canonical.substring(numEnd).startsWith(tail))return false;
   int verStart=numEnd+tail.length();
   if(!canonical.endsWith("\"}"))return false;
