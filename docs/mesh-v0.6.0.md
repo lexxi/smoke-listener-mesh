@@ -3,6 +3,10 @@
 **Status: Entwicklungsstand, noch NICHT kompiliert oder auf Hardware getestet.**
 **Die echte Flash-Installation ist noch SPERRT:** keine Aufrufe von `esp_ota_begin`, `esp_ota_write`, `esp_ota_end` oder `esp_ota_set_boot_partition`. v0.5.9 bleibt unser erfolgreich getesteter Referenzstand.
 
+## Hinweis zum ersten Hardwaretest
+
+Beim ersten v0.6.0-Lauf wurden alle drei Manifestblöcke übertragen, aber die Signatur wegen eines falsch kodierten JSON-Trennzeichens abgelehnt. Ein zweiter Versuch wurde durch eine 120-Sekunden-Sitzungssperre behindert. Beide Fehler wurden auf `main` korrigiert (Verifier und Sitzungswechsel). **Kueche und 1OG müssen nach `git pull` mit dem korrigierten v0.6.0-Stand erneut per USB geflasht werden**, bevor `send_manifest.py` wiederholt wird. Keine Flash-Schreibzugriffe durch das OTA-Protokoll.
+
 ## Ziel und implementierte Prüfung
 
 Die PC-Seite validiert weiterhin die Firmwaredatei mit `build_plan()` sowie den öffentlichen P-256-Schlüssel. Neu sendet `send_manifest.py` das signierte Manifest in bis zu sechs HMAC-geschützten 96-Byte-Paketen an den Zielknoten. Der Zielknoten besitzt den **fest einprogrammierten öffentlichen** Herausgeberschlüssel (aus `ota_public_key.h`). Er überprüft:
