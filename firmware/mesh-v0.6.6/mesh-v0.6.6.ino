@@ -553,7 +553,7 @@ void printBootDiagnostics() {
       (int)err,err==ESP_OK?desc.version:"(unreadable)",
       err==ESP_OK?desc.project_name:"(unreadable)");
   }
-  Serial.printf("[BOOT] activation=LOCAL_ARM_ONLY verified=%u arm_valid=%u mesh_peer_verified=%u rollback_hardware_test=NOT_DONE\\n",
+  Serial.printf("[BOOT] activation=LOCAL_ARM_ONLY verified=%u arm_valid=%u mesh_peer_verified=%u rollback_hardware_test=NOT_DONE\n",
     (unsigned)bootVerified,
     (unsigned)(bootArmed && (uint32_t)(millis()-bootArmedAt)<BOOT_ARM_WINDOW_MS),
     (unsigned)meshPeerVerified);
