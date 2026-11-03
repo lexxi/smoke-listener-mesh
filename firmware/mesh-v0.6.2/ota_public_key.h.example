@@ -1,0 +1,5 @@
+#pragma once
+// Compile-time placeholder only. Generate ota_public_key.h from your real PUBLIC PEM:
+// py .\tools\ota\export_public_header.py --public-key C:\mesh-ota-keys\signing-public.pem --out .\firmware\mesh-v0.6.2\ota_public_key.h
+// Never place signing-private.pem on a microcontroller.
+static const char OTA_PUBLISHER_PUBLIC_KEY_PEM[] = "";
