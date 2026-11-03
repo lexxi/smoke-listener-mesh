@@ -44,9 +44,9 @@ Andere Log-Verzeichnisse lassen sich mit `--log-dir PFAD` ergänzen.
 
 ## Aktiver Logger (automatisch)
 
-Die Anwendung erkennt die MAC des aktuell über USB angeschlossenen Logger-C3 aus dem jüngsten `[TX]`-Eintrag aller erfassten Logs. Dieser Knoten erhält die Rolle `logger` und seinen Erreichbarkeitsstatus aus dem letzten TX-Zeitstempel. Andere Knoten behalten ihre aus `[RX]` ermittelten Statuswerte. Ein gestoppter Logger wird nach 120 Sekunden als offline geführt. Zum Umstellen auf einen anderen Logger sind keine Konfigurationsänderungen nötig; dessen neue `[TX]`-Meldungen werden automatisch erkannt.
+Die Anwendung erkennt die MAC des im **ausgewählten Testlauf** sendenden Logger-C3 aus dessen jüngstem `[TX]`-Eintrag. Dieser Knoten erhält die Rolle `logger` und seinen Erreichbarkeitsstatus aus dem letzten TX-Zeitstempel. Andere Knoten behalten ihre aus `[RX]` ermittelten Statuswerte. Ein gestoppter Logger wird nach 120 Sekunden als offline geführt. Zum Umstellen auf einen anderen Logger sind keine Konfigurationsänderungen nötig; dessen neue `[TX]`-Meldungen werden automatisch erkannt.
 
-Nach `git pull` den Webservice neu starten, da er ohne automatischen Code-Reload läuft. Die bereits vorhandenen Logs werden beim Start neu eingelesen, damit auch ältere TX-Zeilen in SQLite übernommen werden.
+Nach `git pull` den Webservice neu starten, da er ohne automatischen Code-Reload läuft. Die bereits vorhandenen Logs werden beim Start neu eingelesen, damit auch ältere TX-Zeilen in SQLite übernommen werden. Bei der Standardauswahl zählt für die Dashboard-Statistik jedoch nur die zuletzt geänderte Logdatei.
 
 ## Dashboard v0.3.0: Testläufe getrennt
 
