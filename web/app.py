@@ -14,6 +14,7 @@ from flask import Flask, jsonify, render_template, request
 
 ROOT = Path(__file__).resolve().parents[1]
 RX = re.compile(r"\[RX\]\s+(.*)")
+TX = re.compile(r"\[TX\]\s+(.*)")
 KV = re.compile(r"([A-Za-z_]+)=([^\s]+)")
 TIME = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\s+")
 LOCAL = dt.datetime.now().astimezone().tzinfo
@@ -44,6 +45,14 @@ def database():
         UNIQUE(source_file, source_offset)
     )""")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_origin_time ON receptions(origin, received_at DESC)")
+    conn.execute("""CREATE TABLE IF NOT EXISTS transmissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sent_at TEXT NOT NULL, origin TEXT NOT NULL,
+        boot TEXT NOT NULL, seq INTEGER NOT NULL,
+        source_file TEXT NOT NULL, source_offset INTEGER NOT NULL,
+        UNIQUE(source_file, source_offset)
+    )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_time ON transmissions(sent_at DESC)")
     return conn
 
 def mac_from_origin(origin):
@@ -83,6 +92,21 @@ def parse_line(line):
                 values["via"].upper(), values["boot"].upper(), int(values["seq"]),
                 int(values["hops"]), int(values["ttl"]),
                 int(values["rssi"]) if "rssi" in values else None, values["type"])
+    except (ValueError, OverflowError):
+        return None
+
+def parse_tx(line):
+    match = TX.search(line)
+    stamp = TIME.match(line)
+    if not match or not stamp:
+        return None
+    values = dict(KV.findall(match.group(1)))
+    if any(k not in values for k in ("origin", "boot", "seq")):
+        return None
+    try:
+        timestamp = dt.datetime.strptime(stamp.group(1), "%Y-%m-%d %H:%M:%S")
+        return (timestamp.isoformat(), values["origin"].upper(),
+                values["boot"].upper(), int(values["seq"]))
     except (ValueError, OverflowError):
         return None
 
@@ -127,6 +151,13 @@ def ingest():
                                 (received_at,origin,name,via,boot,seq,hops,ttl,rssi,packet_type,source_file,source_offset)
                                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""", parsed + (key, start))
                             count += cursor.rowcount
+                        else:
+                            sent = parse_tx(line.decode("utf-8", errors="replace"))
+                            if sent:
+                                conn.execute(
+                                    """INSERT OR IGNORE INTO transmissions
+                                    (sent_at,origin,boot,seq,source_file,source_offset)
+                                    VALUES (?,?,?,?,?,?)""", sent + (key, start))
                     offsets[key] = ((stat.st_dev, stat.st_ino), f.tell())
         return count
 
@@ -152,6 +183,15 @@ def snapshot():
             """SELECT received_at,origin,name,via,seq,hops,rssi,packet_type
                FROM receptions ORDER BY id DESC LIMIT 40""")]
         total = conn.execute("SELECT COUNT(*) FROM receptions").fetchone()[0]
+        active_logger = conn.execute(
+            "SELECT * FROM transmissions ORDER BY sent_at DESC, id DESC LIMIT 1"
+        ).fetchone()
+        logger_tx = None
+        if active_logger:
+            logger_tx = conn.execute(
+                "SELECT COUNT(*) FROM transmissions WHERE origin=?",
+                (active_logger["origin"],)
+            ).fetchone()[0]
     for last in latest:
         mac = mac_from_origin(last["origin"])
         if not mac:
@@ -169,6 +209,26 @@ def snapshot():
                     packets=counters["packets"], direct=counters["direct"] or 0,
                     relayed=counters["relayed"] or 0, rssi=last["rssi"],
                     hops=last["hops"], via=last["via"], last_type=last["packet_type"])
+    logger_mac = None
+    if active_logger:
+        logger_mac = mac_from_origin(active_logger["origin"])
+        if logger_mac:
+            if logger_mac not in nodes:
+                nodes[logger_mac] = {
+                    "mac": logger_mac, "configured_name": "", "location": "",
+                    "name": logger_mac, "packets": 0, "direct": 0, "relayed": 0
+                }
+            logger_node = nodes[logger_mac]
+            sent_at = active_logger["sent_at"]
+            age = max(0, int((now - dt.datetime.fromisoformat(sent_at)).total_seconds()))
+            logger_node.update(
+                role="logger", last_seen=sent_at, age_seconds=age,
+                status="online" if age <= 45 else "stale" if age <= 120 else "offline",
+                tx_packets=logger_tx, last_type="TX",
+                hops=None, via=None, rssi=None,
+            )
+    for node in nodes.values():
+        node.setdefault("role", "remote")
     for path in paths:
         path["source_mac"] = mac_from_origin(path["origin"])
         path["source"] = nodes.get(path["source_mac"], {}).get("name", path["source_mac"])
@@ -177,7 +237,7 @@ def snapshot():
         mac = mac_from_origin(event["origin"])
         event["source"] = nodes.get(mac, {}).get("name", event["name"] or mac)
         event["relay"] = nodes.get(event["via"], {}).get("name", event["via"])
-    return {"nodes": list(nodes.values()), "routes": paths, "events": recent,
+    return {"nodes": list(nodes.values()), "logger_mac": logger_mac, "routes": paths, "events": recent,
             "total": total, "generated_at": now.isoformat(), "log_files": len(log_files()),
             "note": "RSSI measures the last radio hop, not necessarily origin-to-logger signal strength."}
 
