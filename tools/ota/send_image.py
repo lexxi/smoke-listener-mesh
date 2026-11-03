@@ -24,6 +24,8 @@ def run():
     p.add_argument("--manifest", type=Path, required=True)
     p.add_argument("--public-key", type=Path, required=True)
     p.add_argument("--baud", type=int, default=115200)
+    p.add_argument("--flash-stage", action="store_true",
+                   help="EXPERIMENTAL: stage image in locally armed v0.6.1 inactive slot; no boot change.")
     p.add_argument("--timeout", type=int, default=1200)
     p.add_argument("--out", type=Path, default=None)
     args = p.parse_args()
@@ -37,13 +39,14 @@ def run():
     outfile.parent.mkdir(parents=True, exist_ok=True)
     print(f"Verified signed release: {plan['version']} target={plan['target']} "
           f"bytes={plan['size']} blocks={plan['blocks']}", flush=True)
-    print(f"NO FLASH: log={outfile}", flush=True)
+    print(f"MODE={'FLASH_STAGE_BOOT_UNCHANGED' if args.flash_stage else 'RAM_ONLY_NO_FLASH'} log={outfile}", flush=True)
     try:
         with serial.Serial(args.port, args.baud, timeout=1, write_timeout=5) as com, \
                 args.image.open("rb") as image, outfile.open("w", encoding="utf-8", buffering=1) as logfile:
             time.sleep(3)
             com.reset_input_buffer()
-            com.write(f"IMG BEGIN {plan['target']} {plan['size']} {plan['sha256']}\n".encode("ascii"))
+            suffix = " STAGE" if args.flash_stage else ""
+            com.write(f"IMG BEGIN {plan['target']} {plan['size']} {plan['sha256']}{suffix}\n".encode("ascii"))
             com.flush()
             next_index = 0
             deadline = time.monotonic() + args.timeout
@@ -61,10 +64,16 @@ def run():
                 if "[IMAGE] START" in line:
                     started = True
                 if "[IMAGE] DONE" in line:
-                    if not started or "SHA256_OK" not in line or f"bytes={plan['size']}" not in line:
+                    required = "STAGED_APP1" if args.flash_stage else "NO_FLASH"
+                    if (not started or "SHA256_OK" not in line or
+                            required not in line or
+                            f"bytes={plan['size']}" not in line):
                         print("FAIL: unexpected completion fields", file=sys.stderr)
                         return 1
-                    print("PASS: complete real-image transport + target SHA256; nothing flashed.")
+                    if args.flash_stage:
+                        print("PASS: image written and verified in inactive OTA slot; BOOT PARTITION NOT CHANGED.")
+                    else:
+                        print("PASS: complete real-image transport + target SHA256; nothing flashed.")
                     return 0
                 if "[IMAGE] FAIL" in line or "[IMAGE] ERROR" in line:
                     return 1
