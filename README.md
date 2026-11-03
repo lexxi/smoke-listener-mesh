@@ -64,3 +64,34 @@ static constexpr char MESH_CONFIG_AP_PASSWORD[] = "HIER_EIGENES_STARKES_PASSWORT
 Zum Konfigurieren den bereits laufenden XIAO **ohne RESET** mit dem BOOT-Taster ca. 5 Sekunden gedrückt halten. Das Gerät startet einen AP `SmokeListener-XXXXXX` (die letzten sechs Hex-Zeichen der stabilen Hardware-Node-ID, unabhängig von der WLAN-MAC-Anzeige im AP-Modus) auf Kanal 6; nach Verbindung `http://192.168.4.1` im Browser öffnen und einen Namen aus 1–24 ASCII-Zeichen (Buchstaben, Ziffern, Minuszeichen, Unterstrich) speichern. Der Name bleibt in NVS erhalten. Während des AP-Modus ist ESP-NOW pausiert; nach 5 Minuten ohne Webzugriff erfolgt ein Neustart zurück ins Mesh. Nach einem Speichervorgang bei Bedarf den AP auslaufen lassen oder die Stromversorgung neu starten.
 
 **Fehlersuche:** `[CONFIG] ERROR: set private AP password first` bedeutet, dass das Passwort fehlt, das unveränderte Beispielpasswort eingetragen ist oder weniger als 12 Zeichen umfasst. Lokale `mesh_secrets.h` im **v0.5.4-Verzeichnis** prüfen, korrigieren und neu flashen. Die Firmware ist experimentell und muss vor einem flächendeckenden Update an einem einzelnen XIAO getestet werden.
+
+## Dauerlogger, Knotennamen und Standortanalyse (v0.5.5)
+
+**Hinweis:** v0.5.5 ist eine neue, experimentelle Protokollversion (Protocol 3; Pakete mit authentifiziertem 24-Byte-Namensfeld). **Nicht kompatibel mit v0.5.4 (Protocol 2).** Alle fünf Knoten müssen mit v0.5.5 und demselben privaten Mesh-Netzwerkschlüssel geflasht werden. Zuerst auf zwei Geräten testen, danach die anderen drei aktualisieren. Namen bleiben beim normalen Flashen im NVS gespeichert; bei Flash-Erase gehen sie verloren. Der Name wird nicht verschlüsselt: Andere Funkteilnehmer können ihn ggf. mitlesen, ohne das HMAC-Geheimnis zu kennen. Nie sicherheitskritische Alarmierung von diesem Prototyp abhängig machen.
+
+Firmware: [mesh-v0.5.5.ino](firmware/mesh-v0.5.5/mesh-v0.5.5.ino). Im privaten Verzeichnis `firmware/mesh-v0.5.5/` die bisherige `mesh_secrets.h` aus v0.5.4 übernehmen (einschließlich privatem WLAN-AP-Passwort). Kein Passwort und keinen geheimen Schlüssel ins Git-Repository übernehmen.
+
+Der Gerätename wird weiterhin über den WLAN-Konfigurationsmodus per BOOT-Taster gesetzt (5 Sekunden halten, Weboberfläche auf `http://192.168.4.1`). Jeder gesendete TEST/HEARTBEAT enthält jetzt den Namen, der durch das HMAC geschützt und beim Relay unverändert mitgeführt wird. RX zeigt `name=<Name>` zusammen mit `origin=<ID>` und `via=<MAC>`. Der Name ist eine frei vergebbare Beschriftung, die unveränderliche Node-ID bleibt die technisch maßgebliche Identität.
+
+### Seriell dauerhaft mitschreiben
+
+Im Repository-Stammverzeichnis auf Windows:
+
+```powershell
+py -m pip install pyserial
+py .\scripts\logging.py --port COM5
+```
+
+Der neue Logger läuft **ohne Zeitlimit** (`--hours 0` ist Standard), beendet sich per Strg+C, erstellt eine Zeitstempel-`.log`-Datei im Unterverzeichnis `log/`, schreibt jede Zeile unmittelbar und versucht bei einer USB-Trennung nach 5 Sekunden erneut zu verbinden. Optional `--hours 6` für zeitbegrenzte Tests oder `--out log\mein-test.log`. COM-Port ggf. anpassen; Arduino Serial Monitor schließen. Windows-Energiesparmodus und automatische Neustarts können die Erfassung dennoch unterbrechen. Der Logger selbst läuft nicht nach einem Windows-Neustart automatisch wieder an.
+
+Falls lokal bereits ein **anderes** `log\logging.py` vorhanden ist, dieses nicht mit dem neuen Repository-Skript verwechseln; für Dauerbetrieb ausdrücklich `scripts\logging.py` aufrufen.
+
+### MAC, Name und Standort
+
+`config/nodes.csv` enthält alle fünf bekannten MAC-Adressen; der PC-Logger ist `AC:27:6E:7E:D3:20`. Die vier verteilten Standorte (2× Keller, EG, 1. OG) sind **noch nicht einzelnen MACs zugeordnet**. Die Spalten `name` und `location` dort lokal ergänzen. Eine leere Zeile niemals als bestätigte Zuordnung interpretieren.
+
+```powershell
+py .\scripts\analyze_mesh_log.py .\log\mesh_YYYYMMDD_HHMMSS.log --nodes .\config\nodes.csv
+```
+
+Das Skript zählt je Ursprung eindeutige RX-Ereignisse, direkte und Relay-Empfänge, mittleren RSSI bei Direktempfang, Sequenzlücken im beobachteten Bereich und verschiedene Boot-IDs. RSSI bei einem Relay ist der **letzte Hop**, keine Messung der Funkstrecke zum ursprünglichen Knoten. Die lokal gepflegte Standortzuordnung funktioniert auch rückwirkend für Logs aus v0.5.4 ohne Namensübertragung.
