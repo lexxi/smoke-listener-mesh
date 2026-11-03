@@ -140,6 +140,7 @@ struct AuthRx {
   uint64_t origin=0;
   uint32_t session=0,lastActivity=0,expectedSize=0;
   uint16_t length=0,total=0,next=0;
+  uint8_t resultStatus=2; // 1=verified, 2=signature/format error, 3=downgrade
   String version;
   uint8_t data[576]={},expectedHash[32]={};
 } authRx;
@@ -201,6 +202,7 @@ void authReceive(const OtaFrame &f) {
        f.session!=authSession || f.index!=authIndex ||
        f.total!=authTotal || f.attempt>authAttempts)return;
     if(f.data[0]==2){authStop("signature_rejected");return;}
+    if(f.data[0]==3){authStop("DOWNGRADE_REJECTED");return;}
     if(f.index+1==authTotal) {
       if(f.data[0]!=1){authStop("unverified");return;}
       Serial.printf("[AUTH] PASS target=%s bytes=%u retries=%lu VERIFIED_ON_DEVICE NO_FLASH\n",
@@ -236,7 +238,7 @@ void authReceive(const OtaFrame &f) {
      f.session!=authRx.session || f.total!=authRx.total)return;
   authRx.lastActivity=millis();
   if(f.index<authRx.next) {
-    authReply(f,authRx.verified && f.index+1==authRx.total?1:0);
+    authReply(f,f.index+1==authRx.total?authRx.resultStatus:0);
     return;
   }
   if(f.index!=authRx.next)return;
@@ -245,14 +247,17 @@ void authReceive(const OtaFrame &f) {
   if(authRx.next==authRx.total) {
     authRx.verified=releaseVerify(authRx.data+2,authRx.length-2,
       nodeId,authRx.expectedSize,authRx.expectedHash,authRx.version);
+    authRx.resultStatus=authRx.verified?1:2;
     if(authRx.verified && !newerFirmwareVersion(authRx.version,CURRENT_FW_VERSION)) {
       authRx.verified=false;
+      authRx.resultStatus=3;
       Serial.printf("[AUTH] REJECT downgrade_or_same_version signed=%s running=%s\n",
         authRx.version.c_str(),CURRENT_FW_VERSION);
     }
-    Serial.printf("[AUTH] RESULT source=%s SIGNATURE_%s NO_FLASH\n",
-      idString(f.origin).c_str(),authRx.verified?"OK":"FAIL");
-    authReply(f,authRx.verified?1:2);
+    Serial.printf("[AUTH] RESULT source=%s result=%s NO_FLASH\n",
+      idString(f.origin).c_str(),
+      authRx.resultStatus==1?"SIGNATURE_OK":authRx.resultStatus==3?"DOWNGRADE_REJECTED":"SIGNATURE_FAIL");
+    authReply(f,authRx.resultStatus);
   } else authReply(f,0);
 }
 
