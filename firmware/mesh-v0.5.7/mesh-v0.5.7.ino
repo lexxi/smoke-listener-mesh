@@ -430,7 +430,7 @@ void receiveOta(const OtaFrame &frame) {
        frame.index!=otaIndex || frame.total!=otaTotal || frame.attempt>otaAttempts)return;
     Serial.printf("[OTA] ACK source=%s index=%u/%u hops=%u\n",
       idString(frame.origin).c_str(),(unsigned)(frame.index+1),
-      (unsigned)OTA_TOTAL,(unsigned)(INITIAL_TTL-frame.ttl));
+      (unsigned)frame.total,(unsigned)(INITIAL_TTL-frame.ttl));
     otaAckHops+=INITIAL_TTL-frame.ttl;
     otaIndex++;otaAttempts=0;
     if(otaIndex==otaTotal) {
