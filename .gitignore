@@ -12,3 +12,6 @@ log/
 
 # Generated pinned public verification key (per local release authority)
 **/ota_public_key.h
+
+# Arduino build directories
+**/build/
