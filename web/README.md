@@ -41,3 +41,9 @@ Andere Log-Verzeichnisse lassen sich mit `--log-dir PFAD` ergänzen.
 - Node `7E:E3:A0` kann als `Keller_Abgang` auftreten, auch wenn Standort `FZRaum` konfiguriert ist.
 - Keine Authentifizierung: standardmäßig nur `127.0.0.1`; für vertrauenswürdiges LAN `--host 0.0.0.0` und Firewall prüfen.
 - Keine sicherheitskritische Rauch-/Brandmeldung; nur experimentelle Beobachtung.
+
+## Aktiver Logger (automatisch)
+
+Die Anwendung erkennt die MAC des aktuell über USB angeschlossenen Logger-C3 aus dem jüngsten `[TX]`-Eintrag aller erfassten Logs. Dieser Knoten erhält die Rolle `logger` und seinen Erreichbarkeitsstatus aus dem letzten TX-Zeitstempel. Andere Knoten behalten ihre aus `[RX]` ermittelten Statuswerte. Ein gestoppter Logger wird nach 120 Sekunden als offline geführt. Zum Umstellen auf einen anderen Logger sind keine Konfigurationsänderungen nötig; dessen neue `[TX]`-Meldungen werden automatisch erkannt.
+
+Nach `git pull` den Webservice neu starten, da er ohne automatischen Code-Reload läuft. Die bereits vorhandenen Logs werden beim Start neu eingelesen, damit auch ältere TX-Zeilen in SQLite übernommen werden.
