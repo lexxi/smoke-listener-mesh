@@ -9,6 +9,10 @@
 header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:24px}
 h1{font-size:26px;margin:0}h2{font-size:17px;margin:0 0 14px}
 small,.muted{color:#95a7c0}small{font-size:12px}
+.sessionbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.sessionbar select{max-width:min(100%,460px);background:#1a2a40;border:1px solid #476077;border-radius:8px;color:#e6edf7;padding:9px 12px;font:inherit}
+.sessionbar button{background:#263c57;border:1px solid #476077;border-radius:8px;color:#e6edf7;padding:9px 12px;cursor:pointer}
+.sessionbar button:hover{background:#344b6c}
 .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
 .panel{background:#152237;border:1px solid #2a3b54;border-radius:12px;padding:18px;margin-bottom:16px}
 .metric{font-size:30px;font-weight:700;margin-top:8px}.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -33,8 +37,14 @@ th{color:#b6c5d9;font-weight:600}
 </style>
 </head>
 <body>
-<header><div><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><h1>Smoke Mesh Monitor</h1><small style="border:1px solid #354760;border-radius:6px;padding:4px 8px;color:#b6c5d9">Dashboard v0.2.0</small></div><div class="muted">ESP32-C3 · ESP-NOW · lokale Testinstallation</div></div>
+<header><div><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><h1>Smoke Mesh Monitor</h1><small style="border:1px solid #354760;border-radius:6px;padding:4px 8px;color:#b6c5d9">Dashboard v0.3.0</small></div><div class="muted">ESP32-C3 · ESP-NOW · lokale Testinstallation</div></div>
 <div id="updated" class="muted">Lade Daten …</div></header>
+<section class="panel sessionbar" aria-label="Testlauf auswählen">
+<label for="session">Testlauf</label>
+<select id="session" aria-label="Testlauf"><option value="">Neuester Log (automatisch)</option></select>
+<button id="latest" type="button">Aktuellen Log anzeigen</button>
+<small id="session-note" class="muted">Die Statistiken beziehen sich auf einen Log.</small>
+</section>
 <section class="grid">
 <div class="panel"><small>Bekannte Knoten</small><div id="count" class="metric">–</div></div>
 <div class="panel"><small>Aktuell erreichbar</small><div id="online" class="metric">–</div></div>
@@ -54,6 +64,30 @@ th{color:#b6c5d9;font-weight:600}
 <div class="warn">Experimenteller Mesh-Monitor – keine zertifizierte Brandmeldeanlage. „Online“ bedeutet nur, dass kürzlich ein authentifiziertes Paket am Logger angekommen ist. RSSI gehört zum letzten Funk-Hop. Nicht als alleinige Alarmierung verwenden.</div>
 <script>
 const $ = id => document.getElementById(id);
+let selectedSession = "";
+$("session").addEventListener("change", e => {selectedSession=e.target.value;refresh();});
+$("latest").addEventListener("click", () => {selectedSession="";$("session").value="";refresh();});
+function updateSessions(data){
+ const control=$("session");
+ const previous=control.value;
+ const sessions=data.sessions||[];
+ const ids=sessions.map(s=>s.id);
+ const fingerprint=ids.join("\n");
+ if(control.dataset.fingerprint!==fingerprint){
+   clear(control);
+   const automatic=el("option","Neuester Log (automatisch)");automatic.value="";
+   control.appendChild(automatic);
+   sessions.forEach(s=>{
+     const o=el("option",s.label+(s.active?" · ausgewählt":""));
+     o.value=s.id;control.appendChild(o);
+   });
+   control.dataset.fingerprint=fingerprint;
+ }
+ control.value=selectedSession;
+ $("session-note").textContent=selectedSession
+  ? "Archivansicht: Status zeigt den zeitlichen Abstand zu heute."
+  : "Aktueller Testlauf: "+(sessions.find(s=>s.active)?.label||"noch kein Log");
+}
 function el(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined && text!==null)e.textContent=String(text); if(cls)e.className=cls; return e; }
 function clear(parent) { parent.replaceChildren(); }
 function addCell(row, value) {row.appendChild(el("td", value===null || value===undefined ? "–" : value));}
@@ -70,6 +104,7 @@ function nodeCard(n) {
  return card;
 }
 function render(data){
+ updateSessions(data);
  $("updated").textContent="Letzte Abfrage: "+new Date().toLocaleTimeString("de-AT")+" · "+data.log_files+" Logdatei(en)";
  const nodes=data.nodes.filter(n=>n.role==="logger" || n.location!=="PC-Logger");
  $("count").textContent=nodes.length;
@@ -93,7 +128,7 @@ function render(data){
  clear($("events"));data.events.forEach(e=>{const tr=el("tr");[time(e.received_at),e.source,e.packet_type,e.relay,e.hops,e.rssi===null?"–":e.rssi+" dBm",e.seq].forEach(x=>addCell(tr,x));$("events").appendChild(tr);});
 }
 async function refresh(){
- try{const response=await fetch("/api/status",{cache:"no-store"});if(!response.ok)throw new Error("HTTP "+response.status);
+ try{const response=await fetch("/api/status"+(selectedSession?"?file="+encodeURIComponent(selectedSession):""),{cache:"no-store"});if(!response.ok)throw new Error("HTTP "+response.status);
  const data=await response.json();render(data);}
  catch(e){$("updated").textContent="Fehler beim Laden: "+e.message;}
 }
