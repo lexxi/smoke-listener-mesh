@@ -380,7 +380,11 @@ void imageReceive(const OtaFrame &f) {
         imgRx.otaOpen=true;
       }
       mbedtls_sha256_init(&imgRx.hash);
-      if(mbedtls_sha256_starts(&imgRx.hash,0)!=0){imgRx.active=false;return;}
+      if(mbedtls_sha256_starts(&imgRx.hash,0)!=0){
+        mbedtls_sha256_free(&imgRx.hash);
+        if(imgRx.otaOpen){esp_ota_abort(imgRx.otaHandle);imgRx.otaOpen=false;}
+        imgRx.active=false;return;
+      }
       Serial.printf("[IMAGE] BEGIN from=%s bytes=%lu blocks=%u mode=%s BOOT_UNCHANGED\n",
         idString(f.origin).c_str(),(unsigned long)length,(unsigned)f.total,
         imgRx.stage?"FLASH_STAGE":"RAM_ONLY");
