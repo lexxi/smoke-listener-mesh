@@ -315,7 +315,7 @@ void imageReceive(const OtaFrame &f) {
         Serial.printf("[IMAGE] DONE target=%s bytes=%lu blocks=%u retries=%lu duration_ms=%lu SHA256_OK %s BOOT_UNCHANGED\n",
           idString(imgTarget).c_str(),(unsigned long)imgSize,(unsigned)imgTotal,
           (unsigned long)imgRetries,(unsigned long)(millis()-imgStartedAt),
-          imgStage?"STAGED_APP1":"NO_FLASH");
+          imgStage?"STAGED_INACTIVE":"NO_FLASH");
         imgActive=false;
       } else imageStop("target_sha256_mismatch");
       return;
