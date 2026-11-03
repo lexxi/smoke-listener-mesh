@@ -100,6 +100,9 @@ def main():
                         return 1
                     print("PASS: ECDSA P-256 signature verified by target (no flash).")
                     return 0
+                if "[AUTH] FAIL DOWNGRADE_REJECTED" in line:
+                    print("REJECTED: target refused an older or equal signed firmware version; no flash.")
+                    return 1
                 if "[AUTH] FAIL signature_rejected" in line:
                     if args.test_invalid_signature:
                         print("PASS: target REJECTED corrupted signature; no flash.")
