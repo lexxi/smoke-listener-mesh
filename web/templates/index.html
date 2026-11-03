@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smoke Mesh Monitor</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,Segoe UI,sans-serif;background:#0c1422;color:#e6edf7}
+*{box-sizing:border-box}body{margin:0;padding:24px;max-width:1450px;margin-inline:auto}
+header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:24px}
+h1{font-size:26px;margin:0}h2{font-size:17px;margin:0 0 14px}
+small,.muted{color:#95a7c0}small{font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.panel{background:#152237;border:1px solid #2a3b54;border-radius:12px;padding:18px;margin-bottom:16px}
+.metric{font-size:30px;font-weight:700;margin-top:8px}.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.node-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px}
+.node{border:1px solid #354760;border-radius:10px;padding:14px;background:#1a2a40}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.name{font-size:17px;font-weight:650;overflow-wrap:anywhere}
+.sub{color:#9bb0cb;font-size:13px;margin-top:5px}
+.tag{font-size:12px;border-radius:999px;padding:4px 9px;font-weight:700;white-space:nowrap}
+.online{background:#164d3d;color:#8ff2c3}.stale{background:#5b451d;color:#f4d38b}
+.offline{background:#5b303a;color:#ffb3bd}.unknown{background:#364358;color:#c5d0df}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:9px 7px;text-align:left;border-bottom:1px solid #293c55}
+th{color:#b6c5d9;font-weight:600}
+.scroll{overflow-x:auto} .floor{padding:12px 0;border-top:1px solid #2a3b54}
+.floor-title{color:#9bb0cb;font-size:13px;margin-bottom:10px}
+.floor-items{display:flex;gap:10px;flex-wrap:wrap}
+.floor-item{border:1px solid #476077;border-radius:9px;padding:12px 16px;min-width:150px}
+.warn{padding:12px;border:1px solid #745e32;border-radius:9px;color:#f4d38b;margin-top:16px;font-size:13px}
+@media(max-width:850px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
+@media(max-width:500px){body{padding:12px}.grid{grid-template-columns:1fr 1fr}.metric{font-size:22px}}
+</style>
+</head>
+<body>
+<header><div><h1>Smoke Mesh Monitor</h1><div class="muted">ESP32-C3 · ESP-NOW · lokale Testinstallation</div></div>
+<div id="updated" class="muted">Lade Daten …</div></header>
+<section class="grid">
+<div class="panel"><small>Bekannte Knoten</small><div id="count" class="metric">–</div></div>
+<div class="panel"><small>Aktuell erreichbar</small><div id="online" class="metric">–</div></div>
+<div class="panel"><small>Empfangene Pakete</small><div id="packets" class="metric">–</div></div>
+<div class="panel"><small>Über Relay empfangen</small><div id="relay" class="metric">–</div></div>
+</section>
+<section class="panel"><h2>Knotenübersicht</h2><div id="nodes" class="node-grid"></div></section>
+<section class="two">
+<div class="panel"><h2>Lageplan (schematisch)</h2><div id="floorplan"></div>
+<p class="muted"><small>Keine echten Raumkoordinaten hinterlegt. Der Plan zeigt nur die Zuordnung aus config/nodes.csv.</small></p></div>
+<div class="panel"><h2>Relay-Verbindungen</h2><div class="scroll"><table><thead><tr><th>Ursprung</th><th>Letzter Relay</th><th>Hops</th><th>Pakete</th></tr></thead><tbody id="routes"></tbody></table></div>
+<p class="muted"><small>Nur letzter Sender vor dem Logger bekannt; keine vollständige Hop-Route.</small></p></div>
+</section>
+<section class="panel"><h2>Letzte Empfangsmeldungen</h2><div class="scroll"><table><thead>
+<tr><th>Zeit</th><th>Knoten</th><th>Typ</th><th>Via</th><th>Hops</th><th>RSSI</th><th>Seq</th></tr>
+</thead><tbody id="events"></tbody></table></div></section>
+<div class="warn">Experimenteller Mesh-Monitor – keine zertifizierte Brandmeldeanlage. „Online“ bedeutet nur, dass kürzlich ein authentifiziertes Paket am Logger angekommen ist. RSSI gehört zum letzten Funk-Hop. Nicht als alleinige Alarmierung verwenden.</div>
+<script>
+const $ = id => document.getElementById(id);
+function el(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined && text!==null)e.textContent=String(text); if(cls)e.className=cls; return e; }
+function clear(parent) { parent.replaceChildren(); }
+function addCell(row, value) {row.appendChild(el("td", value===null || value===undefined ? "–" : value));}
+function statusText(s){return ({online:"Online",stale:"Überfällig",offline:"Offline",unknown:"Unbekannt"})[s]||s;}
+function time(x){return x ? x.replace("T"," ") : "–";}
+function nodeCard(n) {
+ const card=el("div",undefined,"node"), top=el("div",undefined,"row");
+ top.append(el("div",n.name,"name"),el("span",statusText(n.status),"tag "+n.status));
+ card.append(top,el("div",(n.location||"Standort unbekannt")+" · "+n.mac,"sub"));
+ if(n.configured_name && n.configured_name!==n.name)card.append(el("div","Konfiguration: "+n.configured_name,"sub"));
+ card.append(el("div","Letzter Empfang: "+(n.age_seconds===null?"noch keiner":n.age_seconds+" s")+" · "+time(n.last_seen),"sub"));
+ card.append(el("div","Pakete: "+n.packets+" · direkt: "+n.direct+" · via Relay: "+n.relayed,"sub"));
+ card.append(el("div","Letzter Weg: "+(n.hops===null?"–":n.hops+" Hop(s)")+" · RSSI: "+(n.rssi===null?"–":n.rssi+" dBm"),"sub"));
+ return card;
+}
+function render(data){
+ $("updated").textContent="Letzte Abfrage: "+new Date().toLocaleTimeString("de-AT")+" · "+data.log_files+" Logdatei(en)";
+ const nodes=data.nodes.filter(n=>n.location!=="PC-Logger");
+ $("count").textContent=nodes.length;
+ $("online").textContent=nodes.filter(n=>n.status==="online").length+" / "+nodes.length;
+ $("packets").textContent=data.total.toLocaleString("de-AT");
+ $("relay").textContent=nodes.reduce((s,n)=>s+(n.relayed||0),0).toLocaleString("de-AT");
+ clear($("nodes"));nodes.forEach(n=>$("nodes").appendChild(nodeCard(n)));
+ clear($("floorplan"));
+ const groups=[["1. OG",["1OG"]],["Erdgeschoss",["Kueche","FZRaum"]],["Garage",["Garage"]],["Andere",[]]];
+ const assigned=new Set();
+ for(const [floor,locations] of groups){
+  const group=el("div",undefined,"floor"), items=el("div",undefined,"floor-items");
+  const matches=nodes.filter(n=>locations.includes(n.location) || (floor==="Andere" && !["1OG","Kueche","FZRaum","Garage"].includes(n.location)));
+  if(!matches.length)continue;
+  group.appendChild(el("div",floor,"floor-title"));
+  matches.forEach(n=>{assigned.add(n.mac);const c=el("div",undefined,"floor-item");
+    c.append(el("div",n.name,"name"),el("div",statusText(n.status)+" · "+(n.age_seconds===null?"–":n.age_seconds+" s"),"sub"));items.appendChild(c);});
+  group.appendChild(items);$("floorplan").appendChild(group);
+ }
+ clear($("routes"));data.routes.slice(0,30).forEach(r=>{const tr=el("tr");[r.source,r.relay,r.hops,r.packets].forEach(x=>addCell(tr,x));$("routes").appendChild(tr);});
+ clear($("events"));data.events.forEach(e=>{const tr=el("tr");[time(e.received_at),e.source,e.packet_type,e.relay,e.hops,e.rssi===null?"–":e.rssi+" dBm",e.seq].forEach(x=>addCell(tr,x));$("events").appendChild(tr);});
+}
+async function refresh(){
+ try{const response=await fetch("/api/status",{cache:"no-store"});if(!response.ok)throw new Error("HTTP "+response.status);
+ const data=await response.json();render(data);}
+ catch(e){$("updated").textContent="Fehler beim Laden: "+e.message;}
+}
+refresh();setInterval(refresh,5000);
+</script>
+</body></html>
