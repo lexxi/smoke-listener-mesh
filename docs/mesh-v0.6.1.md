@@ -13,6 +13,12 @@
 
 **Einschränkungen:** Kein automatischer Installationsabschluss, kein OTA-Boot, keine Bootbestätigung und noch kein getesteter Rollback. Der Versionsvergleich schützt nur gegenüber der einkompilierten Version, nicht dauerhaft gegenüber USB-/Flash-Reprogrammierung oder einer eFuse-basierten Anti-Rollback-Sicherung. Secure Boot und Flash Encryption sind ebenfalls nicht eingerichtet.
 
+## Eindeutige Downgrade-Meldung am Gateway
+
+Nach dem ersten Hardwaretest war `signature_rejected` mehrdeutig. Das Zielgerät liefert nun einen eigenen, HMAC-authentifizierten Antwortstatus für signierte, aber zu alte oder gleiche Versionen (`DOWNGRADE_REJECTED`). Kueche gibt ihn am seriellen Port aus, `send_manifest.py` zeigt zusätzlich eine verständliche Erläuterung. Das schützt vor falscher Interpretation eines Signaturfehlers als erfolgreich nachgewiesenen Versionsvergleich.
+
+**Wichtig:** Für diese neue Rückmeldung müssen **beide Geräte** die geänderte v0.6.1 erhalten: 1OG zum Senden des neuen Status und Kueche zum Interpretieren. Nur das Python-Skript zu aktualisieren genügt nicht. Für den Nachtest keine `FLASH ARM`-Freigabe setzen.
+
 ## Warum wir v0.6.2 als Test-Image brauchen
 
 Kueche und 1OG führen aktuell v0.6.0 aus. Nach einem einmaligen Flash von v0.6.1 per USB kann der neue Empfänger ältere oder gleiche Versionen nicht mehr annehmen. Eine *neue* v0.6.2 ist daher die erste sinnvolle OTA-Testdatei. **Das bisherige signierte Manifest für v0.5.9 muss unter v0.6.1 abgelehnt werden.** Für den nächsten Test wird eine echte v0.6.2-Binärdatei erstellt und für 1OG neu signiert.
