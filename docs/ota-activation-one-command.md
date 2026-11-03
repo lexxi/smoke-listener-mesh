@@ -23,7 +23,14 @@ git pull origin main
 .\tools\ota\ota-activate.ps1
 ```
 
-Der Launcher nutzt `tools/ota/ota_test.py --activate` und erledigt:
+Der Launcher nutzt standardmäßig `tools/ota/ota_test.py --activate --activate-only`: **keine Manifest- oder Firmwareübertragung**. Er kontrolliert den signierten RAM-Prüfzustand des noch laufenden 1OG, führt `BOOT VERIFY` aus und fragt ausdrücklich vor der Bootumschaltung. Wenn die Sitzung durch Reset verloren ist, stoppt er ohne Übertragung.
+
+**Nur falls eine neue signierte Übertragung ausdrücklich notwendig ist**, kann man `-Restage` angeben:
+```powershell
+.\tools\ota\ota-activate.ps1 -Restage
+```
+
+Der folgende Ablauf gilt nur mit `-Restage`:
 1. Offline-Validierung von Signatur, Ziel-ID, Image und SHA-256.
 2. Durchgängige Verbindung COM15; `NAME GET` und `BOOT STATUS` prüfen v0.6.6 und `app0`.
 3. Lokales `FLASH ARM`, Signaturmanifest-Transfer über COM12, Flash-Staging von v0.6.7.
@@ -42,3 +49,7 @@ Die Skriptausführung kann etwa 3–4 Minuten dauern, weil das bereits gespeiche
 - Erst in einem separaten Test mit USB-Zugriff: Neustart → `PENDING_VERIFY` auslesen → authentifizierte Mesh-Verbindung prüfen → kontrolliert `BOOT CONFIRM` oder absichtlich unbestätigt erneut starten und Rückfall auf `app0` prüfen.
 - ESP-IDF-Rollback ist im bereitgestellten Core konfiguriert, aber der tatsächlich installierte Bootloader und der Rückfallmechanismus sind **nicht auf Hardware bewiesen**.
 - Vor jedem Neustart nach aktivierter `app1` muss ein funktionierender USB-Recovery-Weg feststehen.
+
+## Änderung: Keine Wiederholung der Übertragung als Standard
+
+Der Standardmodus `ota-activate.ps1` prüft das bereits vorhandene v0.6.7-Image ausschließlich über die aktuell noch gültige, signierte RAM-Sitzung des 1OG. Nach Reset sind `authRx`/`imgRx` verloren: Dann wird `BOOT VERIFY` scheitern. Die v0.6.6-Firmware kann ohne erneutes Staging die signierte Freigabe nicht aus Flash rekonstruieren. **Das Skript bricht deshalb ab, statt selbständig 1 MB neu zu übertragen.** Eine spätere Firmwareverbesserung könnte diese Limitierung über dauerhaft signiert gespeicherte Metadaten beheben.
