@@ -125,6 +125,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--gateway", default="COM12")
     ap.add_argument("--target-port", default="COM15")
+    ap.add_argument("--from-version", choices=["0.6.6","0.6.7"], default="0.6.6")
+    ap.add_argument("--to-version", choices=["0.6.7","0.6.8"], default="0.6.7")
     ap.add_argument("--image", type=Path, default=DEFAULT_IMAGE)
     ap.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     ap.add_argument("--public-key", type=Path, default=DEFAULT_KEY)
@@ -138,8 +140,9 @@ def main() -> int:
         ap.error("Gateway and target must use different COM ports")
     try:
         plan = build_plan(args.image, args.manifest, args.public_key)
-        if plan["target"] != TARGET_NODE or plan["version"] != "0.6.7":
-            raise ValueError("This test is locked to signed v0.6.7 for the 1OG node")
+        if plan["target"] != TARGET_NODE or plan["version"] != args.to_version or (args.from_version, args.to_version) not in (("0.6.6","0.6.7"),("0.6.7","0.6.8")):
+            raise ValueError("Unexpected node/version or unsupported upgrade pair")
+        source_slot, next_slot = ("app0","app1") if args.from_version == "0.6.6" else ("app1","app0")
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"STOP: signed release preflight: {exc}", file=sys.stderr)
         return 2
@@ -162,8 +165,8 @@ def main() -> int:
             name = target.command("NAME GET", r"\[CONFIG\] name=.*node=([0-9A-F]{16})")
             if TARGET_NODE not in name:
                 raise RuntimeError(f"Wrong target device on {args.target_port}: {name}")
-            status = target.command("BOOT STATUS", r"\[BOOT\] running=.*version=0\.6\.6\b")
-            if "running=app0" not in status or "boot=app0" not in status or "inactive=app1" not in status:
+            status = target.command("BOOT STATUS", rf"\[BOOT\] running=.*version={re.escape(args.from_version)}\b")
+            if f"running={source_slot}" not in status or f"boot={source_slot}" not in status or f"inactive={next_slot}" not in status:
                 raise RuntimeError(f"Unexpected boot slot: {status}")
             if not args.activate_only:
                 target.command("FLASH ARM", r"\[FLASH\] ARMED local_serial_only window=300s")
@@ -176,20 +179,20 @@ def main() -> int:
             else:
                 print("ACTIVATE-ONLY: no MANIFEST and no IMAGE transfer attempted.", flush=True)
             flash = target.command("FLASH STATUS", r"\[FLASH\] running=.*staged_valid=[01].*BOOT_UNCHANGED")
-            if "running=0.6.6" not in flash or "staged_valid=1" not in flash:
+            if f"running={args.from_version}" not in flash or "staged_valid=1" not in flash:
                 raise RuntimeError(f"Unexpected flash status: {flash}")
             verified = target.command("BOOT VERIFY",
-                rf"\[BOOT\] VERIFY PASS signed=0\.6\.7 bytes={plan['size']} slot=app1 SHA256_OK BOOT_UNCHANGED",
+                rf"\[BOOT\] VERIFY PASS signed={re.escape(args.to_version)} bytes={plan['size']} slot={next_slot} SHA256_OK BOOT_UNCHANGED",
                 timeout=40)
-            boot = target.command("BOOT STATUS", r"\[BOOT\] running=.*version=0\.6\.6")
-            if "running=app0" not in boot or "boot=app0" not in boot:
+            boot = target.command("BOOT STATUS", rf"\[BOOT\] running=.*version={re.escape(args.from_version)}")
+            if f"running={source_slot}" not in boot or f"boot={source_slot}" not in boot:
                 raise RuntimeError(f"Boot selection unexpectedly changed: {boot}")
             flags = target.command("BOOT STATUS",
                 r"\[BOOT\] activation=LOCAL_ARM_ONLY verified=[01] arm_valid=[01]")
             if "verified=1" not in flags or "arm_valid=0" not in flags:
                 raise RuntimeError(f"Unverified/armed state: {flags}")
-            print("\nPASS: v0.6.7 signed OTA verified from existing app1 on 1OG."
-                  " Boot remains app0/v0.6.6.", flush=True)
+            print(f"\nPASS: v{args.to_version} signed OTA verified in {next_slot} on 1OG."
+                  f" Boot remains {source_slot}/v{args.from_version}.", flush=True)
             if not args.activate:
                 print("STOPPED BEFORE BOOT ACTIVATION (default).", flush=True)
                 return 0
@@ -197,17 +200,18 @@ def main() -> int:
                 raise RuntimeError("Activation requires an interactive local terminal; no redirected stdin")
             print("\nCAUTION: BOOT ACTIVATE changes otadata. Rollback is not hardware-tested.")
             print("The device will NOT reboot automatically. USB recovery must be available.")
-            confirmation = input("Type exactly 'ACTIVATE 1OG 0.6.7' to proceed: ")
-            if confirmation != "ACTIVATE 1OG 0.6.7":
-                print("CANCELLED. Boot remains app0.", flush=True)
+            phrase = f"ACTIVATE 1OG {args.to_version}"
+            confirmation = input(f"Type exactly '{phrase}' to proceed: ")
+            if confirmation != phrase:
+                print(f"CANCELLED. Boot remains {source_slot}.", flush=True)
                 return 0
             target.command("BOOT ARM", r"\[BOOT\] ARMED local_serial_only window=60s")
-            target.command("BOOT ACTIVATE", r"\[BOOT\] ACTIVATE SUCCESS next_boot=app1 running=app0 NO_AUTO_REBOOT",
+            target.command("BOOT ACTIVATE", rf"\[BOOT\] ACTIVATE SUCCESS next_boot={next_slot} running={source_slot} NO_AUTO_REBOOT",
                            timeout=50)
-            selected = target.command("BOOT STATUS", r"\[BOOT\] running=.*version=0\.6\.6\b")
-            if "running=app0" not in selected or "boot=app1" not in selected:
+            selected = target.command("BOOT STATUS", rf"\[BOOT\] running=.*version={re.escape(args.from_version)}\b")
+            if f"running={source_slot}" not in selected or f"boot={next_slot}" not in selected:
                 raise RuntimeError(f"ACTIVATION STATE UNCERTAIN: inspect otadata before resetting: {selected}")
-            print("\nPASS: Boot target is app1/v0.6.7; running still app0/v0.6.6.")
+            print(f"\nPASS: Boot target is {next_slot}/v{args.to_version}; running still {source_slot}/v{args.from_version}.")
             print("NO REBOOT SENT. Do not power-cycle before the separate rollback test plan.", flush=True)
             return 0
         except (RuntimeError, OSError, serial.SerialException, subprocess.SubprocessError) as exc:
