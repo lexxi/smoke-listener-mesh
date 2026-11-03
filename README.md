@@ -21,6 +21,7 @@ Frühere Implementierungen und Dokumente bleiben zur Nachvollziehbarkeit im Repo
 
 - **v0.5.6 auf Hardware getestet:** Direkter Test 1OG → Garage: 16/16 Blöcke. Relay-Pfad Keller_Abgang → Garage → 1OG: erfolgreich 16/16 ACKs mit `hops=1`; ohne Garage 0/16; nach Wiedereinschalten erst im zweiten Anlauf 16/16. Paketverluste treten auf. Das ist ein **RAM-Transporttest, kein Firmware-Update**.
 - **v0.5.7 im Repository, Build/Hardwaretest offen:** längere RAM-only-Tests mit 1–4096 Blöcken, mehr Diagnose und Wiederholungen. Anleitung: [v0.5.7](docs/mesh-v0.5.7.md).
+- **Vorbereitung echter OTA-Updates:** [Firmware-Signaturwerkzeug](docs/ota-signing.md) für zielgebundene, mit ECDSA-P-256 signierte Firmwaremanifeste hinzugefügt. Der Empfänger und der eigentliche Flash-Workflow fehlen noch.
 - **Echtes OTA-Flashen noch nicht implementiert.** v0.5.6 kann v0.5.7 **nicht drahtlos installieren**. Eine spätere dafür freigegebene Version benötigt mindestens eine USB-Erstinstallation je Knoten. Details: [OTA-Roadmap](docs/mesh-ota.md).
 
 ## Hardware
