@@ -17,6 +17,12 @@ Experimenteller ESP32-C3-basierter Mesh-Zusatz für die **akustische Erkennung u
 
 Frühere Implementierungen und Dokumente bleiben zur Nachvollziehbarkeit im Repository. Der **aktuelle Einstiegspunkt** ist `firmware/mesh-v0.5.5/mesh-v0.5.5.ino`, nicht v0.5.1.
 
+## OTA-Entwicklung (Stand 03.11.2026)
+
+- **v0.5.6 auf Hardware getestet:** Direkter Test 1OG → Garage: 16/16 Blöcke. Relay-Pfad Keller_Abgang → Garage → 1OG: erfolgreich 16/16 ACKs mit `hops=1`; ohne Garage 0/16; nach Wiedereinschalten erst im zweiten Anlauf 16/16. Paketverluste treten auf. Das ist ein **RAM-Transporttest, kein Firmware-Update**.
+- **v0.5.7 im Repository, Build/Hardwaretest offen:** längere RAM-only-Tests mit 1–4096 Blöcken, mehr Diagnose und Wiederholungen. Anleitung: [v0.5.7](docs/mesh-v0.5.7.md).
+- **Echtes OTA-Flashen noch nicht implementiert.** v0.5.6 kann v0.5.7 **nicht drahtlos installieren**. Eine spätere dafür freigegebene Version benötigt mindestens eine USB-Erstinstallation je Knoten. Details: [OTA-Roadmap](docs/mesh-ota.md).
+
 ## Hardware
 
 Aktueller Testaufbau: ESP32-C3 SuperMini mit INMP441 (I²S), USB-Stromversorgung. Für den späteren Knoten vorgesehen: **Buzzer, 18650-Li-Ion-Akku, Lade-/Schutzelektronik, geregelte 3,3-V-Versorgung und geeignete 2,4-GHz-Antenne**. Antennenanschluss und Buzzer-Treiber sind abhängig von der konkreten Hardware noch zu prüfen.
