@@ -161,8 +161,21 @@ def ingest():
                     offsets[key] = ((stat.st_dev, stat.st_ino), f.tell())
         return count
 
-def snapshot():
+def available_sessions():
+    """One log file is one test session; choose latest modified file as default."""
+    return sorted(log_files(), key=lambda p: (p.stat().st_mtime, str(p)), reverse=True)
+
+def snapshot(selected_file=None):
     ingest()
+    sessions = available_sessions()
+    allowed = {str(p.resolve()): p for p in sessions}
+    if selected_file and selected_file not in allowed:
+        raise ValueError("Unknown log file")
+    chosen = selected_file or (str(sessions[0].resolve()) if sessions else None)
+    session_info = [
+        {"id": str(p.resolve()), "label": p.name, "active": str(p.resolve()) == chosen}
+        for p in sessions
+    ]
     now = dt.datetime.now().astimezone().replace(tzinfo=None)
     settings = nodes_config()
     nodes = {mac: {**entry, "name": entry["configured_name"] or entry["location"] or mac,
@@ -171,27 +184,37 @@ def snapshot():
                    "hops": None, "via": None, "last_type": None}
              for mac, entry in settings.items()}
     with database() as conn:
-        latest = conn.execute("""SELECT r.* FROM receptions r JOIN
-          (SELECT origin, MAX(id) AS last_id FROM receptions GROUP BY origin) x
-          ON x.last_id=r.id""").fetchall()
-        sums = {r["origin"]: r for r in conn.execute(
-            "SELECT origin,COUNT(*) packets,SUM(hops=0) direct,SUM(hops>0) relayed FROM receptions GROUP BY origin")}
-        paths = [dict(row) for row in conn.execute(
-            """SELECT origin,via,hops,COUNT(*) AS packets FROM receptions
-            WHERE hops>0 GROUP BY origin,via,hops ORDER BY packets DESC LIMIT 100""")]
-        recent = [dict(row) for row in conn.execute(
-            """SELECT received_at,origin,name,via,seq,hops,rssi,packet_type
-               FROM receptions ORDER BY id DESC LIMIT 40""")]
-        total = conn.execute("SELECT COUNT(*) FROM receptions").fetchone()[0]
-        active_logger = conn.execute(
-            "SELECT * FROM transmissions ORDER BY sent_at DESC, id DESC LIMIT 1"
-        ).fetchone()
-        logger_tx = None
-        if active_logger:
-            logger_tx = conn.execute(
-                "SELECT COUNT(*) FROM transmissions WHERE origin=?",
-                (active_logger["origin"],)
+        if chosen is None:
+            latest, sums, paths, recent, total, active_logger, logger_tx = [], {}, [], [], 0, None, None
+        else:
+            latest = conn.execute("""SELECT * FROM (
+                SELECT r.*, ROW_NUMBER() OVER
+                    (PARTITION BY origin ORDER BY received_at DESC, id DESC) AS rn
+                FROM receptions r WHERE source_file=?
+            ) WHERE rn=1""", (chosen,)).fetchall()
+            sums = {r["origin"]: r for r in conn.execute(
+                """SELECT origin, COUNT(*) packets, SUM(hops=0) direct,
+                   SUM(hops>0) relayed FROM receptions WHERE source_file=? GROUP BY origin""",
+                (chosen,))}
+            paths = [dict(row) for row in conn.execute(
+                """SELECT origin,via,hops,COUNT(*) AS packets FROM receptions
+                   WHERE source_file=? AND hops>0 GROUP BY origin,via,hops
+                   ORDER BY packets DESC LIMIT 100""", (chosen,))]
+            recent = [dict(row) for row in conn.execute(
+                """SELECT received_at,origin,name,via,seq,hops,rssi,packet_type
+                   FROM receptions WHERE source_file=?
+                   ORDER BY received_at DESC,id DESC LIMIT 40""", (chosen,))]
+            total = conn.execute(
+                "SELECT COUNT(*) FROM receptions WHERE source_file=?", (chosen,)
             ).fetchone()[0]
+            active_logger = conn.execute(
+                """SELECT * FROM transmissions WHERE source_file=?
+                   ORDER BY sent_at DESC,id DESC LIMIT 1""", (chosen,)
+            ).fetchone()
+            logger_tx = conn.execute(
+                "SELECT COUNT(*) FROM transmissions WHERE source_file=? AND origin=?",
+                (chosen, active_logger["origin"])
+            ).fetchone()[0] if active_logger else None
     for last in latest:
         mac = mac_from_origin(last["origin"])
         if not mac:
@@ -237,8 +260,10 @@ def snapshot():
         mac = mac_from_origin(event["origin"])
         event["source"] = nodes.get(mac, {}).get("name", event["name"] or mac)
         event["relay"] = nodes.get(event["via"], {}).get("name", event["via"])
-    return {"nodes": list(nodes.values()), "logger_mac": logger_mac, "routes": paths, "events": recent,
-            "total": total, "generated_at": now.isoformat(), "log_files": len(log_files()),
+    return {"nodes": list(nodes.values()), "logger_mac": logger_mac,
+            "selected_file": chosen, "sessions": session_info,
+            "routes": paths, "events": recent,
+            "total": total, "generated_at": now.isoformat(), "log_files": len(sessions),
             "note": "RSSI measures the last radio hop, not necessarily origin-to-logger signal strength."}
 
 @app.get("/")
@@ -247,7 +272,10 @@ def index():
 
 @app.get("/api/status")
 def status():
-    return jsonify(snapshot())
+    try:
+        return jsonify(snapshot(request.args.get("file") or None))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 def main():
     parser = argparse.ArgumentParser(description="Local Smoke Mesh web dashboard")
