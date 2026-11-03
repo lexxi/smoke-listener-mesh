@@ -28,6 +28,7 @@ Frühere Implementierungen und Dokumente bleiben zur Nachvollziehbarkeit im Repo
 - **v0.6.0 (auf Kueche und 1OG getestet):** [Signaturprüfung direkt am Zielgerät](docs/mesh-v0.6.0.md): ein gültiges ECDSA-P-256-Manifest wurde akzeptiert, eine absichtlich manipulierte Signatur abgelehnt. **Kein Flash-Schreiben.**
 - **v0.6.1 (neu, noch NICHT kompiliert oder hardwaregetestet):** [Downgrade-Prüfung und ausdrücklich freizugebendes Schreiben in den inaktiven OTA-App-Slot](docs/mesh-v0.6.1.md). **Keine Bootumschaltung und kein automatischer Rollback.** Nicht ohne die dokumentierten Tests produktiv verwenden.
 - **v0.6.2 (Upgrade-Kandidat, noch nicht kompiliert):** [Signiertes Image für den positiven v0.6.1→v0.6.2-Test](docs/mesh-v0.6.2.md). Kueche und 1OG bleiben zunächst auf v0.6.1. Erst Signatur und RAM-only-Transfer prüfen; Flash-Staging noch nicht starten.
+- **v0.6.3 (Rollback-Diagnostik, noch nicht kompiliert):** [Boot-/Rollback-Fähigkeiten prüfen](docs/mesh-v0.6.3.md), ohne die Bootpartition zu wechseln. Zunächst nur kompilieren; auf 1OG liegt derzeit die getestete v0.6.2 in der inaktiven Partition.
 - **Vollständige automatische OTA-Installation ist noch nicht fertig.** Es fehlen kontrollierte Bootaktivierung, Bootbestätigung, Recovery und Rollback. Details: [OTA-Roadmap](docs/mesh-ota.md).
 
 ## Hardware
