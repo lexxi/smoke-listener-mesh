@@ -517,7 +517,7 @@ void printBootDiagnostics() {
   const esp_partition_t *running=esp_ota_get_running_partition();
   const esp_partition_t *boot=esp_ota_get_boot_partition();
   const esp_partition_t *next=esp_ota_get_next_update_partition(nullptr);
-  Serial.printf("[BOOT] running=%s boot=%s inactive=%s version=%s\\n",
+  Serial.printf("[BOOT] running=%s boot=%s inactive=%s version=%s\n",
     running?running->label:"(none)",boot?boot->label:"(none)",
     next?next->label:"(none)",CURRENT_FW_VERSION);
 #if defined(CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE) && CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
@@ -537,15 +537,15 @@ void printBootDiagnostics() {
   if(running) {
     esp_ota_img_states_t state=ESP_OTA_IMG_UNDEFINED;
     esp_err_t err=esp_ota_get_state_partition(running,&state);
-    Serial.printf("[BOOT] running_state_result=%d running_state=%d\\n",(int)err,(int)state);
+    Serial.printf("[BOOT] running_state_result=%d running_state=%d\n",(int)err,(int)state);
   }
   if(next) {
     esp_ota_img_states_t state=ESP_OTA_IMG_UNDEFINED;
     esp_err_t err=esp_ota_get_state_partition(next,&state);
-    Serial.printf("[BOOT] inactive_state_result=%d inactive_state=%d\\n",(int)err,(int)state);
+    Serial.printf("[BOOT] inactive_state_result=%d inactive_state=%d\n",(int)err,(int)state);
     esp_app_desc_t desc={};
     err=esp_ota_get_partition_description(next,&desc);
-    Serial.printf("[BOOT] inactive_image_desc_result=%d app_version=%s project=%s\\n",
+    Serial.printf("[BOOT] inactive_image_desc_result=%d app_version=%s project=%s\n",
       (int)err,err==ESP_OK?desc.version:"(unreadable)",
       err==ESP_OK?desc.project_name:"(unreadable)");
   }
