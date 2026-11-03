@@ -90,7 +90,8 @@ class TargetConsole:
                 if not self.reader.is_alive():
                     raise RuntimeError("COM15 serial reader stopped")
                 continue
-            if "[CONFIG] ERROR" in line or "[BOOT] VERIFY FAIL" in line:
+            if ("[CONFIG] ERROR" in line or "[BOOT] VERIFY FAIL" in line or
+                ("ERROR" in line and line.startswith(("[FLASH]", "[BOOT]", "[IMAGE]", "[AUTH]")))):
                 raise RuntimeError(f"{text}: {line}")
             if re.search(pattern, line):
                 return line
