@@ -37,7 +37,7 @@ Anschließend `firmware/mesh-v0.6.1/mesh-v0.6.1.ino` in der Arduino IDE **nur ü
 - Das signierte v0.5.9-Manifest senden: muss als Downgrade abgelehnt werden.
 - Ein neues, für 1OG signiertes v0.6.2-Manifest senden: muss angenommen werden.
 - Mit `send_image.py` ohne `--flash-stage` unverändert den RAM-only-Transfer prüfen.
-- Für den späteren Staging-Test 1OG per USB verbinden, **an 1OG** `FLASH ARM` eingeben, lokalen Monitor schließen. Per PC-Tool über **Kueche** mit ausdrücklichem `--flash-stage` den Transfer auslösen. Bei Erfolg: `STAGED_APP1 BOOT_UNCHANGED`. Über `FLASH STATUS` auf 1OG kann die Zwischenablage geprüft werden. Der serielle Monitor von Kueche muss beim Gateway-Script geschlossen sein.
+- Für den späteren Staging-Test 1OG per USB verbinden, **an 1OG** `FLASH ARM` eingeben, lokalen Monitor schließen. Per PC-Tool über **Kueche** mit ausdrücklichem `--flash-stage` den Transfer auslösen. Bei Erfolg: `STAGED_INACTIVE BOOT_UNCHANGED`. Über `FLASH STATUS` auf 1OG kann die Zwischenablage geprüft werden. Der serielle Monitor von Kueche muss beim Gateway-Script geschlossen sein.
 - Stromverlust-/Fehler- und Recovery-Szenarien auf einem separat per USB rettbaren Testgerät prüfen; erst danach Bootaktivierung und Rollback implementieren.
 
 Das Staging kann die vorhandene *inaktive* Firmware überschreiben. Auch ohne Bootumschaltung ist dies eine **echte Flash-Operation**. Erst ausführen, wenn der Testknoten per USB wiederhergestellt werden kann.
