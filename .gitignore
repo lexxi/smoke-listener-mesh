@@ -5,3 +5,7 @@
 
 logs/
 log/
+
+# Local dashboard runtime data
+/web/data/
+**/__pycache__/
