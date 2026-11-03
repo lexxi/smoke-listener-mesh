@@ -18,7 +18,7 @@
 #include "ota_version.h"
 
 // v0.6.4: read-back verification of a signed staged image; no boot-selection changes.
-// Development build, intentionally retains the same controlled staging guard.
+// Development build: signed staging and local-only guarded boot activation.
 // Boot activation deliberately DISABLED; flashing requires local serial arming.
 // Experimental prototype; NOT a life-safety alarm system.
 // All nodes require the SAME private mesh_secrets.h.
@@ -553,7 +553,10 @@ void printBootDiagnostics() {
       (int)err,err==ESP_OK?desc.version:"(unreadable)",
       err==ESP_OK?desc.project_name:"(unreadable)");
   }
-  Serial.println("[BOOT] activation=LOCKED rollback_NOT_YET_PROVEN");
+  Serial.printf("[BOOT] activation=LOCAL_ARM_ONLY verified=%u arm_valid=%u mesh_peer_verified=%u rollback_hardware_test=NOT_DONE\\n",
+    (unsigned)bootVerified,
+    (unsigned)(bootArmed && (uint32_t)(millis()-bootArmedAt)<BOOT_ARM_WINDOW_MS),
+    (unsigned)meshPeerVerified);
 }
 // Verify exact signed-image bytes from the inactive slot, not only the RAM transfer hash.
 // This diagnostic intentionally does NOT change otadata or boot selection.
