@@ -195,7 +195,7 @@ void authReceive(const OtaFrame &f) {
   if(f.index==0 && (!authRx.active || authRx.session!=f.session ||
                      authRx.origin!=f.origin)) {
     // Accept a new session only if the old one is complete or has timed out.
-    if(authRx.active && !authRx.verified &&
+    if(authRx.active && authRx.next<authRx.total &&
        (uint32_t)(millis()-authRx.lastActivity)<120000UL)return;
     authRx=AuthRx{};
     authRx.active=true;authRx.origin=f.origin;authRx.session=f.session;
