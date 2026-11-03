@@ -44,7 +44,7 @@ inline bool releaseVerify(const uint8_t *blob,size_t length,
     canonical+=c;
   }
   // Reconstruct precisely the only allowed canonical JSON layout.
-  const String prefix="{\\\"board\\\":\\\"esp32c3\\\",\\\"schema\\\":\\\"smoke-mesh-ota-v1\\\",\\\"sha256\\\":\\\"";
+  const String prefix="{\"board\":\"esp32c3\",\"schema\":\"smoke-mesh-ota-v1\",\"sha256\":\"";
   if(!canonical.startsWith(prefix))return false;
   const String hashText=canonical.substring(prefix.length(),prefix.length()+64);
   if(hashText.length()!=64)return false;
@@ -54,7 +54,7 @@ inline bool releaseVerify(const uint8_t *blob,size_t length,
        !releaseHexNibble(hashText[2*i+1],b))return false;
     imageSha[i]=(uint8_t)((a<<4)|b);
   }
-  const String mid="\\\",\\\"size\\\":";
+  const String mid="\",\"size\":";
   int numStart=prefix.length()+64;
   if(!canonical.substring(numStart).startsWith(mid))return false;
   numStart+=mid.length();
@@ -69,10 +69,10 @@ inline bool releaseVerify(const uint8_t *blob,size_t length,
   char id[17];
   snprintf(id,sizeof(id),"%08lX%08lX",
     (unsigned long)(deviceId>>32),(unsigned long)deviceId);
-  const String tail="\\\",\\\"target\\\":\\\""+String(id)+"\\\",\\\"version\\\":\\\"";
+  const String tail="\",\"target\":\""+String(id)+"\",\"version\":\"";
   if(!canonical.substring(numEnd).startsWith(tail))return false;
   int verStart=numEnd+tail.length();
-  if(!canonical.endsWith("\\\"}"))return false;
+  if(!canonical.endsWith("\"}"))return false;
   const String version=canonical.substring(verStart,canonical.length()-2);
   if(!version.length() || version.length()>32)return false;
   for(size_t i=0;i<version.length();i++){
@@ -80,7 +80,7 @@ inline bool releaseVerify(const uint8_t *blob,size_t length,
     if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||
          (c>='0'&&c<='9')||c=='.'||c=='_'||c=='-'))return false;
   }
-  if(canonical!=prefix+hashText+mid+number+tail+version+"\\\"}")
+  if(canonical!=prefix+hashText+mid+number+tail+version+"\"}")
     return false;
   const esp_partition_t *running=esp_ota_get_running_partition();
   const esp_partition_t *next=esp_ota_get_next_update_partition(nullptr);
