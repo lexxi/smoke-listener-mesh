@@ -170,7 +170,7 @@ def main() -> int:
             if "running=0.6.6" not in flash or "staged_valid=1" not in flash:
                 raise RuntimeError(f"Unexpected flash status: {flash}")
             verified = target.command("BOOT VERIFY",
-                r"\[BOOT\] VERIFY PASS signed=0\.6\.7 bytes=1034128 slot=app1 SHA256_OK BOOT_UNCHANGED",
+                rf"\[BOOT\] VERIFY PASS signed=0\.6\.7 bytes={plan['size']} slot=app1 SHA256_OK BOOT_UNCHANGED",
                 timeout=40)
             boot = target.command("BOOT STATUS", r"\[BOOT\] running=.*version=0\.6\.6")
             if "running=app0" not in boot or "boot=app0" not in boot:
