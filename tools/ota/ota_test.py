@@ -129,7 +129,10 @@ def main() -> int:
     ap.add_argument("--public-key", type=Path, default=DEFAULT_KEY)
     ap.add_argument("--dry-run", action="store_true", help="Only offline verification; never open COM ports")
     ap.add_argument("--activate", action="store_true", help="After successful transfer request separately confirmed local BOOT ACTIVATE; NO REBOOT")
+    ap.add_argument("--activate-only", action="store_true", help="No image transfer: use only a previously verified image still authorized in current target RAM session")
     args = ap.parse_args()
+    if args.activate_only and not args.activate:
+        ap.error("--activate-only requires --activate")
     if args.gateway.upper() == args.target_port.upper():
         ap.error("Gateway and target must use different COM ports")
     try:
@@ -161,12 +164,16 @@ def main() -> int:
             status = target.command("BOOT STATUS", r"\[BOOT\] running=.*version=0\.6\.6\b")
             if "running=app0" not in status or "boot=app0" not in status or "inactive=app1" not in status:
                 raise RuntimeError(f"Unexpected boot slot: {status}")
-            target.command("FLASH ARM", r"\[FLASH\] ARMED local_serial_only window=300s")
-            common = ["--port", args.gateway, "--image", str(args.image),
-                      "--manifest", str(args.manifest), "--public-key", str(args.public_key)]
-            run_child("MANIFEST", [str(HERE / "send_manifest.py"), *common], logfile)
-            run_child("IMAGE", [str(HERE / "send_image.py"), *common,
-                                "--flash-stage", "--timeout", "1800"], logfile)
+            if not args.activate_only:
+                target.command("FLASH ARM", r"\[FLASH\] ARMED local_serial_only window=300s")
+            if not args.activate_only:
+                common = ["--port", args.gateway, "--image", str(args.image),
+                          "--manifest", str(args.manifest), "--public-key", str(args.public_key)]
+                run_child("MANIFEST", [str(HERE / "send_manifest.py"), *common], logfile)
+                run_child("IMAGE", [str(HERE / "send_image.py"), *common,
+                                    "--flash-stage", "--timeout", "1800"], logfile)
+            else:
+                print("ACTIVATE-ONLY: no MANIFEST and no IMAGE transfer attempted.", flush=True)
             flash = target.command("FLASH STATUS", r"\[FLASH\] running=.*staged_valid=[01].*BOOT_UNCHANGED")
             if "running=0.6.6" not in flash or "staged_valid=1" not in flash:
                 raise RuntimeError(f"Unexpected flash status: {flash}")
@@ -180,7 +187,7 @@ def main() -> int:
                 r"\[BOOT\] activation=LOCAL_ARM_ONLY verified=[01] arm_valid=[01]")
             if "verified=1" not in flags or "arm_valid=0" not in flags:
                 raise RuntimeError(f"Unverified/armed state: {flags}")
-            print("\nPASS: v0.6.7 signed OTA staged and read back on 1OG."
+            print("\nPASS: v0.6.7 signed OTA verified from existing app1 on 1OG."
                   " Boot remains app0/v0.6.6.", flush=True)
             if not args.activate:
                 print("STOPPED BEFORE BOOT ACTIVATION (default).", flush=True)
