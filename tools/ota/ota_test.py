@@ -128,6 +128,7 @@ def main() -> int:
     ap.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     ap.add_argument("--public-key", type=Path, default=DEFAULT_KEY)
     ap.add_argument("--dry-run", action="store_true", help="Only offline verification; never open COM ports")
+    ap.add_argument("--activate", action="store_true", help="After successful transfer request separately confirmed local BOOT ACTIVATE; NO REBOOT")
     args = ap.parse_args()
     if args.gateway.upper() == args.target_port.upper():
         ap.error("Gateway and target must use different COM ports")
@@ -140,7 +141,7 @@ def main() -> int:
         return 2
     print(f"Verified offline: version={plan['version']} node={plan['target']} "
           f"bytes={plan['size']} sha256={plan['sha256']}", flush=True)
-    print(f"Ports: Kueche={args.gateway} 1OG={args.target_port}; BOOT ACTIVATE is NEVER sent.")
+    print(f"Ports: Kueche={args.gateway} 1OG={args.target_port}; mode={'GUARDED_ACTIVATION_NO_REBOOT' if args.activate else 'STAGING_ONLY'}")
     if args.dry_run:
         print("DRY RUN OK: serial ports untouched.")
         return 0
@@ -180,10 +181,29 @@ def main() -> int:
             if "verified=1" not in flags or "arm_valid=0" not in flags:
                 raise RuntimeError(f"Unverified/armed state: {flags}")
             print("\nPASS: v0.6.7 signed OTA staged and read back on 1OG."
-                  " Boot remains app0/v0.6.6. No activation, no reboot.", flush=True)
+                  " Boot remains app0/v0.6.6.", flush=True)
+            if not args.activate:
+                print("STOPPED BEFORE BOOT ACTIVATION (default).", flush=True)
+                return 0
+            if not sys.stdin.isatty():
+                raise RuntimeError("Activation requires an interactive local terminal; no redirected stdin")
+            print("\nCAUTION: BOOT ACTIVATE changes otadata. Rollback is not hardware-tested.")
+            print("The device will NOT reboot automatically. USB recovery must be available.")
+            confirmation = input("Type exactly 'ACTIVATE 1OG 0.6.7' to proceed: ")
+            if confirmation != "ACTIVATE 1OG 0.6.7":
+                print("CANCELLED. Boot remains app0.", flush=True)
+                return 0
+            target.command("BOOT ARM", r"\[BOOT\] ARMED local_serial_only window=60s")
+            target.command("BOOT ACTIVATE", r"\[BOOT\] ACTIVATE SUCCESS next_boot=app1 running=app0 NO_AUTO_REBOOT",
+                           timeout=50)
+            selected = target.command("BOOT STATUS", r"\[BOOT\] running=.*version=0\.6\.6\b")
+            if "running=app0" not in selected or "boot=app1" not in selected:
+                raise RuntimeError(f"ACTIVATION STATE UNCERTAIN: inspect otadata before resetting: {selected}")
+            print("\nPASS: Boot target is app1/v0.6.7; running still app0/v0.6.6.")
+            print("NO REBOOT SENT. Do not power-cycle before the separate rollback test plan.", flush=True)
             return 0
         except (RuntimeError, OSError, serial.SerialException, subprocess.SubprocessError) as exc:
-            print(f"\nSTOP: {exc}\nNo boot activation was requested. Log: {logpath}", file=sys.stderr, flush=True)
+            print(f"\nSTOP: {exc}\nInspect BOOT STATUS before any reset. Log: {logpath}", file=sys.stderr, flush=True)
             return 1
         finally:
             if target is not None:
