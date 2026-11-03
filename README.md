@@ -23,6 +23,7 @@ Frühere Implementierungen und Dokumente bleiben zur Nachvollziehbarkeit im Repo
 - **v0.5.7 im Repository, Build/Hardwaretest offen:** längere RAM-only-Tests mit 1–4096 Blöcken, mehr Diagnose und Wiederholungen. Anleitung: [v0.5.7](docs/mesh-v0.5.7.md).
 - **v0.5.8 (Quellcode, Build noch offen):** [OTA-Partitionsprüfung](docs/mesh-v0.5.8.md) mit `OTA PREFLIGHT`; noch kein Flash-Schreibzugriff und kein drahtloses Firmwareupdate.
 - **Vorbereitung echter OTA-Updates:** [Firmware-Signaturwerkzeug](docs/ota-signing.md) für zielgebundene, mit ECDSA-P-256 signierte Firmwaremanifeste hinzugefügt. Der Empfänger und der eigentliche Flash-Workflow fehlen noch.
+- **Echte Image-Datei (Offline-Vorbereitung):** [signierte Firmware in 96-Byte-Transferblöcke aufbereiten](docs/ota-real-image-preparation.md), inklusive Signatur- und SHA-256-Prüfung am PC und manipulationsbezogener Unittests. **Noch keine Übertragung der Datei über Funk und kein OTA-Flashen.**
 - **Echtes OTA-Flashen noch nicht implementiert.** v0.5.6 kann v0.5.7 **nicht drahtlos installieren**. Eine spätere dafür freigegebene Version benötigt mindestens eine USB-Erstinstallation je Knoten. Details: [OTA-Roadmap](docs/mesh-ota.md).
 
 ## Hardware
