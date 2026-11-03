@@ -65,13 +65,13 @@ function nodeCard(n) {
  card.append(top,el("div",(n.location||"Standort unbekannt")+" · "+n.mac,"sub"));
  if(n.configured_name && n.configured_name!==n.name)card.append(el("div","Konfiguration: "+n.configured_name,"sub"));
  card.append(el("div","Letzter Empfang: "+(n.age_seconds===null?"noch keiner":n.age_seconds+" s")+" · "+time(n.last_seen),"sub"));
- card.append(el("div","Pakete: "+n.packets+" · direkt: "+n.direct+" · via Relay: "+n.relayed,"sub"));
- card.append(el("div","Letzter Weg: "+(n.hops===null?"–":n.hops+" Hop(s)")+" · RSSI: "+(n.rssi===null?"–":n.rssi+" dBm"),"sub"));
+ card.append(el("div",n.role==="logger" ? "Rolle: USB-Logger · gesendet: "+(n.tx_packets||0) : "Pakete: "+n.packets+" · direkt: "+n.direct+" · via Relay: "+n.relayed,"sub"));
+ if(n.role!=="logger")card.append(el("div","Letzter Weg: "+(n.hops===null?"–":n.hops+" Hop(s)")+" · RSSI: "+(n.rssi===null?"–":n.rssi+" dBm"),"sub"));
  return card;
 }
 function render(data){
  $("updated").textContent="Letzte Abfrage: "+new Date().toLocaleTimeString("de-AT")+" · "+data.log_files+" Logdatei(en)";
- const nodes=data.nodes.filter(n=>n.location!=="PC-Logger");
+ const nodes=data.nodes.filter(n=>n.role==="logger" || n.location!=="PC-Logger");
  $("count").textContent=nodes.length;
  $("online").textContent=nodes.filter(n=>n.status==="online").length+" / "+nodes.length;
  $("packets").textContent=data.total.toLocaleString("de-AT");
