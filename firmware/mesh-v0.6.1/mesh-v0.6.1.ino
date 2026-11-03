@@ -178,6 +178,23 @@ void authRetry() {
   Serial.printf("[AUTH] SEND index=%u/%u attempt=%u\n",
     (unsigned)(authIndex+1),(unsigned)authTotal,(unsigned)authAttempts);
 }
+struct ImageReceiver {
+  bool active=false, complete=false, valid=false;
+  uint64_t origin=0;
+  uint32_t session=0, size=0, count=0, lastActivity=0;
+  uint16_t total=0, next=0;
+  uint8_t shaExpected[32]={};
+  bool stage=false,otaOpen=false;
+  esp_ota_handle_t otaHandle=0;
+  const esp_partition_t *otaPartition=nullptr;
+  mbedtls_sha256_context hash;
+} imgRx;
+bool imgActive=false, imgWaitSerial=false, imgBegin=true, imgStage=false;
+uint64_t imgTarget=0;
+uint32_t imgSession=0, imgSize=0, imgSentAt=0, imgStartedAt=0, imgRetries=0;
+uint16_t imgTotal=0, imgIndex=0;
+uint8_t imgAttempts=0, imgPayload[OTA_BYTES]={}, imgSha[32]={};
+
 void authReceive(const OtaFrame &f) {
   if(f.kind==IMG_AUTH_ACK) {
     if(!authActive || authNeedSerial || f.origin!=authTarget ||
@@ -239,22 +256,6 @@ void authReceive(const OtaFrame &f) {
   } else authReply(f,0);
 }
 
-struct ImageReceiver {
-  bool active=false, complete=false, valid=false;
-  uint64_t origin=0;
-  uint32_t session=0, size=0, count=0, lastActivity=0;
-  uint16_t total=0, next=0;
-  uint8_t shaExpected[32]={};
-  bool stage=false,otaOpen=false;
-  esp_ota_handle_t otaHandle=0;
-  const esp_partition_t *otaPartition=nullptr;
-  mbedtls_sha256_context hash;
-} imgRx;
-bool imgActive=false, imgWaitSerial=false, imgBegin=true, imgStage=false;
-uint64_t imgTarget=0;
-uint32_t imgSession=0, imgSize=0, imgSentAt=0, imgStartedAt=0, imgRetries=0;
-uint16_t imgTotal=0, imgIndex=0;
-uint8_t imgAttempts=0, imgPayload[OTA_BYTES]={}, imgSha[32]={};
 
 int imageNibble(char c) {
   if(c>='0'&&c<='9')return c-'0';
