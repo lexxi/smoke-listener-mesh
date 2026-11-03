@@ -87,6 +87,23 @@ py .\tools\ota\send_image.py `
 
 Ein erfolgreicher Lauf endet mit `[IMAGE] DONE ... SHA256_OK NO_FLASH` – **keine Firmware wurde installiert**.
 
+## Negativtest: ungültige Signatur muss scheitern
+
+Nach einem erfolgreichen positiven Signaturtest diesen Befehl ausführen. Der PC verifiziert zuerst das **unveränderte Originalmanifest** und verändert danach ausschließlich im Arbeitsspeicher ein Bit im DER-Signaturwert. Manifestdatei und Firmware bleiben unverändert, es erfolgt kein Flash-Schreiben:
+
+```powershell
+py .\tools\ota\send_manifest.py `
+  --port COM12 `
+  --image ".\firmware\mesh-v0.5.9\build\esp32.esp32.XIAO_ESP32C3\mesh-v0.5.9.ino.bin" `
+  --manifest C:\mesh-ota-keys\release-1og.json `
+  --public-key C:\mesh-ota-keys\signing-public.pem `
+  --test-invalid-signature
+```
+
+**Erwartet:** `[AUTH] FAIL signature_rejected ... NO_FLASH` und anschließend `PASS: target REJECTED corrupted signature; no flash.` Bei `VERIFIED_ON_DEVICE` im Negativtest meldet der PC stattdessen einen Fehler.
+
+Nur falls der Negativtest erfolgreich ist, die nächsten OTA-Schritte verfolgen.
+
 ## Nächster Schritt für echtes Flashen
 
 Nach erfolgreichen Signatur- und End-to-End-Tests auf dem ESP32 bauen wir einen getrennten, kontrollierten `esp_ota_begin/write/end`-Pfad für `app1` ein. Es fehlen unter anderem Anti-Rollback/Versionsschutz, Persistenz und Recovery bei Stromverlust, Firmware-Image-Validierung und Boot-Bestätigung samt Rollback.
