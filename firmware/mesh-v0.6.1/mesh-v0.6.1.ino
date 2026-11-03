@@ -197,6 +197,8 @@ void authReceive(const OtaFrame &f) {
     return;
   }
   if(f.kind!=IMG_AUTH)return;
+  // Freeze authorizations during an active image stream.
+  if(imgRx.active && !imgRx.complete)return;
   if(f.index==0 && (!authRx.active || authRx.session!=f.session ||
                      authRx.origin!=f.origin)) {
     // Accept a new session only if the old one is complete or has timed out.
@@ -341,7 +343,9 @@ void imageReceive(const OtaFrame &f) {
       Serial.println("[IMAGE] REJECT missing_or_mismatched_device_signature");
       return;
     }
-    if(stageRequested &&
+    const bool sameImageSession=imgRx.active && imgRx.origin==f.origin &&
+      imgRx.session==f.session && imgRx.stage==stageRequested;
+    if(stageRequested && !sameImageSession &&
        (!flashArmed || (uint32_t)(millis()-flashArmedAt)>=FLASH_ARM_WINDOW_MS)) {
       flashArmed=false;
       Serial.println("[IMAGE] REJECT target_not_locally_armed_for_flash");
