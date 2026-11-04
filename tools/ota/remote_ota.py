@@ -105,7 +105,11 @@ def deploy(args, plan: dict) -> None:
         raise RuntimeError("Target boot state unsuitable for OTA; inspect running/boot/state")
     if numeric(plan["version"]) <= numeric(first["version"]):
         raise RuntimeError("Same/older signed release refused (no downgrade)")
-    if not args.deploy:
+    if args.activate_staged:
+        if not first["staged"] or not first["verified"]:
+            raise RuntimeError("No staged and verified image currently available; do not activate")
+        print("[REMOTE] MODE: ACTIVATE_STAGED; reauthorize, reverify existing flash, NO IMAGE UPLOAD", flush=True)
+    elif not args.deploy:
         print("[REMOTE] MODE: STAGE_ONLY; boot is not changed", flush=True)
     else:
         print("[REMOTE] MODE: DEPLOY; stage, verify, activate, reboot, confirm", flush=True)
@@ -113,18 +117,23 @@ def deploy(args, plan: dict) -> None:
     common = ["--port", args.gateway, "--image", str(args.image),
               "--manifest", str(args.manifest), "--public-key", str(args.public_key)]
     command_child("SIGNATURE", [str(HERE / "send_manifest.py"), *common])
-    armed = mgmt(args.gateway, target, "ARM", mgmt(args.gateway, target)["nonce"])
-    if armed["version"] != first["version"]:
-        raise RuntimeError("Target version changed during preparation")
 
-    command_child("IMAGE", [str(HERE / "send_image.py"), *common,
-                            "--flash-stage", "--timeout", "1800"])
-    verified = mgmt(args.gateway, target, "VERIFY", mgmt(args.gateway, target)["nonce"])
+    if args.activate_staged:
+        # Reauthorize against the exact selected signed manifest so readback
+        # compares existing flash contents against the expected image SHA-256.
+        verified = mgmt(args.gateway, target, "VERIFY", mgmt(args.gateway, target)["nonce"])
+    else:
+        armed = mgmt(args.gateway, target, "ARM", mgmt(args.gateway, target)["nonce"])
+        if armed["version"] != first["version"]:
+            raise RuntimeError("Target version changed during preparation")
+        command_child("IMAGE", [str(HERE / "send_image.py"), *common,
+                                "--flash-stage", "--timeout", "1800"])
+        verified = mgmt(args.gateway, target, "VERIFY", mgmt(args.gateway, target)["nonce"])
     if not verified["verified"] or not verified["staged"] or verified["boot"] != verified["running"]:
         raise RuntimeError("Remote flash readback or boot invariants failed")
     print("[REMOTE] STAGED_AND_VERIFIED; inactive firmware ready, old boot still selected", flush=True)
 
-    if not args.deploy:
+    if not args.deploy and not args.activate_staged:
         print("[REMOTE] DONE STAGE_ONLY BOOT_UNCHANGED", flush=True)
         return
 
@@ -174,8 +183,13 @@ def main() -> int:
     p.add_argument("--manifest", type=Path, required=True)
     p.add_argument("--public-key", type=Path, required=True)
     p.add_argument("--deploy", action="store_true", help="Explicitly allow activate/reboot/confirm after stage")
+    p.add_argument("--activate-staged", action="store_true", help="Reverify and boot previously staged image WITHOUT resending it")
     p.add_argument("--status-only", action="store_true", help="Only interrogate remote node; never flash")
     args = p.parse_args()
+    if args.deploy and args.activate_staged:
+        p.error("--deploy and --activate-staged are mutually exclusive")
+    if args.status_only and (args.deploy or args.activate_staged):
+        p.error("--status-only cannot modify boot state")
     try:
         plan = build_plan(args.image, args.manifest, args.public_key)
         numeric(plan["version"])
