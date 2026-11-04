@@ -17,6 +17,16 @@ Experimenteller ESP32-C3-basierter Mesh-Zusatz für die **akustische Erkennung u
 
 Frühere Implementierungen und Dokumente bleiben zur Nachvollziehbarkeit im Repository. Der **aktuelle Einstiegspunkt** ist `firmware/mesh-v0.5.5/mesh-v0.5.5.ino`, nicht v0.5.1.
 
+## Firmwareversionen im Mesh (Entwicklung v0.6.10)
+
+Die vorhandene Windows-Webapp zeigt unter **Knotenübersicht** nun pro Knoten eine Firmwareversion, sofern diese als authentifizierte Telemetrie gemeldet wurde. Alte Firmware meldet noch keine Version und erscheint korrekt als **Unbekannt**.
+
+Die neue Firmware `firmware/mesh-v0.6.10/mesh-v0.6.10.ino` behält Protokoll 3 und das bestehende 92-Byte-Paket bei. Sie verwendet vier bisher ungenutzte, HMAC-geschützte Bytes im Namensfeld für Major/Minor/Patch. Ein v0.6.10-USB-Logger kann daher Versionen anderer aktualisierter Knoten ausgeben und seine eigene Version über `[TX]` anzeigen.
+
+**Status:** v0.6.10 wurde in GitHub vorbereitet, **noch nicht kompiliert oder auf Hardware getestet**. 1OG bleibt auf der erfolgreich bestätigten v0.6.9; für den ersten Test eignet sich Garage (COM14).
+
+Anleitung: [Firmware-Telemetrie v0.6.10](docs/mesh-firmware-version-telemetry-v0610.md).
+
 ## OTA-Entwicklung (Stand 03.11.2026)
 
 - **v0.5.6 auf Hardware getestet:** Direkter Test 1OG → Garage: 16/16 Blöcke. Relay-Pfad Keller_Abgang → Garage → 1OG: erfolgreich 16/16 ACKs mit `hops=1`; ohne Garage 0/16; nach Wiedereinschalten erst im zweiten Anlauf 16/16. Paketverluste treten auf. Das ist ein **RAM-Transporttest, kein Firmware-Update**.
