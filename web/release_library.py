@@ -8,6 +8,8 @@ import re
 import secrets
 import sys
 import tempfile
+import zipfile
+import shutil
 import threading
 from pathlib import Path
 from flask import Blueprint, abort, jsonify, request
@@ -79,6 +81,94 @@ def list_releases() -> list[dict]:
             # Corrupt or unverifiable stored items must not be offered as releases.
             continue
     return found
+
+
+@bp.post("/api/releases/upload-bundle")
+def upload_bundle():
+    """Upload ONE ZIP with firmware.bin and 1-4 node-specific signed manifests."""
+    _local()
+    if request.headers.get("X-Release-CSRF") != CSRF:
+        return jsonify({"error": "CSRF-Prüfung fehlgeschlagen."}), 403
+    bundle = request.files.get("bundle")
+    if bundle is None:
+        return jsonify({"error": "ZIP-Datei fehlt."}), 400
+    if request.content_length and request.content_length > 3_000_000:
+        return jsonify({"error": "ZIP-Upload zu groß."}), 413
+    if not PUBLIC_KEY.is_file():
+        return jsonify({"error": "Öffentlicher Prüfschlüssel fehlt."}), 400
+
+    permitted_targets = {
+        "000010637C6E27AC", "000058FE7D6E27AC",
+        "000094457F6E27AC", "0000A0E37E6E27AC",
+    }
+    tmp_root = ROOT / "web" / "data" / "uploads_tmp"
+    tmp_root.mkdir(parents=True, exist_ok=True)
+    with GUARD, tempfile.TemporaryDirectory(dir=tmp_root) as temporary:
+        base = Path(temporary)
+        archive = base / "bundle.zip"
+        with archive.open("xb") as out:
+            data = bundle.stream.read(3_000_001)
+            if len(data) > 3_000_000:
+                return jsonify({"error": "ZIP-Upload zu groß."}), 413
+            out.write(data)
+        plans = []
+        try:
+            with zipfile.ZipFile(archive) as zipped:
+                members = zipped.infolist()
+                names = [item.filename for item in members]
+                if len(names) < 2 or len(names) > 5 or len(names) != len(set(names)):
+                    raise ValueError("Erwartet: genau eine BIN und 1–4 Manifeste ohne Duplikate")
+                if "firmware.bin" not in names or any(
+                    name != "firmware.bin" and
+                    not re.fullmatch(r"manifest_[0-9A-F]{16}\.json", name)
+                    for name in names
+                ):
+                    raise ValueError("Unbekannter Archivpfad oder falscher Dateiname")
+                if any(info.is_dir() or info.flag_bits & 1 for info in members):
+                    raise ValueError("Verzeichnisse und verschlüsselte Dateien sind nicht zugelassen")
+                if any((info.file_size > (MAX_BIN if info.filename == "firmware.bin" else MAX_MANIFEST))
+                       for info in members):
+                    raise ValueError("Firmware oder Manifest zu groß")
+                image = base / "firmware.bin"
+                image.write_bytes(zipped.read("firmware.bin"))
+                for name in names:
+                    if name == "firmware.bin":
+                        continue
+                    target = name[len("manifest_"):-len(".json")]
+                    if target not in permitted_targets:
+                        raise ValueError("Unbekannter Zielknoten: " + target)
+                    manifest = base / name
+                    manifest.write_bytes(zipped.read(name))
+                    plan = _verify(image, manifest)
+                    if plan["target"] != target:
+                        raise ValueError("Manifestsignatur passt nicht zum Dateinamen")
+                    plans.append((plan, manifest))
+            if not plans:
+                raise ValueError("Keine signierten Manifeste enthalten")
+            if len({p["version"] for p, _ in plans}) != 1:
+                raise ValueError("Das Paket enthält unterschiedliche Firmwareversionen")
+            STORE.mkdir(parents=True, exist_ok=True)
+            created = []
+            stored = []
+            try:
+                for plan, manifest in plans:
+                    identifier = _identity(plan)
+                    folder = STORE / identifier
+                    if folder.exists():
+                        stored.append({**_summary(plan, identifier), "already_present": True})
+                        continue
+                    folder.mkdir(mode=0o700)
+                    created.append(folder)
+                    shutil.copyfile(image, folder / "firmware.bin")
+                    shutil.copyfile(manifest, folder / "manifest.json")
+                    stored.append({**_summary(plan, identifier), "already_present": False})
+            except OSError:
+                for folder in created:
+                    shutil.rmtree(folder, ignore_errors=True)
+                raise
+            return jsonify({"stored": True, "releases": stored}), 201
+        except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile) as exc:
+            return jsonify({"error": "Release-ZIP nicht gültig: " + str(exc)}), 400
 
 
 @bp.get("/api/releases")
