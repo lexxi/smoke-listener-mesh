@@ -738,9 +738,14 @@ void mgmtReply(const OtaFrame &req,uint8_t result){
   f.data[13]=(uint8_t)(imgRx.complete && imgRx.valid && imgRx.stage);
   f.data[14]=(uint8_t)bootVerified;
   f.data[15]=(uint8_t)meshPeerVerified;
-  unsigned maj=0,min=0,patch=0;
-  if(sscanf(CURRENT_FW_VERSION,"%u.%u.%u",&maj,&min,&patch)==3){
-    f.data[16]=(uint8_t)maj;f.data[17]=(uint8_t)min;f.data[18]=(uint8_t)patch;
+  uint16_t versionParts[3]={};
+  char variant=0;
+  if(parseFirmwareVersion(String(CURRENT_FW_VERSION),versionParts,variant) &&
+     versionParts[0]<=255 && versionParts[1]<=255 && versionParts[2]<=255){
+    f.data[16]=(uint8_t)versionParts[0];
+    f.data[17]=(uint8_t)versionParts[1];
+    f.data[18]=(uint8_t)versionParts[2];
+    f.data[19]=variant?(uint8_t)(variant-'a'+1):0;
   }
   // Name is transmitted within the already authenticated OTA frame.
   // ASCII permitted characters exclude whitespace and delimiters.
@@ -756,11 +761,12 @@ void mgmtReceive(const OtaFrame &f){
     memcpy(remoteName,f.data+20,MAX_NAME_LENGTH);
     String safeName=String(remoteName);
     if(!validName(safeName))safeName="(unset)";
-    Serial.printf("[MGMT] REPLY origin=%s action=%s result=%u nonce=%s running=app%u boot=app%u state=%u staged=%u verified=%u peer=%u version=%u.%u.%u name=%s\n",
+    Serial.printf("[MGMT] REPLY origin=%s action=%s result=%u nonce=%s running=app%u boot=app%u state=%u staged=%u verified=%u peer=%u version=%u.%u.%u%s name=%s\n",
       idString(f.origin).c_str(),mgmtActionName(f.data[0]),(unsigned)f.data[1],
       idString(nonce).c_str(),(unsigned)f.data[10],(unsigned)f.data[11],
       (unsigned)f.data[12],(unsigned)f.data[13],(unsigned)f.data[14],
-      (unsigned)f.data[15],(unsigned)f.data[16],(unsigned)f.data[17],(unsigned)f.data[18],safeName.c_str());
+      (unsigned)f.data[15],(unsigned)f.data[16],(unsigned)f.data[17],(unsigned)f.data[18],
+      (f.data[19]>=1&&f.data[19]<=8?(String(".")+char('a'+f.data[19]-1)):String("")).c_str(),safeName.c_str());
     mgmtWaiting=false;
     return;
   }
@@ -1264,8 +1270,11 @@ void processRx(const RxEvent &event) {
   meshPeerVerified=true;
   String sourceName=packetName(p);
   String fw="unknown";
-  if((uint8_t)p.name[20]==0xA5)
+  const uint8_t versionMarker=(uint8_t)p.name[20];
+  if(versionMarker==0xA5 || (versionMarker>=0xB0 && versionMarker<=0xB7)){
     fw=String((uint8_t)p.name[21])+"."+String((uint8_t)p.name[22])+"."+String((uint8_t)p.name[23]);
+    if(versionMarker>=0xB0)fw+="."+String(char('a'+versionMarker-0xB0));
+  }
   Serial.printf("[RX] name=%s origin=%s via=%s boot=%s seq=%lu ttl=%u hops=%u type=%s rssi=%d dBm channel=%u fw=%s AUTH=OK\n",
       sourceName.length()?sourceName.c_str():"(unset)",
       idString(p.origin).c_str(),macString(event.from).c_str(),
@@ -1411,14 +1420,17 @@ void sendLocal(uint8_t type) {
   // Wire-compatible v3 packet extension. Bytes 20..23 of authenticated name
   // were unused for names <=19 chars. Old firmware stops parsing at NUL.
   // HMAC already covers the complete 24-byte name field.
-  p.name[20]=(char)0xA5;
-  unsigned major=0,minor=0,patch=0;
-  if(sscanf(CURRENT_FW_VERSION,"%u.%u.%u",&major,&minor,&patch)!=3 ||
-     major>255 || minor>255 || patch>255) {
+  uint16_t versionParts[3]={};
+  char variant=0;
+  if(!parseFirmwareVersion(String(CURRENT_FW_VERSION),versionParts,variant) ||
+     versionParts[0]>255 || versionParts[1]>255 || versionParts[2]>255) {
     Serial.println("[FW] ERROR invalid telemetry firmware version");
     return;
   }
-  p.name[21]=(char)major; p.name[22]=(char)minor; p.name[23]=(char)patch;
+  p.name[20]=(char)(variant?0xB0+(variant-'a'):0xA5);
+  p.name[21]=(char)versionParts[0];
+  p.name[22]=(char)versionParts[1];
+  p.name[23]=(char)versionParts[2];
   p.ttl=INITIAL_TTL;
   if(calculateTag(p,p.tag))sendPacket(p,false);
   else Serial.println("ERROR: HMAC failed");
