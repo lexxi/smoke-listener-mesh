@@ -27,6 +27,21 @@ Die neue Firmware `firmware/mesh-v0.6.10/mesh-v0.6.10.ino` behält Protokoll 3 u
 
 Anleitung: [Firmware-Telemetrie v0.6.10](docs/mesh-firmware-version-telemetry-v0610.md).
 
+## Fern-OTA per Webapp (experimentell: v0.6.11/v0.6.12)
+
+**Ziel:** einmalig v0.6.11 über USB auf die C3 installieren, danach Firmwareversionen durch ein signiertes Release-Paket und die Weboberfläche verwalten. Ein C3 bleibt am Webserver als USB-zu-ESP-NOW-Gateway angeschlossen. Ein eigener USB-Anschluss an jedem Zielknoten ist dann für reguläre Updates nicht mehr nötig.
+
+**Implementiert (noch nicht auf Hardware getestet):**
+- `firmware/mesh-v0.6.11/`: HMAC-authentifizierte, auf Garage/Kueche als Gateway begrenzte ESP-NOW-Steuerung für Status, Flash-Freigabe, Readback, Bootaktivierung, Neustart und Bestätigung; wechselnde Boot-Challenge gegen Wiederholungen.
+- `firmware/mesh-v0.6.12/`: erster Test-Build für ein nachfolgendes Upgrade ohne USB am Ziel; Fernsteuerung bleibt enthalten.
+- `tools/ota/remote_ota.py` und `web/remote.py`: gatewaybasierte Jobs für Funkstatus, nur Flashstaging oder vollständigen Updateversuch inklusive Rollback-Kontrolle.
+- `web/logger_control.py`: Web-Garage-Logger auf COM14 wird bei OTA via Garage automatisch pausiert und wieder gestartet.
+- `tools/ota/prepare-web-bundle.ps1`: ein ZIP-Paket mit EINER BIN und vier knotenspezifisch signierten Manifesten erstellen. Die Webapp verifiziert sämtliche Manifeste und bietet die einzelnen Ziel-Releases an.
+
+**ACHTUNG:** Die frühere OTA-Hardwarevalidierung gilt nur für den lokalen Mechanismus, **nicht** für die hier neue Remote-Steuerung. **v0.6.11 noch nicht auf alle Geräte aufspielen**. Erst Garage und 1OG kompilieren, USB-testen, danach das echte Web-OTA auf v0.6.12 prüfen. Insbesondere muss die PENDING_VERIFY-/Rollback-Kette auf der Hardware validiert werden. Ein fehlgeschlagenes Image kann trotz Watchdog eine USB-Rettung nötig machen.
+
+[Schrittweise Anleitung und Sicherheitsgrenzen](docs/remote-ota-one-time-usb-migration.md).
+
 ## OTA per Weboberfläche für 1OG v0.6.10 (Staging)
 
 Die Seite **http://127.0.0.1:8088/ota** führt nun durch drei Schritte: **signiertes Release hochladen → Ziel/Version auswählen → Firmware übertragen und SHA-256 kontrollieren**. Für den ersten kontrollierten Hardwaretest ist nur **1OG: v0.6.9 (app0) → v0.6.10 (app1)** freigeschaltet.
