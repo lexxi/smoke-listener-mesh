@@ -1,4 +1,4 @@
-"""Fail-closed node-role policy tests, no ESP32 hardware needed."""
+"""OTA target allowlist tests; all feature combinations allowed on every registered C3."""
 import importlib.util
 import json
 import tempfile
@@ -11,41 +11,35 @@ module = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(module)
 NODE = "000010637C6E27AC"
 
-class NodeRoleTests(unittest.TestCase):
-    def test_missing_role_blocks_new_release(self):
-        with self.assertRaisesRegex(ValueError, "Keine freigegebene"):
-            module.check_release_role({"version":"0.6.15","features":["audio"],"target":NODE}, {})
+class NodeTargetTests(unittest.TestCase):
+    def test_all_eight_variants_allowed_for_registered_node(self):
+        for gateway in (False, True):
+            for audio in (False, True):
+                for ap in (False, True):
+                    features = ([ "gateway" ] if gateway else []) + ([ "audio" ] if audio else []) + ([ "config_ap" ] if ap else [])
+                    module.check_release_target({"version":"0.6.150","features":features,"target":NODE},{NODE})
 
-    def test_wrong_role_blocks(self):
-        with self.assertRaisesRegex(ValueError, "nicht für Zielrolle"):
-            module.check_release_role({"version":"0.6.15","features":["gateway"],"target":NODE}, {NODE:"listener"})
+    def test_missing_target_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "nicht freigegeben"):
+            module.check_release_target({"version":"0.6.150","features":["audio"],"target":NODE},set())
 
-    def test_exact_roles(self):
-        for role,features in [
-            ("mesh",[]), ("listener",["audio"]), ("gateway",["gateway"]),
-            ("hybrid",["audio","gateway"]), ("listener",["audio","config_ap"])]:
-            self.assertEqual(module.check_release_role(
-                {"version":"0.6.15","features":features,"target":NODE},
-                {NODE:role}),role)
-
-    def test_unknown_features_or_unsigned_claim_block(self):
+    def test_missing_signed_feature_claim_fails(self):
         with self.assertRaises(ValueError):
-            module.check_release_role({"version":"0.6.15","features":None,"target":NODE},{NODE:"mesh"})
+            module.check_release_target({"version":"0.6.150","features":None,"target":NODE},{NODE})
 
-    def test_legacy_release_not_blocked(self):
-        self.assertEqual(module.check_release_role(
-            {"version":"0.6.14","features":None,"target":NODE},{}),"legacy")
+    def test_legacy_remains_compatible(self):
+        module.check_release_target({"version":"0.6.14","features":None,"target":NODE},set())
 
-    def test_explicit_file_parsing(self):
+    def test_file_validation(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path=Path(tmp)/"roles.json"
-            self.assertEqual(module.load_roles(path),{})
-            path.write_text(json.dumps({NODE:"listener"}),encoding="utf-8")
-            self.assertEqual(module.load_roles(path),{NODE:"listener"})
-            path.write_text(json.dumps({NODE:"invented"}),encoding="utf-8")
-            with self.assertRaises(ValueError):module.load_roles(path)
-            path.write_text(json.dumps({"NOT_A_NODE":"listener"}),encoding="utf-8")
-            with self.assertRaises(ValueError):module.load_roles(path)
+            path=Path(tmp)/"node_targets.json"
+            self.assertEqual(module.load_targets(path),set())
+            path.write_text(json.dumps([NODE]),encoding="utf-8")
+            self.assertEqual(module.load_targets(path),{NODE})
+            for invalid in ([NODE,NODE], ["NOT_A_NODE"], {"node":NODE}, [NODE]*5):
+                path.write_text(json.dumps(invalid),encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    module.load_targets(path)
 
 if __name__=="__main__":
     unittest.main()
