@@ -101,7 +101,8 @@ foreach ($idx in 0..7) {
     Copy-Item -LiteralPath $bin -Destination $pkgBin
     foreach ($target in $targets) {
       $manifest = Join-Path $package ("manifest_"+$target+".json")
-      & $python $signer sign --image $pkgBin --private-key $PrivateKey --target $target --version $release --features ($features -join ",") --out $manifest
+      $featureArgument = if ($features.Count -eq 0) { "none" } else { $features -join "," }
+      & $python $signer sign --image $pkgBin --private-key $PrivateKey --target $target --version $release --features $featureArgument --out $manifest
       if ($LASTEXITCODE -ne 0) { throw "Signieren fehlgeschlagen: $release $target" }
       & $python $signer verify --image $pkgBin --manifest $manifest --public-key $PublicKey
       if ($LASTEXITCODE -ne 0) { throw "Signaturpruefung fehlgeschlagen: $release $target" }
