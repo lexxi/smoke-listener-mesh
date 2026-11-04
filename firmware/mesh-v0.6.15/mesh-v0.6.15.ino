@@ -1050,11 +1050,11 @@ void handleCommand(String command) {
   } else if(command.equalsIgnoreCase("IMG STOP")) {
     imgActive=false;imgWaitSerial=false;
     Serial.println("[IMAGE] STOP NO_FLASH");
-  } else if(command.equalsIgnoreCase("OTA PREFLIGHT")) {
-    printOtaPreflight();
   }
 #endif // SMOKE_FEATURE_GATEWAY
-  else if(command.equalsIgnoreCase("NAME GET")) {
+  else if(command.equalsIgnoreCase("OTA PREFLIGHT")) {
+    printOtaPreflight();
+  } else if(command.equalsIgnoreCase("NAME GET")) {
     Serial.printf("[CONFIG] name=%s node=%s\n",
       nodeName.length()?nodeName.c_str():"(unset)",idString(nodeId).c_str());
   } else if(command.equalsIgnoreCase("NAME RESET")) {
@@ -1492,6 +1492,9 @@ void setup() {
   }
   nodeId = ESP.getEfuseMac();
   Serial.printf("[FW] version=%s signed_readback=1 ota_boot_activation=LOCAL_NO_AUTO_REBOOT\n",CURRENT_FW_VERSION);
+  Serial.printf("[FW] features gateway=%u audio=%u config_ap=%u battery=%u buzzer=%u\n",
+    (unsigned)FEATURE_GATEWAY,(unsigned)FEATURE_AUDIO,(unsigned)FEATURE_CONFIG_AP,
+    (unsigned)FEATURE_BATTERY,(unsigned)FEATURE_BUZZER);
   if(prefs.begin("smoke-mesh",true)) {
     nodeName=prefs.getString("name","");
     prefs.end();
