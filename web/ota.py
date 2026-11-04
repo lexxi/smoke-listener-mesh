@@ -1,172 +1,164 @@
-"""Local-only signed OTA staging web UI. Boot activation is intentionally excluded."""
+"""Local OTA coordinator for verified uploaded releases.
+
+Only 1OG v0.6.9 -> v0.6.10 (app0 -> app1) is enabled for staging.
+Requires the gateway on COM12 and target physically connected on COM15.
+Does NOT activate, reboot or confirm firmware.
+"""
 from __future__ import annotations
 
 import datetime as dt
-import json
 import os
-import re
 import secrets
 import subprocess
 import sys
 import threading
 from pathlib import Path
-
 from flask import Blueprint, abort, jsonify, render_template, request
+from release_library import STORE, PUBLIC_KEY, _identity, _verify, list_releases, GUARD
 
 ROOT = Path(__file__).resolve().parents[1]
 OTA = ROOT / "tools" / "ota"
-KEY = Path(r"C:\mesh-ota-keys\signing-public.pem")
-RELEASES = {
-    "0.6.9": {
-        "image": ROOT / "firmware/mesh-v0.6.9/build/esp32.esp32.XIAO_ESP32C3/mesh-v0.6.9.ino.bin",
-        "manifest": Path(r"C:\mesh-ota-keys\release-1og-069.json"),
-        "from_version": "0.6.7",
-        "to_version": "0.6.9",
-        "node": "000010637C6E27AC",
-        "from_slot": "app1",
-        "to_slot": "app0",
-    },
-}
-GATEWAY_PORT = "COM12"
-TARGET_PORT = "COM15"
+GATEWAY_PORT = os.environ.get("SMOKE_OTA_GATEWAY_PORT", "COM12").upper()
+TARGET_PORT = os.environ.get("SMOKE_OTA_TARGET_PORT", "COM15").upper()
+ALLOWED_TARGET = "000010637C6E27AC"   # 1OG; verified on hardware in earlier tests
+ALLOWED_UPGRADE = ("0.6.9", "0.6.10")
 
 bp = Blueprint("ota", __name__)
-lock = threading.Lock()
-job = {"id": None, "state": "idle", "started": None, "ended": None,
-       "version": None, "pid": None, "returncode": None, "lines": [],
-       "message": "Noch kein OTA-Test ausgeführt."}
-MAX_LINES = 240
+lock = threading.RLock()
 csrf_token = secrets.token_urlsafe(32)
+MAX_LINES = 300
+job = {"id": None, "state": "idle", "started": None, "ended": None,
+       "release_id": None, "pid": None, "returncode": None, "lines": [],
+       "message": "Noch kein OTA-Lauf ausgeführt."}
 
 
 def _now():
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
-def _plan(version: str):
-    if version not in RELEASES:
-        raise ValueError("Unbekanntes Release.")
-    release = RELEASES[version]
-    sys.path.insert(0, str(OTA))
-    try:
-        from prepare_transfer import build_plan
-        p = build_plan(release["image"], release["manifest"], KEY)
-    finally:
-        sys.path.remove(str(OTA))
-    if p["target"] != release["node"] or p["version"] != version:
-        raise ValueError("Signiertes Manifest passt nicht zu Zielknoten/Version.")
-    return p
+def _local():
+    if request.remote_addr not in ("127.0.0.1", "::1"):
+        abort(403)
 
 
-def _add_line(value: str):
+def _release(release_id: str):
+    if not isinstance(release_id, str) or not release_id or "/" in release_id or "\\" in release_id:
+        raise ValueError("Ungültige Release-ID")
+    folder = STORE / release_id
+    if not folder.is_dir():
+        raise ValueError("Release nicht gefunden")
+    image, manifest = folder / "firmware.bin", folder / "manifest.json"
+    plan = _verify(image, manifest)
+    if _identity(plan) != release_id:
+        raise ValueError("Release-ID entspricht nicht dem signierten Inhalt")
+    return image, manifest, plan
+
+
+def _supported(plan: dict) -> bool:
+    return plan["target"] == ALLOWED_TARGET and plan["version"] == ALLOWED_UPGRADE[1]
+
+
+def _append(line: str):
     with lock:
-        job["lines"].append(value.rstrip()[:600])
+        job["lines"].append(line.rstrip()[:700])
         if len(job["lines"]) > MAX_LINES:
             del job["lines"][:-MAX_LINES]
 
 
-def _run(version: str):
-    release = RELEASES[version]
-    command = [
-        sys.executable, "-u", str(OTA / "ota_test.py"),
-        "--gateway", GATEWAY_PORT,
-        "--target-port", TARGET_PORT,
-        "--from-version", release["from_version"],
-        "--to-version", release["to_version"],
-        "--image", str(release["image"]),
-        "--manifest", str(release["manifest"]),
-        "--public-key", str(KEY),
-    ]
-    result = None
+def _run(release_id: str):
     try:
-        # No shell=True, no user-provided paths/COM ports, no activation flag.
-        proc = subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True, encoding="utf-8",
-                                errors="replace", bufsize=1)
+        with GUARD:
+            image, manifest, plan = _release(release_id)
+            if not _supported(plan):
+                raise ValueError("Knoten/Versionspaar nicht für OTA-Staging freigegeben")
+        command = [
+            sys.executable, "-u", str(OTA / "ota_test.py"),
+            "--gateway", GATEWAY_PORT, "--target-port", TARGET_PORT,
+            "--from-version", ALLOWED_UPGRADE[0],
+            "--to-version", ALLOWED_UPGRADE[1],
+            "--image", str(image), "--manifest", str(manifest),
+            "--public-key", str(PUBLIC_KEY),
+        ]
+        # stdin=DEVNULL prohibits any interactive activation. No --activate flag.
+        proc = subprocess.Popen(command, cwd=ROOT, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, encoding="utf-8", errors="replace", bufsize=1)
         with lock:
             job["pid"] = proc.pid
         assert proc.stdout is not None
         with proc.stdout:
             for line in proc.stdout:
-                _add_line(line)
-        result = proc.wait()
+                _append(line)
+        code = proc.wait()
         with lock:
-            job["returncode"] = result
-            job["state"] = "passed" if result == 0 else "failed"
-            job["message"] = ("Firmware in inaktivem Slot geprüft; Bootauswahl unverändert."
-                              if result == 0 else "OTA-Test fehlgeschlagen. Gerät und Log kontrollieren.")
+            job["returncode"] = code
+            job["state"] = "passed" if code == 0 else "failed"
+            job["message"] = ("Staging und SHA-256-Readback erfolgreich. Boot unverändert."
+                              if code == 0 else "Staging fehlgeschlagen. Log prüfen; Boot nicht umstellen.")
     except Exception as exc:
-        _add_line(f"LOCAL ERROR: {exc}")
+        _append("LOCAL ERROR: " + str(exc))
         with lock:
             job["state"] = "failed"
-            job["message"] = "OTA-Skript konnte nicht ausgeführt werden."
+            job["message"] = "OTA-Lauf konnte nicht erfolgreich abgeschlossen werden."
     finally:
         with lock:
-            job["ended"] = _now()
             job["pid"] = None
-
-
-def _local_only():
-    # This application must be bound to loopback for command functionality.
-    # Reject non-loopback requests even if the server is launched incorrectly.
-    if request.remote_addr not in ("127.0.0.1", "::1"):
-        abort(403)
+            job["ended"] = _now()
 
 
 @bp.get("/ota")
-def ota_page():
-    _local_only()
-    return render_template("ota.html", releases=RELEASES, csrf_token=csrf_token)
+def page():
+    _local()
+    return render_template("ota.html", csrf_token=csrf_token)
 
 
 @bp.get("/api/ota/releases")
-def ota_releases():
-    _local_only()
-    items = []
-    for version, release in RELEASES.items():
-        info = {"version": version, "target": release["node"],
-                "from_version": release["from_version"], "from_slot": release["from_slot"],
-                "to_slot": release["to_slot"]}
-        try:
-            p = _plan(version)
-            info.update({"ready": True, "bytes": p["size"], "sha256": p["sha256"],
-                         "blocks": p["blocks"]})
-        except (OSError, ValueError, ImportError, TypeError, KeyError) as exc:
-            info.update({"ready": False, "error": str(exc)})
-        items.append(info)
-    return jsonify({"releases": items, "gateway_port": GATEWAY_PORT,
-                    "target_port": TARGET_PORT,
-                    "notice": "Firmwareversionen sind statisch konfiguriert; keine Live-Geräteerkennung."})
+def available():
+    _local()
+    with GUARD:
+        entries = list_releases()
+    for entry in entries:
+        entry["transfer_enabled"] = (
+            entry["target"] == ALLOWED_TARGET and entry["version"] == ALLOWED_UPGRADE[1]
+        )
+        entry["transfer_note"] = (
+            "1OG: v0.6.9 (app0) → v0.6.10 (app1), Staging ohne Bootwechsel"
+            if entry["transfer_enabled"] else "Nur gespeichert – für dieses Gerät/Versionspaar kein Staging freigegeben"
+        )
+    return jsonify({"releases": entries, "gateway_port": GATEWAY_PORT,
+                    "target_port": TARGET_PORT, "allowed_target": ALLOWED_TARGET,
+                    "required_current_version": ALLOWED_UPGRADE[0]})
 
 
 @bp.get("/api/ota/job")
-def ota_job():
-    _local_only()
+def job_status():
+    _local()
     with lock:
         return jsonify(dict(job))
 
 
 @bp.post("/api/ota/start")
-def ota_start():
-    _local_only()
+def start():
+    _local()
     if request.headers.get("X-OTA-CSRF") != csrf_token:
-        return jsonify({"error": "Ungültiger CSRF-Schutz."}), 403
-    return jsonify({"error": "Altes v0.6.9-Staging deaktiviert: Ziel 1OG läuft bereits v0.6.9. Release-Upload ist separat verfügbar."}), 409
-
+        return jsonify({"error": "Ungültiges CSRF-Token"}), 403
     data = request.get_json(silent=True) or {}
-    version = data.get("version")
-    if version not in RELEASES:
-        return jsonify({"error": "Unbekanntes Release."}), 400
+    release_id = data.get("release_id")
+    if GATEWAY_PORT == TARGET_PORT:
+        return jsonify({"error": "Gateway und Target dürfen nicht denselben COM-Port verwenden"}), 400
     try:
-        plan = _plan(version)
-    except (OSError, ValueError, ImportError, TypeError, KeyError) as exc:
-        return jsonify({"error": "Signaturprüfung fehlgeschlagen: " + str(exc)}), 400
+        with GUARD:
+            _, _, plan = _release(release_id)
+            if not _supported(plan):
+                return jsonify({"error": "Staging nur für signiertes 1OG v0.6.10 aus v0.6.9 freigegeben"}), 400
+    except (OSError, ValueError, TypeError, KeyError, ImportError) as exc:
+        return jsonify({"error": "Release-Prüfung fehlgeschlagen: " + str(exc)}), 400
     with lock:
         if job["state"] == "running":
-            return jsonify({"error": "Bereits ein OTA-Job aktiv."}), 409
+            return jsonify({"error": "Ein OTA-Lauf ist bereits aktiv"}), 409
         job.update({"id": secrets.token_hex(6), "state": "running",
-                    "started": _now(), "ended": None, "version": version, "pid": None,
-                    "returncode": None, "lines": [],
-                    "message": f"Signiertes Release {version} geprüft ({plan['size']} Byte). Starte OTA-Staging."})
-    threading.Thread(target=_run, args=(version,), daemon=True).start()
+                    "started": _now(), "ended": None, "release_id": release_id,
+                    "pid": None, "returncode": None, "lines": [],
+                    "message": "1OG v0.6.9 → v0.6.10: signiertes Staging gestartet; keine Bootaktivierung."})
+    threading.Thread(target=_run, args=(release_id,), daemon=True).start()
     return jsonify({"accepted": True, "id": job["id"]}), 202
