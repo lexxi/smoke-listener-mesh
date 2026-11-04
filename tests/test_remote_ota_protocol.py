@@ -62,17 +62,17 @@ class RemoteProtocolTests(unittest.TestCase):
                     return (
                         f"[MGMT] REPLY origin={TARGET} action=NAME_SET result=0 "
                         "nonce=ABCDEF0123456789 running=app1 boot=app1 state=2 "
-                        "staged=0 verified=0 peer=1 version=0.6.13 name=Keller_Abgang\\n"
+                        "staged=0 verified=0 peer=1 version=0.6.13 name=Keller_Abgang\n"
                     ).encode("ascii")
                 return b""
         dummy = NameSerial()
-        with mock.patch.object(remote_ota.serial, "Serial", return_value=dummy), \\
+        with mock.patch.object(remote_ota.serial, "Serial", return_value=dummy), \
              mock.patch.object(remote_ota.time, "sleep", return_value=None):
             reply = remote_ota.mgmt("COM14", TARGET, "NAME_SET",
                                     "ABCDEF0123456789", "Keller_Abgang")
         self.assertEqual(reply["name"], "Keller_Abgang")
         self.assertEqual(dummy.writes[0],
-                         f"MGMT {TARGET} NAME_SET ABCDEF0123456789 Keller_Abgang\\n".encode())
+                         f"MGMT {TARGET} NAME_SET ABCDEF0123456789 Keller_Abgang\n".encode())
 
     def test_reject_invalid_names(self):
         for name in ("", "two words", "äbc", "x" * 20, "bad;command"):
