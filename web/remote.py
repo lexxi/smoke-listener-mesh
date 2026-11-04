@@ -18,7 +18,7 @@ from flask import Blueprint, abort, jsonify, request, send_file, Response
 
 from release_library import STORE, PUBLIC_KEY, GUARD, _identity, _verify
 from logger_control import pause_for_remote_ota, resume_after_remote_ota
-from node_role_policy import load_roles, check_release_role
+from node_role_policy import load_targets, check_release_target
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "tools" / "ota" / "remote_ota.py"
@@ -86,7 +86,7 @@ def _run(release_id, port, mode):
             if plan["target"] == TRUSTED_GATEWAYS[port][1]:
                 raise ValueError("Ein Knoten kann nicht über sich selbst als USB-Gateway aktualisiert werden")
             if mode != "status":
-                check_release_role(plan, load_roles())
+                check_release_target(plan, load_targets())
         if port == "COM14":
             paused = pause_for_remote_ota()
             _log("[WEB] Garage-Logger pausiert, COM14 exklusiv für Remote-OTA.")
@@ -184,13 +184,13 @@ def download_log():
 def config():
     _local()
     try:
-        roles = load_roles()
-        role_error = None
+        targets = sorted(load_targets())
+        target_error = None
     except (ValueError, OSError, TypeError) as exc:
-        roles, role_error = {}, str(exc)
+        targets, target_error = [], str(exc)
     return jsonify({
-        "node_roles": roles,
-        "role_config_error": role_error,
+        "node_targets": targets,
+        "target_config_error": target_error,
         "gateways": [{"port": port, "name": info[0], "node": info[1]}
                      for port, info in TRUSTED_GATEWAYS.items()],
         "csrf": csrf,
@@ -220,7 +220,7 @@ def start():
             if plan["target"] == TRUSTED_GATEWAYS[port][1]:
                 raise ValueError("Gateway und Zielknoten müssen unterschiedliche C3 sein")
             if mode != "status":
-                check_release_role(plan, load_roles())
+                check_release_target(plan, load_targets())
     except (OSError, ValueError, TypeError, KeyError, ImportError) as exc:
         return jsonify({"error": "Release-Prüfung: " + str(exc)}), 400
     with lock:
