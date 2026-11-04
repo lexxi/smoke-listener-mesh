@@ -49,7 +49,7 @@ def mgmt(port_name: str, target: str, action: str = "STATUS",
         ser.rts = False
         ser.port = port_name
         ser.open()
-        time.sleep(1.2)
+        time.sleep(2.5)  # allow ESP32-C3 USB gateway boot/serial initialization
         ser.reset_input_buffer()
         ser.write((command + "\n").encode("ascii"))
         ser.flush()
