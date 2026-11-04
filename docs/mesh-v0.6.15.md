@@ -251,6 +251,18 @@ Die Webapp liest die zentrale Konfiguration aus `web/gateways.json` beim Start.
   COM-Ports können sich nach Neuanschluss der Hardware ändern.
 - Der Web-Logger wird weiterhin **nur nach Klick auf „Logger starten“**
   gestartet. Vorher alle externen Serial-Monitore/Logger auf diesem Port schließen.
+**Wichtig: Vertrauensliste im Empfänger:** Die Firmware enthält zusätzlich eine
+kompilierte Remote-Management-Allowlist (`MGMT_TRUST_*` in
+`firmware/mesh-v0.6.15/mesh-v0.6.15.ino`). Seit der Gateway-Erweiterung
+ist auch `00000CEC7E6E27AC` (Gateway/COM16) enthalten. Die JSON-Datei
+konfiguriert nur die Webapp. Bereits geflashte Empfänger vertrauen dem
+neuen Gateway **erst nach einem Firmwareupdate**; andernfalls erscheint
+`[MGMT] TIMEOUT no_reply`, obwohl Heartbeats empfangen werden.
+Vor dem Aktualisieren aller Empfänger einen Management-STATUS über einen
+bereits vertrauenswürdigen Gateway (Garage oder Kueche) testen. Ein neuer
+Build mit derselben Versionskennung ist dabei nicht eindeutig von einem
+alten Build zu unterscheiden; Versionierung beim Rollout beachten.
+
 - `web/data/node_targets.json` ist eine **separate OTA-Zielknoten-Allowlist**;
   die Gateway-Konfiguration ersetzt sie nicht.
 
