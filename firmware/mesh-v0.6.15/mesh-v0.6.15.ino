@@ -840,6 +840,7 @@ void mgmtReceive(const OtaFrame &f){
     idString(f.origin).c_str(),mgmtActionName(action),(unsigned)result);
   mgmtReply(f,result);
 }
+#if SMOKE_FEATURE_GATEWAY
 void mgmtSendSerial(const String &line){
   // Gateway command: MGMT <16hex-target> <ACTION> [16hex nonce] [NAME]
   // NAME may only appear for NAME_SET; preserve exact case.
@@ -893,10 +894,13 @@ void mgmtSendSerial(const String &line){
   Serial.printf("[MGMT] SENT target=%s action=%s session=%lu\n",
     idString(target).c_str(),mgmtActionName(action),(unsigned long)f.session);
 }
+#endif // SMOKE_FEATURE_GATEWAY
 void mgmtPendingWatchdog(){
+#if SMOKE_FEATURE_GATEWAY
   if(mgmtWaiting && (uint32_t)(millis()-mgmtRequestAt)>4500UL){
     Serial.println("[MGMT] TIMEOUT no_reply");mgmtWaiting=false;
   }
+#endif
   if(mgmtRebootAt && (int32_t)(millis()-mgmtRebootAt)>=0)ESP.restart();
   const esp_partition_t *run=esp_ota_get_running_partition();
   esp_ota_img_states_t state=ESP_OTA_IMG_UNDEFINED;
@@ -951,7 +955,9 @@ void handleCommand(String command) {
       CURRENT_FW_VERSION,(unsigned)flashArmed,
       (unsigned)(flashArmed && (uint32_t)(millis()-flashArmedAt)<FLASH_ARM_WINDOW_MS),
       (unsigned)(imgRx.complete && imgRx.valid && imgRx.stage));
-  } else if(command.startsWith("MGMT ")) {
+  }
+#if SMOKE_FEATURE_GATEWAY
+  else if(command.startsWith("MGMT ")) {
     mgmtSendSerial(command);
   } else if(command.startsWith("AUTH BEGIN ")) {
     if(authActive || imgActive || otaActive || !ready || apMode) {
@@ -1046,7 +1052,9 @@ void handleCommand(String command) {
     Serial.println("[IMAGE] STOP NO_FLASH");
   } else if(command.equalsIgnoreCase("OTA PREFLIGHT")) {
     printOtaPreflight();
-  } else if(command.equalsIgnoreCase("NAME GET")) {
+  }
+#endif // SMOKE_FEATURE_GATEWAY
+  else if(command.equalsIgnoreCase("NAME GET")) {
     Serial.printf("[CONFIG] name=%s node=%s\n",
       nodeName.length()?nodeName.c_str():"(unset)",idString(nodeId).c_str());
   } else if(command.equalsIgnoreCase("NAME RESET")) {
@@ -1073,7 +1081,9 @@ void handleCommand(String command) {
       nodeName=name;
       Serial.printf("[CONFIG] OK name=%s\n",nodeName.c_str());
     } else Serial.println("[CONFIG] ERROR NVS write");
-  } else if(command.equalsIgnoreCase("OTA STATS")) {
+  }
+#if SMOKE_FEATURE_GATEWAY
+  else if(command.equalsIgnoreCase("OTA STATS")) {
     Serial.printf("[OTA] STATS rx_data=%lu rx_ack=%lu relay_data=%lu relay_ack=%lu relay_drops=%lu invalid=%lu tx_errors=%lu active=%u index=%u/%u retries=%lu\n",
       (unsigned long)otaRxData,(unsigned long)otaRxAck,(unsigned long)otaRelayData,
       (unsigned long)otaRelayAck,(unsigned long)otaRelayDrops,(unsigned long)otaAuthRejected,
@@ -1120,8 +1130,14 @@ void handleCommand(String command) {
     sendOtaChunk();
   } else if(command.equalsIgnoreCase("OTA STOP")) {
     otaActive=false;Serial.println("[OTA] STOP");
-  } else if(command.equalsIgnoreCase("HELP")) {
+  }
+#endif // SMOKE_FEATURE_GATEWAY
+  else if(command.equalsIgnoreCase("HELP")) {
+#if SMOKE_FEATURE_GATEWAY
     Serial.println("[CONFIG] Commands: NAME GET | NAME SET <name> | NAME RESET | OTA PREFLIGHT | BOOT STATUS | BOOT VERIFY | BOOT ARM/DISARM/ACTIVATE/CONFIRM | FLASH ARM/DISARM/STATUS | AUTH BEGIN <16hex> <len> | AUTH DATA <192hex> | AUTH STOP | IMG BEGIN <16hex> <size> <sha256> [STAGE] | IMG DATA <192hex> | IMG STOP | OTA TEST <16hex> [1..4096] | OTA STATS | OTA DEBUG ON/OFF | OTA STOP | MGMT <16hex> STATUS/ARM/VERIFY/ACTIVATE/REBOOT/CONFIRM [nonce16] | HELP");
+#else
+    Serial.println("[CONFIG] Commands: NAME GET | NAME SET <name> | NAME RESET | OTA PREFLIGHT | BOOT STATUS | BOOT VERIFY | BOOT ARM/DISARM/ACTIVATE/CONFIRM | FLASH ARM/DISARM/STATUS | HELP");
+#endif
   } else if(command.length()) {
     Serial.println("[CONFIG] ERROR unknown command (send HELP)");
   }
