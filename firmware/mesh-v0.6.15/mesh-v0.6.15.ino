@@ -154,7 +154,11 @@ extern "C" bool verifyRollbackLater() {
   return true;
 }
 
-constexpr char CURRENT_FW_VERSION[]="0.6.15";
+// Release matrix may override the monotone numeric OTA version per build.
+#ifndef SMOKE_FIRMWARE_VERSION
+#define SMOKE_FIRMWARE_VERSION "0.6.15"
+#endif
+constexpr char CURRENT_FW_VERSION[]=SMOKE_FIRMWARE_VERSION;
 constexpr uint32_t FLASH_ARM_WINDOW_MS=300000UL;
 constexpr uint32_t BOOT_ARM_WINDOW_MS=60000UL;
 bool bootVerified=false,bootArmed=false,meshPeerVerified=false;
