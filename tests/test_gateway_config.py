@@ -46,6 +46,11 @@ class GatewayConfigTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     load_gateway_config(path)
 
+    def test_embedded_receiver_trusts_dedicated_gateway(self):
+        sketch = (WEB.parent / "firmware" / "mesh-v0.6.15" / "mesh-v0.6.15.ino").read_text(encoding="utf-8")
+        self.assertIn("MGMT_TRUST_GATEWAY=0x00000CEC7E6E27ACULL", sketch)
+        self.assertIn("origin==MGMT_TRUST_GATEWAY", sketch)
+
     def test_dashboard_has_no_hardcoded_com_port(self):
         template = (WEB / "templates" / "index.html").read_text(encoding="utf-8")
         self.assertIn("logger-gateway", template)
