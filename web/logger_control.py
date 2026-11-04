@@ -79,7 +79,7 @@ def start():
 
 @bp.post("/api/logger/stop")
 def stop():
-    global note
+    global note, output_handle
     local()
     if request.headers.get("X-Logger-CSRF") != token:
         abort(403)
@@ -95,7 +95,8 @@ def stop():
         else:
             note = "Kein über die Webapp laufender Logger."
         if output_handle is not None:
-            output_handle.flush()
+            output_handle.close()
+            output_handle = None
         return jsonify(status_data())
 
 
