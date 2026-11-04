@@ -26,6 +26,18 @@ FEATURE_SCHEMA = "smoke-mesh-features-v1"
 def feature_claim(features, digest, target, version, label=None):
     if not isinstance(features, list) or any(type(x) is not str or x not in FEATURE_NAMES for x in features) or len(set(features)) != len(features):
         raise ValueError("Unknown or duplicate feature")
+    import re
+    suffix = re.fullmatch(r"\d+\.\d+\.\d+\.([a-h])", version)
+    if suffix:
+        expected = (
+            [], ["audio"], ["gateway"], ["audio", "gateway"],
+            ["config_ap"], ["audio", "config_ap"],
+            ["config_ap", "gateway"], ["audio", "config_ap", "gateway"],
+        )[ord(suffix.group(1)) - ord("a")]
+        if sorted(features) != expected:
+            raise ValueError("Signed variant letter does not match selected firmware features")
+        if label is not None and label != version:
+            raise ValueError("Signed label must match four-part version")
     claim = {"schema": FEATURE_SCHEMA, "firmware_sha256": digest, "target": target,
              "version": version, "features": sorted(features)}
     if label is not None:
