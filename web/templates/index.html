@@ -41,12 +41,12 @@ th{color:#b6c5d9;font-weight:600}
 <body>
 <header><div><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><h1>Smoke Mesh Monitor</h1><small style="border:1px solid #354760;border-radius:6px;padding:4px 8px;color:#b6c5d9">Dashboard v0.3.0</small></div><div class="muted">ESP32-C3 · ESP-NOW · lokale Testinstallation</div></div>
 <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><a href="/ota" style="color:#a9ccff;font-weight:600">Firmware / OTA</a><a href="/nodes" style="color:#a9ccff;font-weight:600">Knotenverwaltung</a><div id="updated" class="muted">Lade Daten …</div></div></header>
-<section class="panel sessionbar" aria-label="Garage USB-Logger">
-<strong>Garage · COM14</strong>
+<section class="panel sessionbar" aria-label="USB-Logger">
+<strong id="logger-gateway">USB-Gateway</strong>
 <span id="logger-state" class="muted">Loggerstatus wird geladen …</span>
-<button id="logger-start" type="button" disabled title="Nur wenn Garage-Logger gestoppt ist">Logger starten</button>
+<button id="logger-start" type="button" disabled title="Nur wenn der Web-Logger gestoppt ist">Logger starten</button>
 <button id="logger-stop" type="button" disabled>Logger stoppen</button>
-<small id="logger-note" class="muted">Der Web-Logger belegt COM14 exklusiv; bestehende PowerShell-Logger vorher beenden.</small>
+<small id="logger-note" class="muted">Der Web-Logger belegt den konfigurierten COM-Port exklusiv; andere serielle Programme vorher beenden.</small>
 </section>
 <section class="panel sessionbar" aria-label="Testlauf auswählen">
 <label for="session">Testlauf</label>
@@ -144,19 +144,22 @@ async function refresh(){
 }
 refresh();setInterval(refresh,5000);
 
-// Garage COM14 - starts only on explicit click and never stops an external logger.
+// The configured gateway is read from the logger status API.
 let loggerCsrf=null;
+let loggerName="Gateway", loggerPort="";
 async function refreshLogger(){
  try {
   const r=await fetch('/api/logger/status',{cache:'no-store'});
   if(!r.ok)throw Error('HTTP '+r.status);
   const j=await r.json();loggerCsrf=j.token;
+  loggerName=j.name;loggerPort=j.port;
+  $('logger-gateway').textContent=loggerName+' · '+loggerPort;
   $('logger-state').textContent=j.ota_reserved?'Für OTA reserviert':(j.running?'Läuft · PID '+j.pid:'Nicht von Webapp gestartet');
   $('logger-note').textContent=j.note+(j.session?' · '+j.session:'');
   $('logger-start').disabled=j.running||j.ota_reserved;
   $('logger-stop').disabled=!j.running||j.ota_reserved;
-  $('logger-start').title=j.running?'Logger läuft bereits – zuerst stoppen':'Garage-Logger starten';
-  $('logger-stop').title=j.running?'Laufenden Garage-Logger stoppen':'Kein Logger über die Webapp gestartet';
+  $('logger-start').title=j.running?'Logger läuft bereits – zuerst stoppen':loggerName+'-Logger starten';
+  $('logger-stop').title=j.running?'Laufenden Web-Logger stoppen':'Kein Logger über die Webapp gestartet';
  } catch(e){$('logger-state').textContent='Fehler: '+e.message;$('logger-start').disabled=true;$('logger-stop').disabled=true}
 }
 async function commandLogger(action){
@@ -165,7 +168,7 @@ async function commandLogger(action){
  if(action==='stop'&&$('logger-stop').disabled)return;
  $('logger-start').disabled=true;
  $('logger-stop').disabled=true;
- if(action==='start'&&!confirm('Garage Logger an COM14 starten? Einen bisher laufenden PowerShell-Logger oder Serial Monitor vorher schließen.'))return;
+ if(action==='start'&&!confirm(loggerName+'-Logger an '+loggerPort+' starten? Einen bisher laufenden PowerShell-Logger oder Serial Monitor vorher schließen.'))return;
  try{
   const r=await fetch('/api/logger/'+action,{method:'POST',headers:{'X-Logger-CSRF':loggerCsrf}});
   if(!r.ok)throw Error('HTTP '+r.status);

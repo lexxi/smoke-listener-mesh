@@ -1,7 +1,7 @@
 """Browser-only remote OTA orchestration via a trusted USB-connected ESP-NOW gateway.
 
 No target USB. Only previously verified and locally stored releases.
-A single job per process; Garage COM14 logger is paused/restored automatically.
+A single job per process; the configured logger gateway is paused/restored automatically.
 """
 from __future__ import annotations
 
@@ -18,11 +18,11 @@ from flask import Blueprint, abort, jsonify, request, send_file, Response
 
 from release_library import STORE, PUBLIC_KEY, GUARD, _identity, _verify
 from logger_control import pause_for_remote_ota, resume_after_remote_ota
+from gateway_config import LOGGER_PORT, LOGGER_NAME, TRUSTED_GATEWAYS
+from node_role_policy import load_targets, check_release_target
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "tools" / "ota" / "remote_ota.py"
-TRUSTED_GATEWAYS = {"COM14": ("Garage", "000058FE7D6E27AC"),
-                    "COM12": ("Kueche", "000094457F6E27AC")}
 bp = Blueprint("remote_ota", __name__)
 csrf = secrets.token_urlsafe(32)
 lock = threading.RLock()
@@ -42,7 +42,7 @@ def _local():
 
 def _verify_release(release_id):
     if not isinstance(release_id, str) or not re.fullmatch(
-        r"[0-9A-F]{16}_[0-9.]+_[a-f0-9]{16}", release_id
+        r"[0-9A-F]{16}_[0-9.]+(?:[a-h])?_[a-f0-9]{16}", release_id
     ):
         raise ValueError("Unzulässige Release-ID")
     folder = STORE / release_id
@@ -52,6 +52,13 @@ def _verify_release(release_id):
     plan = _verify(image, manifest)
     if _identity(plan) != release_id:
         raise ValueError("Signiertes Release entspricht nicht der Release-ID")
+    # Legacy signed firmware is still accepted. New feature-capable builds
+    # must carry an additional publisher-signed claim, never a guessed role.
+    if tuple(map(int, plan["version"].split(".")[:3])) >= (0, 6, 15):
+        if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){2}\.[a-h]", plan["version"]):
+            raise ValueError("v0.6.15+ benötigt die vierteilige Firmwareversion X.Y.Z.a-h")
+        if plan.get("features") is None:
+            raise ValueError("v0.6.15+ benötigt signierte Feature-Metadaten für Remote-OTA")
     return image, manifest, plan
 
 
@@ -75,14 +82,18 @@ def _log(line):
 def _run(release_id, port, mode):
     global process
     paused = False
+    reserved = False
     try:
         with GUARD:
             image, manifest, plan = _verify_release(release_id)
             if plan["target"] == TRUSTED_GATEWAYS[port][1]:
                 raise ValueError("Ein Knoten kann nicht über sich selbst als USB-Gateway aktualisiert werden")
-        if port == "COM14":
+            if mode != "status":
+                check_release_target(plan, load_targets())
+        if port == LOGGER_PORT:
             paused = pause_for_remote_ota()
-            _log("[WEB] Garage-Logger pausiert, COM14 exklusiv für Remote-OTA.")
+            reserved = True
+            _log(f"[WEB] {LOGGER_NAME}-Logger pausiert, {LOGGER_PORT} exklusiv für Remote-OTA.")
             time.sleep(0.7)
         args = [
             sys.executable, "-u", str(SCRIPT), "--gateway", port,
@@ -125,12 +136,12 @@ def _run(release_id, port, mode):
             job["state"] = "failed"
             job["message"] = "OTA-Vorgang abgebrochen oder fehlgeschlagen."
     finally:
-        if port == "COM14":
+        if reserved:
             try:
                 resume_after_remote_ota(paused)
-                _log("[WEB] COM14 freigegeben; Garage-Logger bei Bedarf neu gestartet.")
+                _log(f"[WEB] {LOGGER_PORT} freigegeben; {LOGGER_NAME}-Logger bei Bedarf neu gestartet.")
             except Exception as exc:
-                _log(f"[WEB] WARN: Garage-Logger Neustart fehlgeschlagen: {exc}")
+                _log(f"[WEB] WARN: {LOGGER_NAME}-Logger Neustart fehlgeschlagen: {exc}")
         with lock:
             process = None
             job["ended"] = __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds")
@@ -176,7 +187,14 @@ def download_log():
 @bp.get("/api/remote/config")
 def config():
     _local()
+    try:
+        targets = sorted(load_targets())
+        target_error = None
+    except (ValueError, OSError, TypeError) as exc:
+        targets, target_error = [], str(exc)
     return jsonify({
+        "node_targets": targets,
+        "target_config_error": target_error,
         "gateways": [{"port": port, "name": info[0], "node": info[1]}
                      for port, info in TRUSTED_GATEWAYS.items()],
         "csrf": csrf,
@@ -205,6 +223,8 @@ def start():
             _, _, plan = _verify_release(release_id)
             if plan["target"] == TRUSTED_GATEWAYS[port][1]:
                 raise ValueError("Gateway und Zielknoten müssen unterschiedliche C3 sein")
+            if mode != "status":
+                check_release_target(plan, load_targets())
     except (OSError, ValueError, TypeError, KeyError, ImportError) as exc:
         return jsonify({"error": "Release-Prüfung: " + str(exc)}), 400
     with lock:
@@ -259,10 +279,12 @@ def node_action():
 def _run_node_action(target, port, action, name):
     global process
     paused = False
+    reserved = False
     try:
-        if port == "COM14":
+        if port == LOGGER_PORT:
             paused = pause_for_remote_ota()
-            _log("[WEB] Garage-Logger für Knotenverwaltung pausiert.")
+            reserved = True
+            _log(f"[WEB] {LOGGER_NAME}-Logger für Knotenverwaltung pausiert.")
             time.sleep(0.7)
         args = [sys.executable, "-u", str(SCRIPT), "--gateway", port,
                 "--manage-target", target, "--manage-action", action]
@@ -292,10 +314,10 @@ def _run_node_action(target, port, action, name):
             job["state"] = "failed"
             job["message"] = "Knotenverwaltung fehlgeschlagen."
     finally:
-        if port == "COM14":
+        if reserved:
             try:
                 resume_after_remote_ota(paused)
-                _log("[WEB] Garage-Logger wieder freigegeben.")
+                _log(f"[WEB] {LOGGER_NAME}-Logger wieder freigegeben.")
             except Exception as exc:
                 _log("[WEB] WARN: Logger-Neustart fehlgeschlagen: " + str(exc))
         with lock:

@@ -20,6 +20,33 @@ from cryptography.hazmat.primitives.asymmetric import ec
 BOARD = "esp32c3"
 SCHEMA = "smoke-mesh-ota-v1"
 MAX_IMAGE_BYTES = 1310720
+FEATURE_NAMES = {"gateway", "audio", "config_ap"}
+FEATURE_SCHEMA = "smoke-mesh-features-v1"
+
+def feature_claim(features, digest, target, version, label=None):
+    if not isinstance(features, list) or any(type(x) is not str or x not in FEATURE_NAMES for x in features) or len(set(features)) != len(features):
+        raise ValueError("Unknown or duplicate feature")
+    import re
+    suffix = re.fullmatch(r"\d+\.\d+\.\d+\.([a-h])", version)
+    if suffix:
+        expected = (
+            [], ["audio"], ["gateway"], ["audio", "gateway"],
+            ["config_ap"], ["audio", "config_ap"],
+            ["config_ap", "gateway"], ["audio", "config_ap", "gateway"],
+        )[ord(suffix.group(1)) - ord("a")]
+        if sorted(features) != expected:
+            raise ValueError("Signed variant letter does not match selected firmware features")
+        if label is not None and label != version:
+            raise ValueError("Signed label must match four-part version")
+    claim = {"schema": FEATURE_SCHEMA, "firmware_sha256": digest, "target": target,
+             "version": version, "features": sorted(features)}
+    if label is not None:
+        import re
+        if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+[a-z]", label):
+            raise ValueError("Invalid display-version label")
+        claim["label"] = label
+    return claim
+
 
 
 def canonical_bytes(payload: dict) -> bytes:
@@ -89,6 +116,12 @@ def sign(args: argparse.Namespace) -> None:
     }
     signature = key.sign(canonical_bytes(data), ec.ECDSA(hashes.SHA256()))
     manifest = {"signed": data, "signature_der_hex": signature.hex()}
+    if getattr(args, "features", None) is not None:
+        names = args.features.split(",") if args.features and args.features != "none" else []
+        claim = feature_claim(names, digest, target, args.version, getattr(args, "label", None))
+        manifest["feature_claim"] = claim
+        manifest["feature_signature_der_hex"] = key.sign(
+            canonical_bytes(claim), ec.ECDSA(hashes.SHA256())).hex()
     output = Path(args.out)
     if output.exists() and not args.overwrite:
         raise ValueError("Manifest exists; use --overwrite if intentional")
@@ -99,7 +132,10 @@ def sign(args: argparse.Namespace) -> None:
 
 def verify(args: argparse.Namespace) -> None:
     manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
-    if set(manifest) != {"signed", "signature_der_hex"}:
+    required = {"signed", "signature_der_hex"}
+    if "feature_claim" in manifest or "feature_signature_der_hex" in manifest:
+        required |= {"feature_claim", "feature_signature_der_hex"}
+    if set(manifest) != required:
         raise ValueError("Unexpected manifest envelope")
     signed = manifest["signed"]
     if set(signed) != {"schema", "board", "target", "version", "size", "sha256"}:
@@ -117,6 +153,20 @@ def verify(args: argparse.Namespace) -> None:
                       canonical_bytes(signed), ec.ECDSA(hashes.SHA256()))
     except InvalidSignature as exc:
         raise ValueError("Invalid release signature") from exc
+    if "feature_claim" in manifest:
+        claim = manifest["feature_claim"]
+        if not isinstance(claim, dict) or set(claim) not in (
+            {"schema", "firmware_sha256", "target", "version", "features"},
+            {"schema", "firmware_sha256", "target", "version", "features", "label"},
+        ):
+            raise ValueError("Invalid feature claim")
+        if claim != feature_claim(claim["features"], digest, signed["target"], signed["version"], claim.get("label")):
+            raise ValueError("Feature claim mismatch")
+        try:
+            public.verify(bytes.fromhex(manifest["feature_signature_der_hex"]),
+                          canonical_bytes(claim), ec.ECDSA(hashes.SHA256()))
+        except InvalidSignature as exc:
+            raise ValueError("Invalid feature signature") from exc
     print(f"PASS: signature, board, image size and SHA-256 verified for node {signed['target']}")
     print("NOTE: This verifies an offline manifest; no target firmware installation occurred.")
 
@@ -135,6 +185,8 @@ def main() -> int:
     signing.add_argument("--version", required=True)
     signing.add_argument("--out", required=True)
     signing.add_argument("--overwrite", action="store_true")
+    signing.add_argument("--features", default=None, help="Explicit build features, e.g. audio or gateway; empty for CORE")
+    signing.add_argument("--label", default=None, help="Signed human-readable variant label, e.g. 0.6.15a")
     signing.set_defaults(func=sign)
     checking = sub.add_parser("verify")
     checking.add_argument("--image", required=True)

@@ -13,7 +13,7 @@ import json
 import math
 from pathlib import Path
 
-from sign_release import BOARD, SCHEMA, MAX_IMAGE_BYTES, canonical_bytes, image_info
+from sign_release import BOARD, SCHEMA, MAX_IMAGE_BYTES, canonical_bytes, image_info, feature_claim
 
 BLOCK_SIZE = 96
 
@@ -25,7 +25,10 @@ def build_plan(image: Path, manifest: Path, public_key: Path) -> dict:
     from cryptography.hazmat.primitives.asymmetric import ec
 
     envelope = json.loads(manifest.read_text(encoding="utf-8"))
-    if set(envelope) != {"signed", "signature_der_hex"}:
+    required_envelope = {"signed", "signature_der_hex"}
+    if "feature_claim" in envelope or "feature_signature_der_hex" in envelope:
+        required_envelope |= {"feature_claim", "feature_signature_der_hex"}
+    if set(envelope) != required_envelope:
         raise ValueError("Unexpected manifest envelope")
     signed = envelope["signed"]
     required = {"schema", "board", "target", "version", "size", "sha256"}
@@ -53,6 +56,27 @@ def build_plan(image: Path, manifest: Path, public_key: Path) -> dict:
                    canonical_bytes(signed), ec.ECDSA(hashes.SHA256()))
     except InvalidSignature as exc:
         raise ValueError("Invalid firmware publisher signature") from exc
+    features = None
+    label = None
+    if "feature_claim" in envelope:
+        claim = envelope["feature_claim"]
+        if not isinstance(claim, dict) or set(claim) not in (
+            {"schema", "firmware_sha256", "target", "version", "features"},
+            {"schema", "firmware_sha256", "target", "version", "features", "label"},
+        ):
+            raise ValueError("Invalid feature claim fields")
+        expected_claim = feature_claim(
+            claim["features"], digest, target, signed["version"], claim.get("label")
+        )
+        if claim != expected_claim:
+            raise ValueError("Feature metadata does not match signed firmware")
+        try:
+            pub.verify(bytes.fromhex(envelope["feature_signature_der_hex"]),
+                       canonical_bytes(claim), ec.ECDSA(hashes.SHA256()))
+        except InvalidSignature as exc:
+            raise ValueError("Invalid signed feature metadata") from exc
+        features = claim["features"]
+        label = claim.get("label")
     count = math.ceil(size / BLOCK_SIZE)
     if size > MAX_IMAGE_BYTES or count > 65535:
         raise ValueError("Image is too large for the planned transport")
@@ -60,6 +84,8 @@ def build_plan(image: Path, manifest: Path, public_key: Path) -> dict:
         "schema": "smoke-mesh-transfer-plan-v1",
         "target": target,
         "version": signed["version"],
+        "features": features,
+        "label": label,
         "size": size,
         "sha256": digest,
         "block_size": BLOCK_SIZE,

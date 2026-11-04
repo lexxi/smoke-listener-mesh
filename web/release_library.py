@@ -43,7 +43,7 @@ def _verify(image: Path, manifest: Path) -> dict:
         plan = build_plan(image, manifest, PUBLIC_KEY)
     finally:
         sys.path.remove(str(OTA_TOOLS))
-    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){2}", plan["version"]):
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){2}(?:\.[a-h])?", plan["version"]):
         raise ValueError("Nur numerische Versionen X.Y.Z werden akzeptiert.")
     if not re.fullmatch(r"[0-9A-F]{16}", plan["target"]):
         raise ValueError("Ungültige Knoten-ID")
@@ -58,6 +58,8 @@ def _identity(plan: dict) -> str:
 def _summary(plan: dict, release_id: str) -> dict:
     return {"id": release_id, "target": plan["target"],
             "version": plan["version"], "sha256": plan["sha256"],
+            "features": plan.get("features"),
+            "label": plan.get("label"),
             "bytes": plan["size"], "blocks": plan["blocks"],
             "status": "verified", "transfer_enabled": False}
 
@@ -67,7 +69,7 @@ def list_releases() -> list[dict]:
     if not STORE.is_dir():
         return found
     for folder in sorted(STORE.iterdir()):
-        if not folder.is_dir() or not re.fullmatch(r"[0-9A-F]{16}_[0-9.]+_[a-f0-9]{16}", folder.name):
+        if not folder.is_dir() or not re.fullmatch(r"[0-9A-F]{16}_[0-9.]+(?:[a-h])?_[a-f0-9]{16}", folder.name):
             continue
         image = folder / "firmware.bin"
         manifest = folder / "manifest.json"

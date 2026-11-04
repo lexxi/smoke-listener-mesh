@@ -45,6 +45,27 @@ class RemoteProtocolTests(unittest.TestCase):
         self.assertLess(remote_ota.numeric("0.6.11"), remote_ota.numeric("0.6.12"))
         with self.assertRaises(ValueError):
             remote_ota.numeric("0.6.beta")
+    def test_four_part_variant_upgrade_policy(self):
+        self.assertTrue(remote_ota.is_upgrade("0.6.15.a","0.6.14"))
+        self.assertTrue(remote_ota.is_upgrade("0.6.15.a","0.6.15.h"))
+        self.assertTrue(remote_ota.is_upgrade("0.6.15.h","0.6.15.a"))
+        self.assertFalse(remote_ota.is_upgrade("0.6.15.a","0.6.15.a"))
+        self.assertFalse(remote_ota.is_upgrade("0.6.15.h","0.6.16.a"))
+        self.assertEqual(remote_ota.numeric("0.6.15.g"),(0,6,15))
+
+    def test_four_part_reply_parser(self):
+        class V15Serial(FakeSerial):
+            def readline(self):
+                if self.writes:
+                    return (f"[MGMT] REPLY origin={TARGET} action=STATUS result=0 "
+                            "nonce=ABCDEF0123456789 running=app0 boot=app0 state=2 "
+                            "staged=0 verified=0 peer=1 version=0.6.15.b name=1OG\n").encode()
+                return b""
+        with mock.patch.object(remote_ota.serial, "Serial", return_value=V15Serial()), \
+             mock.patch.object(remote_ota.time, "sleep", return_value=None):
+            response=remote_ota.mgmt("COM14",TARGET)
+        self.assertEqual(response["version"],"0.6.15.b")
+
     def test_status_parser_with_configured_serial(self):
         dummy = FakeSerial()
         with mock.patch.object(remote_ota.serial, "Serial", return_value=dummy), \

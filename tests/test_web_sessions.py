@@ -1,11 +1,14 @@
 """Regression tests for session isolation and logger selection."""
 import importlib.util
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-SPEC = importlib.util.spec_from_file_location("mesh_web", Path(__file__).resolve().parents[1] / "web" / "app.py")
+WEB = Path(__file__).resolve().parents[1] / "web"
+sys.path.insert(0, str(WEB))
+SPEC = importlib.util.spec_from_file_location("mesh_web", WEB / "app.py")
 mesh = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(mesh)
 
