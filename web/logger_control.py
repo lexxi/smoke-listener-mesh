@@ -1,6 +1,6 @@
-"""Control the existing Garage serial logger on COM14 from the local dashboard.
+"""Control the configured USB gateway logger from the local dashboard.
 
-Does not open COM14 until explicitly started. Never kills unrelated processes.
+Does not open the port until explicitly started. Never kills unrelated processes.
 """
 from __future__ import annotations
 import atexit
@@ -11,10 +11,11 @@ import sys
 import threading
 from pathlib import Path
 from flask import Blueprint, abort, jsonify, request
+from gateway_config import LOGGER_PORT, LOGGER_NAME
 
 ROOT = Path(__file__).resolve().parents[1]
 LOGGER = ROOT / "scripts" / "logging.py"
-PORT = "COM14"
+PORT = LOGGER_PORT
 bp = Blueprint("logger_control", __name__)
 guard = threading.RLock()
 token = secrets.token_urlsafe(32)
@@ -34,13 +35,13 @@ def running():
 
 
 def status_data():
-    return {"port": PORT, "running": running(),
+    return {"port": PORT, "name": LOGGER_NAME, "running": running(),
             "pid": process.pid if running() else None,
             "session": str(session.relative_to(ROOT)) if session else None,
             "note": note, "token": token, "ota_reserved": ota_reserved}
 
 
-# Reservation prevents the dashboard from reopening COM14 during remote OTA.
+# Reservation prevents the dashboard from reopening {PORT} during remote OTA.
 ota_reserved = False
 
 
@@ -76,21 +77,21 @@ def _start_owned_locked():
         output_handle = None
         process = None
         raise
-    note = "Garage-Logger läuft auf COM14."
+    note = f"{LOGGER_NAME}-Logger läuft auf {PORT}."
 
 
 def pause_for_remote_ota():
-    """Reserve COM14, and pause only the logger owned by this Flask process."""
+    """Reserve {PORT}, and pause only the logger owned by this Flask process."""
     global ota_reserved, note
     with guard:
         if ota_reserved:
-            raise RuntimeError("COM14 is already reserved for OTA")
+            raise RuntimeError(f"{PORT} is already reserved for OTA")
         ota_reserved = True
         was_running = running()
         try:
             if was_running:
                 _stop_owned_locked()
-            note = "COM14 für Remote-OTA freigegeben; Web-Logger pausiert."
+            note = f"{PORT} für Remote-OTA freigegeben; Web-Logger pausiert."
             return was_running
         except Exception:
             ota_reserved = False
@@ -105,7 +106,7 @@ def resume_after_remote_ota(was_running):
             if was_running:
                 _start_owned_locked()
             else:
-                note = "COM14 nach OTA wieder freigegeben."
+                note = f"{PORT} nach OTA wieder freigegeben."
         finally:
             ota_reserved = False
 
@@ -125,7 +126,7 @@ def start():
         abort(403)
     with guard:
         if ota_reserved:
-            return jsonify({"error": "COM14 ist für OTA reserviert."}), 409
+            return jsonify({"error": f"{PORT} ist für OTA reserviert."}), 409
         if running():
             return jsonify(status_data())
         try:
@@ -143,7 +144,7 @@ def stop():
         abort(403)
     with guard:
         if ota_reserved:
-            return jsonify({"error": "COM14 ist für OTA reserviert."}), 409
+            return jsonify({"error": f"{PORT} ist für OTA reserviert."}), 409
         if running():
             _stop_owned_locked()
             note = "Web-Logger beendet. Externe PowerShell-Logger unverändert."
