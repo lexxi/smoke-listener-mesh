@@ -286,6 +286,10 @@ def snapshot(selected_file=None):
             "total": total, "generated_at": now.isoformat(), "log_files": len(sessions),
             "note": "RSSI measures the last radio hop, not necessarily origin-to-logger signal strength."}
 
+@app.get("/nodes")
+def node_admin():
+    return render_template("nodes.html")
+
 @app.get("/")
 def index():
     return render_template("index.html")
