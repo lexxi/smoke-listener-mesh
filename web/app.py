@@ -21,6 +21,8 @@ LOCAL = dt.datetime.now().astimezone().tzinfo
 app = Flask(__name__)
 from ota import bp as ota_blueprint
 app.register_blueprint(ota_blueprint)
+from logger_control import bp as logger_blueprint
+app.register_blueprint(logger_blueprint)
 lock = threading.RLock()
 db_path = ROOT / "web" / "data" / "mesh.db"
 log_dirs = [ROOT / "log", ROOT / "logs", ROOT / "scripts" / "log"]
