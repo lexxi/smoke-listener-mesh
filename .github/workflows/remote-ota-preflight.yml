@@ -4,6 +4,7 @@ on:
     paths:
       - 'firmware/mesh-v0.6.11/**'
       - 'firmware/mesh-v0.6.12/**'
+      - 'firmware/mesh-v0.6.13/**'
       - 'web/**'
       - 'tools/ota/**'
       - '.github/workflows/remote-ota-preflight.yml'
@@ -30,9 +31,9 @@ jobs:
           arduino-cli config init
           arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core install esp32:esp32@3.3.12 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-      - name: Compile v0.6.11 and v0.6.12 with dummy development keys
+      - name: Compile v0.6.11–v0.6.13 with dummy development keys
         run: |
-          for version in 0.6.11 0.6.12; do
+          for version in 0.6.11 0.6.12 0.6.13; do
             dir="firmware/mesh-v${version}"
             cp "$dir/mesh_secrets.h.example" "$dir/mesh_secrets.h"
             cp "$dir/ota_public_key.h.example" "$dir/ota_public_key.h"
