@@ -48,6 +48,75 @@ Beispiel für Rauchmelder: AUDIO=1, GATEWAY=0, CONFIG_AP=0.
 Beispiel für dedizierten USB-Gateway: AUDIO=0, GATEWAY=1, CONFIG_AP=0.
 Keine Abhängigkeit zu einem fest vorgegebenen Profilnamen mehr.
 
+## Zentrale Build-Matrix
+
+`tools/ota/build-release-matrix.ps1` automatisiert das wiederholte
+Kompilieren, den BIN-Export und das Signieren. Es ändert **keine**
+`#define`-Werte in `feature_config.h`, sondern übergibt pro Build
+explizite Makros an Arduino-CLI (`compiler.cpp.extra_flags`).
+Jede Variante hat ein eigenes Build-Verzeichnis und eine eigene BIN.
+Verbotene Kombinationen (Batterie/Buzzer vor Implementierung)
+werden nicht erzeugt.
+
+Voraussetzungen:
+- Arduino-CLI installiert (`arduino-cli` im `PATH`).
+- ESP32 Arduino-Core und dasselbe XIAO_ESP32C3-Boardprofil wie bisher.
+- `mesh_secrets.h` und `ota_public_key.h` lokal im Firmwareverzeichnis.
+- Python-Venv `myenv` mit `cryptography` und private/öffentliche OTA-Schlüssel
+  unter `C:\mesh-ota-keys\` (nur für Signierung).
+- Lokal geprüfte `web/data/node_roles.json` mit den explizit erlaubten
+  Knotenrollen. Ohne sie baut `-BuildOnly`, signiert aber nichts.
+
+```powershell
+git pull --ff-only
+.\tools\ota\prepare-firmware.ps1 -Version 0.6.15 -From 0.6.14
+
+# Erst nur die vier Standardvarianten kompilieren:
+.\tools\ota\build-release-matrix.ps1 -BuildOnly
+
+# Mit lokaler Rollenfreigabe vier Standardvarianten bauen und signieren:
+.\tools\ota\build-release-matrix.ps1
+
+# Alle 8 Kombinationen aus Gateway/Audio/AP, zunächst ohne Signaturen:
+.\tools\ota\build-release-matrix.ps1 -AllCombinations -BuildOnly
+```
+
+Standard: CORE, AUDIO, GATEWAY, HYBRID (je ohne AP).
+`-AllCombinations` ergänzt dieselben vier Varianten mit AP.
+Die vier Rollen entsprechen `mesh`, `listener`, `gateway`,
+`hybrid` in der lokal verwalteten Knoten-Rollenliste.
+Das Skript signiert jede BIN **nur für die freigegebenen Ziel-IDs der
+passenden Rolle** und verifiziert anschließend jede Signatur.
+
+Artefakte unter
+`firmware/mesh-v0.6.15/build/release-matrix/<profil>/`:
+
+- `export/mesh-v0.6.15.ino.bin` – kompilierte Firmware
+- `package/firmware.bin` + signierte Knoten-Manifeste, falls Zielrolle freigegeben
+- `smoke-mesh-v0.6.15-<profil>-ota.zip` – OTA-Paket je Variante und Rolle
+- `build-report.json` im Root: Features, Build-Flags, SHA-256, Größe,
+  erlaubte Ziele und Ausgabepfade
+
+**Keine automatischen Uploads oder OTA-Updates.** Das Build-Skript
+bricht ab, wenn das Ausgabe-Verzeichnis bereits existiert, damit keine
+älteren Releases unbemerkt überschrieben werden. Für weitere Läufe
+einen **neuen** Pfad mit `-OutputRoot` angeben. Die ZIPs und BINs
+bleiben unter den bestehenden `.gitignore`-Buildverzeichnissen.
+
+**Einschränkung:** Der Signer sieht die angegebenen Compiler-Flags,
+nicht nachträglich den tatsächlichen Funktionsumfang im Binärcode.
+Es gibt noch keine kryptografische Rückmeldung der laufenden Features
+vom Knoten. Die alte Arduino-IDE-Funktion `Export compiled Binary`
+wird durch den separaten Arduino-CLI-Build ersetzt; Board-FQBN und
+Arduino-Core-Version müssen für vergleichbare Builds gleich bleiben.
+
+**OTA-Versionierung:** Zwei unterschiedliche Firmware-BINs mit
+identischer Version lassen sich nicht regulär nacheinander OTA
+installieren, weil das Downgrade-Schutzprotokoll gleiche Versionen
+ablehnt. Die Build-Matrix produziert Varianten **für verschiedene
+Zielknotenrollen**, nicht zum Hin-und-Herwechseln derselben Version
+auf einem Gerät.
+
 ## Signierte Feature-Metadaten für neue Releases
 
 Der bestehende, vom ESP32-C3 geprüfte OTA-Payload (`signed` +
