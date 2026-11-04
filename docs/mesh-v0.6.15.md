@@ -17,23 +17,40 @@ Noch **nicht** auf ESP32-C3 kompiliert, auf Hardware getestet oder auf Auswirkun
 OTA-Übertragungszeit, Watchdog, Laufzeit und Funkpaketverluste untersucht.
 **Nicht per OTA auf alle Knoten verteilen.**
 
-## Konfigurations-AP entfernt
+## Wählbare Firmware-Pakete (Compile-Zeit)
 
-Der bislang über den BOOT-Taster (GPIO9) gestartete WLAN-Konfigurations-AP und
-sein HTTP-Webserver sind in v0.6.15 entfernt. Die Namensverwaltung bleibt
-über die bereits vorhandenen lokalen Serial-Befehle `NAME GET`,
-`NAME SET <name>`, `NAME RESET` und über das authentifizierte
-Remote-Management (Gateway und Ziel mindestens v0.6.13) verfügbar.
-Das NVS mit dem gespeicherten Knotennamen wird bei normalem OTA nicht gelöscht.
+In `firmware/mesh-v0.6.15/feature_config.h` wird über
+`SMOKE_FEATURE_PROFILE` festgelegt, welche optionalen Funktionen
+mitkompiliert werden. So entfällt ungenutzter Code aus dem finalen Image.
 
-**Folge:** Bei Funk-/Gatewayausfall ist die Namensänderung nicht mehr per
-Konfigurations-WLAN möglich. Ein lokaler USB-Serial-Zugang bleibt als
-Wiederherstellungsweg erforderlich. GPIO9/BOOT ist dadurch für den
-Konfigurations-AP nicht mehr belegt; seine physische Boot-Funktion
-des ESP32-C3 ist davon nicht betroffen.
+| Profil | Wert | Inhalt |
+| --- | --- | --- |
+| CORE | 0 | ESP-NOW-Mesh, Heartbeats, HMAC, Remote-OTA, Remote-/Serial-Namen |
+| AUDIO | 1 | CORE + INMP441-Audiodiagnose |
+| AP | 2 | CORE + bisheriger BOOT-Taster-Konfigurations-AP |
+| FULL | 3 | CORE + Audio + AP |
 
-Diese Code-Änderung wurde noch nicht auf Hardware validiert.
-Die tatsächliche Flash-Einsparung muss nach dem Kompilieren gemessen werden.
+**Standard ist AUDIO (1)**, damit bestehende v0.6.15-Tests ihre
+Audio-Diagnose behalten. Für einen dedizierten USB-Gateway-Knoten
+kann künftig CORE (0) sinnvoll sein. AP ist optional, nicht endgültig
+entfernt. Wähle das Profil vor jedem Build in der Header-Datei und
+kontrolliere die Compiler-Ausgabe. Der gewählte Funktionsumfang ist
+derzeit nicht kryptografisch im signierten Manifest codiert: Releases
+gleicher Version, aber unterschiedlicher Profile, müssen eindeutig
+benannt und im Build-Protokoll dokumentiert werden.
+
+Änderung eines Profils wirkt erst nach **Neukompilierung** und
+Neuinstallation. Keine Laufzeit-Auswahl in der Webapp.
+
+Das NVS bleibt erhalten; `NAME GET`, `NAME SET` und `NAME RESET`
+funktionieren weiterhin seriell sowie remote ab beidseitiger v0.6.13.
+Wenn AP nicht aktiviert ist, benötigt man bei Funkausfall USB zur
+lokalen Namensänderung. GPIO9/BOOT behält seine Hardware-Bootfunktion.
+
+**Noch nicht hardwarevalidiert:** Flash-Verbrauch und Verhalten
+für **alle vier Profile** müssen separat kompiliert und geprüft werden.
+Bei Profilen mit AP pausiert der Konfigurationsmodus wie bisher
+ESP-NOW; dieser Betriebszustand darf nicht zur Alarmierung dienen.
 
 ## Anschlüsse
 
