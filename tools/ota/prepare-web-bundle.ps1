@@ -1,5 +1,5 @@
 param(
-  [string]$Version = "0.6.12",
+  [string]$Version = "0.6.13",
   [string]$Image = "",
   [string]$PrivateKey = "C:\mesh-ota-keys\signing-private.pem",
   [string]$Output = ""
