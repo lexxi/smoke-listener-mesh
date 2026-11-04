@@ -1,9 +1,11 @@
 """Webserver regression checks for four-component firmware versions."""
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT/"web"))
 SPEC=importlib.util.spec_from_file_location("mesh_web_four_part", ROOT/"web"/"app.py")
 mesh=importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(mesh)
