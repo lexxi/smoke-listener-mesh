@@ -17,7 +17,7 @@ def main() -> int:
         path = ROOT / relative
         ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         print(f"[OK] Python syntax: {relative}")
-    for version in ("0.6.11", "0.6.12"):
+    for version in ("0.6.11", "0.6.12", "0.6.13"):
         path = ROOT / f"firmware/mesh-v{version}/mesh-v{version}.ino"
         source = path.read_text(encoding="utf-8")
         checks = {
@@ -31,6 +31,14 @@ def main() -> int:
             "trusted garage gateway": "MGMT_TRUST_GARAGE" in source,
             "trusted kueche gateway": "MGMT_TRUST_KUECHE" in source,
         }
+        if version == "0.6.13":
+            checks.update({
+                "authenticated name operations": all(x in source for x in (
+                    "MGMT_NAME_GET", "MGMT_NAME_SET", "MGMT_NAME_RESET",
+                    "mgmtNonce", "prefs.putString(\"name\",name)")),
+                "independent reboot guard": "MGMT_RESTART" in source and "mgmtRebootAt" in source,
+                "name reply": "safeName.c_str()" in source,
+            })
         for item, valid in checks.items():
             if not valid:
                 raise AssertionError(f"{version}: missing {item}")
