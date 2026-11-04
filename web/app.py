@@ -8,6 +8,7 @@ import os
 import re
 import sqlite3
 import threading
+from contextlib import closing
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
@@ -142,7 +143,7 @@ def ingest():
     with lock:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         count = 0
-        with database() as conn:
+        with closing(database()) as conn, conn:
             for path in log_files():
                 key = str(path.resolve())
                 stat = path.stat()
@@ -201,7 +202,7 @@ def snapshot(selected_file=None):
                    "packets": 0, "direct": 0, "relayed": 0, "rssi": None,
                    "hops": None, "via": None, "last_type": None, "firmware": None}
              for mac, entry in settings.items()}
-    with database() as conn:
+    with closing(database()) as conn, conn:
         if chosen is None:
             latest, sums, paths, recent, total, active_logger, logger_tx = [], {}, [], [], 0, None, None
         else:
