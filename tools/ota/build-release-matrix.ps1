@@ -13,6 +13,7 @@ param(
   [string]$Fqbn = "esp32:esp32:XIAO_ESP32C3:UploadSpeed=921600,CDCOnBoot=default,CPUFreq=160,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=default,DebugLevel=none,EraseFlash=none",
   [string]$ArduinoCli = "arduino-cli",
   [string]$PrivateKey = "C:\mesh-ota-keys\signing-private.pem",
+  [string]$PublicKey = "C:\mesh-ota-keys\signing-public.pem",
   [string]$RoleFile = "",
   [string]$OutputRoot = "",
   [switch]$AllCombinations,
@@ -37,6 +38,7 @@ if ($cli.CommandType -notin @("Application", "ExternalScript")) {
 $python = Join-Path $repo "myenv\Scripts\python.exe"
 if (-not $BuildOnly) {
   if (-not (Test-Path -LiteralPath $PrivateKey)) { throw "Privater OTA-Signierschluessel fehlt: $PrivateKey" }
+  if (-not (Test-Path -LiteralPath $PublicKey)) { throw "Oeffentlicher OTA-Pruefschluessel fehlt: $PublicKey" }
   if (-not (Test-Path -LiteralPath $python)) { throw "Python-venv fehlt: $python" }
 }
 if (-not $RoleFile) { $RoleFile = Join-Path $repo "web\data\node_roles.json" }
@@ -109,7 +111,8 @@ try {
           "--features",($features -join ","),"--out",$manifest)
         & $python $signer @arguments
         if ($LASTEXITCODE -ne 0) { throw "Signatur fehlgeschlagen: $name fuer $target" }
-        # Verify immediately with the local public key when configured.
+        & $python $signer verify --image (Join-Path $packageDir "firmware.bin") --manifest $manifest --public-key $PublicKey
+        if ($LASTEXITCODE -ne 0) { throw "Signatur-Selbsttest fehlgeschlagen: $name fuer $target" }
       }
       $zipPath = Join-Path $folder ("smoke-mesh-v"+$Version+"-"+$name+"-ota.zip")
       Add-Type -AssemblyName System.IO.Compression.FileSystem
