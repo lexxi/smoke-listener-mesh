@@ -6,6 +6,9 @@ param(
   [string[]]$Features = @()
 )
 $ErrorActionPreference = "Stop"
+if ($Version -eq "0.6.15") {
+  throw "Dieses alte Bundle-Skript ist fuer die vierteilige Version nicht geeignet. Bitte tools/ota/build-release-matrix.ps1 verwenden."
+}
 $allowedFeatures = @("gateway", "audio", "config_ap")
 foreach ($feature in $Features) {
   if ($feature -cnotin $allowedFeatures) { throw "Unbekanntes Feature: $feature" }
