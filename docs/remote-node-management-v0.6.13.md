@@ -12,6 +12,24 @@
 - Ein eigenständiger `RESTART` wird nur akzeptiert, wenn Bootpartition und laufende Partition gleich sind und keine aktive Flash-Übertragung läuft. Der bestehende `REBOOT` bleibt für OTA-Bootwechsel reserviert.
 - Webapp serialisiert OTA und Knotenverwaltung über denselben Job-Lock; der COM14-Logger wird vor jeder Aktion pausiert und danach fortgesetzt.
 
+## Pflicht bei jedem Firmware-Versionswechsel: lokale Header übernehmen
+
+Bei **jeder neuen Firmware-Version** müssen die beiden lokal konfigurierten Header-Dateien aus dem zuletzt verwendeten, funktionierenden Firmware-Verzeichnis in den neuen Versionsordner übernommen werden:
+
+- `mesh_secrets.h` (Mesh-/OTA-Secrets und lokale Einstellungen)
+- `ota_public_key.h` (öffentlicher OTA-Verifikationsschlüssel)
+
+**Nicht** die `.example`-Dateien als Ersatz verwenden und keine neuen Schlüssel erzeugen. Das würde bestehende Einstellungen bzw. die OTA-Vertrauensbeziehung verändern. Die Vorlagen der neuen Version auf zusätzliche oder geänderte Konfigurationsfelder prüfen und diese bei Bedarf in die übernommenen Dateien einarbeiten. Die echten Header mit ihren vertraulichen Inhalten nicht committen.
+
+Beispiel beim Wechsel von v0.6.12 auf v0.6.13 (aus dem Repository-Stammverzeichnis):
+
+```powershell
+Copy-Item .\firmware\mesh-v0.6.12\mesh_secrets.h .\firmware\mesh-v0.6.13\mesh_secrets.h
+Copy-Item .\firmware\mesh-v0.6.12\ota_public_key.h .\firmware\mesh-v0.6.13\ota_public_key.h
+```
+
+Wenn die letzte verwendete Version eine andere ist, den Quellordner entsprechend anpassen. Existierende Zieldateien vor dem Überschreiben vergleichen oder sichern.
+
 ## Firmware bauen
 
 ```powershell
