@@ -23,12 +23,13 @@ class MatrixTests(unittest.TestCase):
         self.assertIn("node_targets.json",SCRIPT)
         self.assertIn('foreach ($target in $targets)',SCRIPT)
         self.assertIn('--features',SCRIPT)
-        self.assertIn('--label',SCRIPT)
+        self.assertIn('$release = $Version + "." + $letter',SCRIPT)
+        self.assertIn('--version $release',SCRIPT)
         self.assertIn('$signer verify',SCRIPT)
         self.assertIn("if (-not $BuildOnly)",SCRIPT)
 
     def test_safe_output(self):
-        self.assertIn("Output already exists",SCRIPT)
+        self.assertIn("Ausgabe existiert bereits",SCRIPT)
         self.assertNotIn("remote_ota.py",SCRIPT)
         self.assertNotIn("/api/remote/start",SCRIPT)
 
