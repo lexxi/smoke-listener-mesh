@@ -15,7 +15,13 @@
 #include "mesh_secrets.h"
 #include "ota_auth.h"
 #include "ota_version.h"
+#include "feature_config.h"
+#if SMOKE_FEATURE_AUDIO
 #include "audio_monitor.h"
+#endif
+#if SMOKE_FEATURE_AP
+#include <WebServer.h>
+#endif
 
 // v0.6.4: read-back verification of a signed staged image; no boot-selection changes.
 // Development build: signed staging and local-only guarded boot activation.
@@ -130,6 +136,14 @@ uint32_t invalidCount=0, pendingDrops=0, queueDrops=0;
 uint64_t nodeId=0, bootNonce=0;
 bool ready=false;
 Preferences prefs;
+#if SMOKE_FEATURE_AP
+WebServer server(80);
+bool apMode=false;
+uint32_t buttonSince=0, apLastActivity=0;
+const uint32_t AP_TIMEOUT_MS=300000;
+#else
+constexpr bool apMode=false;
+#endif
 String nodeName;
 String serialLine;
 constexpr size_t MAX_NAME_LENGTH=19; // reserve 4 authenticated bytes for version, and one NUL
@@ -573,7 +587,7 @@ void verifyStagedImageReadback() {
   bootVerified=false;
   const esp_partition_t *running=esp_ota_get_running_partition();
   const esp_partition_t *slot=esp_ota_get_next_update_partition(nullptr);
-  if(!running || !slot || running==slot || !ready ||
+  if(!running || !slot || running==slot || !ready || apMode ||
      !authRx.verified || !imgRx.complete || !imgRx.valid || !imgRx.stage ||
      imgRx.origin!=authRx.origin ||
      imgRx.size!=authRx.expectedSize ||
@@ -746,7 +760,7 @@ void mgmtReceive(const OtaFrame &f){
     mgmtWaiting=false;
     return;
   }
-  if(!mgmtAllowed(f.origin) || !ready || f.total!=1 || f.index!=0)return;
+  if(!mgmtAllowed(f.origin) || !ready || apMode || f.total!=1 || f.index!=0)return;
   const uint8_t action=f.data[0];
   if(action<MGMT_STATUS || action>MGMT_RESTART)return;
   uint64_t supplied=0;memcpy(&supplied,f.data+2,sizeof(supplied));
@@ -829,7 +843,7 @@ void mgmtReceive(const OtaFrame &f){
 void mgmtSendSerial(const String &line){
   // Gateway command: MGMT <16hex-target> <ACTION> [16hex nonce] [NAME]
   // NAME may only appear for NAME_SET; preserve exact case.
-  if(!ready || mgmtWaiting || authActive || imgActive){
+  if(!ready || apMode || mgmtWaiting || authActive || imgActive){
     Serial.println("[MGMT] ERROR busy");return;
   }
   String rest=line.substring(5);rest.trim();
@@ -901,7 +915,7 @@ void handleCommand(String command) {
   } else if(command.equalsIgnoreCase("BOOT VERIFY")) {
     verifyStagedImageReadback();
   } else if(command.equalsIgnoreCase("BOOT ARM")) {
-    if(!bootVerified || !ready) {
+    if(!bootVerified || !ready || apMode) {
       Serial.println("[BOOT] ARM FAIL requires fresh BOOT VERIFY");
       return;
     }
@@ -940,7 +954,7 @@ void handleCommand(String command) {
   } else if(command.startsWith("MGMT ")) {
     mgmtSendSerial(command);
   } else if(command.startsWith("AUTH BEGIN ")) {
-    if(authActive || imgActive || otaActive || !ready) {
+    if(authActive || imgActive || otaActive || !ready || apMode) {
       Serial.println("[AUTH] ERROR busy");return;
     }
     String arg=command.substring(11);
@@ -979,7 +993,7 @@ void handleCommand(String command) {
     authActive=false;authNeedSerial=false;
     Serial.println("[AUTH] STOP NO_FLASH");
   } else if(command.startsWith("IMG BEGIN ")) {
-    if(imgActive || otaActive || !ready) {
+    if(imgActive || otaActive || !ready || apMode) {
       Serial.println("[IMAGE] ERROR busy");return;
     }
     String value=command.substring(10);
@@ -1084,7 +1098,7 @@ void handleCommand(String command) {
       if(n<1 || n>OTA_MAX_TOTAL) {Serial.println("[OTA] ERROR blocks must be 1..4096");return;}
       requestedTotal=(uint16_t)n;
     }
-    if(value.length()!=16 || otaActive || !ready) {
+    if(value.length()!=16 || otaActive || !ready || apMode) {
       Serial.println("[OTA] ERROR enter 16-hex target; not busy; mesh ready");return;
     }
     uint64_t parsed=0;
@@ -1390,7 +1404,62 @@ void sendLocal(uint8_t type) {
   else Serial.println("ERROR: HMAC failed");
 }
 
+#if SMOKE_FEATURE_AP
+void configForm() {
+  apLastActivity=millis();
+  String html=F("<html><meta name='viewport' content='width=device-width,initial-scale=1'><meta charset='UTF-8'><h2>Smoke Mesh</h2><form method='POST' action='/name'><input name='name' maxlength='19' placeholder='Neuer Name' required><button>Speichern</button></form><p>Aktueller Name: ");
+  html+=nodeName;
+  html+="</p></html>";
+  server.send(200,"text/html; charset=utf-8",html);
+}
+void configSave() {
+  apLastActivity=millis();
+  String name=server.arg("name"); name.trim();
+  if(!validName(name)) {server.send(400,"text/plain","Invalid name");return;}
+  if(!prefs.begin("smoke-mesh",false)) {server.send(500,"text/plain","NVS failed");return;}
+  size_t written=prefs.putString("name",name);
+  prefs.end();
+  if(written!=name.length()){server.send(500,"text/plain","NVS write failed");return;}
+  nodeName=name;
+  Serial.printf("[CONFIG] OK name=%s (web)\n",nodeName.c_str());
+  server.send(200,"text/html","<h2>Saved</h2><a href='/'>Back</a>");
+}
+void beginAP() {
+  if(apMode)return;
+  String pw=MESH_CONFIG_AP_PASSWORD;
+  if(pw.length()<12 || pw=="CHANGE-TO-PRIVATE-LONG-PASSWORD") {
+    Serial.println("[CONFIG] ERROR: set private AP password first");return;
+  }
+  esp_now_deinit();
+  ready=false;
+  WiFi.mode(WIFI_AP);
+  // Use the stable eFuse-derived node ID: WiFi.macAddress() can return zeros in AP mode.
+  String ssid="SmokeListener-"+idString(nodeId).substring(10);
+  if(!WiFi.softAP(ssid.c_str(),MESH_CONFIG_AP_PASSWORD,CHANNEL)) {
+    Serial.println("[CONFIG] AP failed, restarting");ESP.restart();return;
+  }
+  apMode=true; apLastActivity=millis();
+  server.begin();
+  Serial.printf("[CONFIG] AP=%s IP=%s; ESP-NOW paused\n",ssid.c_str(),WiFi.softAPIP().toString().c_str());
+}
+void checkButton() {
+  static bool activated=false;
+  if(digitalRead(9)==LOW) {
+    if(!buttonSince)buttonSince=millis();
+    if(!activated && (uint32_t)(millis()-buttonSince)>=5000) {
+      activated=true;beginAP();
+    }
+  } else {buttonSince=0;activated=false;}
+}
+
+#endif
+
 void setup() {
+#if SMOKE_FEATURE_AP
+  pinMode(9,INPUT_PULLUP);
+  server.on("/",HTTP_GET,configForm);
+  server.on("/name",HTTP_POST,configSave);
+#endif
   Serial.begin(115200);
   delay(1500);
   Serial.println("\nSmoke Listener Mesh v0.6.15 | REMOTE OTA MGMT EXPERIMENTAL");
@@ -1449,11 +1518,24 @@ void setup() {
     Serial.println("[BOOT] PENDING_VERIFY: manual BOOT CONFIRM required after authenticated mesh packet");
   sendLocal(TEST);
   lastHeartbeat=millis();
+#if SMOKE_FEATURE_AUDIO
   audioMonitorStart();
+#endif
 }
 void loop() {
   pollSerial();
+#if SMOKE_FEATURE_AP
+  checkButton();
+#endif
   mgmtPendingWatchdog();
+#if SMOKE_FEATURE_AP
+  if(apMode) {
+    server.handleClient();
+    if((uint32_t)(millis()-apLastActivity)>=AP_TIMEOUT_MS) ESP.restart();
+    delay(5);
+    return;
+  }
+#endif
   if(!ready){delay(1000);return;}
   RxEvent event;
   while(xQueueReceive(rxQueue,&event,0)==pdTRUE)processRx(event);
