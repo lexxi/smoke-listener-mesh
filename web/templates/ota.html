@@ -1,100 +1,116 @@
 <!doctype html>
-<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Smoke Mesh · OTA</title>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smoke Mesh · Firmware</title>
 <style>
-:root{color-scheme:dark;font-family:system-ui,Segoe UI,Arial,sans-serif;background:#0b1320;color:#e5edf7}
-*{box-sizing:border-box}body{max-width:1080px;margin:0 auto;padding:28px 18px}
-header{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:22px;flex-wrap:wrap}
-h1{margin:0;font-size:26px}h2{font-size:18px;margin:0 0 14px}a{color:#a9ccff;text-decoration:none}
-.card{border:1px solid #33465d;border-radius:12px;background:#162338;padding:20px;margin-bottom:16px}
-.muted{color:#a3b4c9}.warn{color:#ffd38a}.row{display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap}
-.meta{font-size:14px;color:#a3b4c9;line-height:1.8;white-space:pre-line}
-button{border:1px solid #41608b;background:#315987;color:#fff;border-radius:8px;padding:11px 17px;font-size:15px;cursor:pointer}
-button:hover:enabled{background:#4272ad}button:disabled{opacity:.45;cursor:not-allowed}
-pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#08121f;border:1px solid #304560;padding:15px;border-radius:8px;font-family:Consolas,monospace;font-size:12px;max-height:420px;overflow-y:auto}
-.badge{display:inline-block;border-radius:5px;border:1px solid #3f5877;padding:4px 8px;color:#c1d5ee;font-size:12px}
-hr{border:0;border-top:1px solid #33465d;margin:17px 0}
+:root{color-scheme:dark;font-family:system-ui,"Segoe UI",sans-serif;background:#0b1320;color:#e5edf7}
+*{box-sizing:border-box}body{max-width:1020px;margin:auto;padding:24px 18px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 24px}
+h1{font-size:27px;margin:0}h2{font-size:19px;margin:0 0 14px}
+a{color:#a9ccff;text-decoration:none}.muted{color:#a3b4c9}.hint{font-size:13px;color:#a3b4c9}
+.card{background:#162338;border:1px solid #33465d;border-radius:12px;padding:20px;margin:0 0 16px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}
+button{background:#345b89;border:1px solid #587ca9;color:white;border-radius:8px;padding:11px 16px;cursor:pointer;font:inherit}
+button:disabled{opacity:.4;cursor:not-allowed}.label{font-size:13px;color:#a3b4c9}
+input[type=file]{display:block;max-width:100%;margin:7px 0 12px}
+select{background:#0e1d31;border:1px solid #547399;border-radius:8px;color:#e5edf7;padding:12px;width:100%;font:inherit}
+pre{font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;background:#08121f;padding:14px;border:1px solid #304560;border-radius:8px;max-height:360px;overflow:auto}
+.notice{border-left:3px solid #ba9045;padding:9px 14px;color:#f4d59e;background:#2c291f;margin:13px 0;border-radius:4px}
+.good{color:#91e7b5}.bad{color:#f6a4a4}
+.steps{display:flex;gap:10px;flex-wrap:wrap}.step{background:#1d324d;padding:8px 13px;border-radius:8px;font-size:13px}
 </style></head><body>
-<header><div><h1>Firmware-Updates</h1><div class="muted">Smoke Listener Mesh · lokale Testverwaltung</div></div><a href="/">← Mesh Monitor</a></header>
-<section class="card"><div class="row"><h2>Release-Verwaltung</h2><span class="badge">Signaturprüfung vor Speicherung</span></div>
-<p class="muted">Kompilierte ESP32-C3-Firmware (*.bin) und zugehöriges signiertes Manifest (*.json) hochladen. Der Server benötigt keine Arduino-Header und keinen privaten Signierschlüssel.</p>
-<form id="release-upload">
-<div class="row"><label>Firmware-BIN <input id="upload-bin" type="file" accept=".bin,application/octet-stream" required></label>
-<label>Signiertes Manifest <input id="upload-manifest" type="file" accept=".json,application/json" required></label>
-<button id="upload-submit" type="submit">Release prüfen & speichern</button></div></form>
-<p id="upload-status" class="muted">Noch kein Release hochgeladen.</p>
-<h2>Geprüfte Releases</h2><div id="uploaded-releases" class="meta">Lade Release-Liste …</div>
-<p class="warn">Diese Releases werden nur gespeichert. OTA-Übertragung und Bootaktivierung aus der Release-Liste sind noch nicht freigeschaltet.</p>
+<header><div><h1>Firmware-Verwaltung</h1><div class="muted">Smoke Listener Mesh · Windows-Test</div></div><a href="/">← Mesh Monitor</a></header>
+<div class="steps"><span class="step">1 · Release bereitstellen</span><span class="step">2 · Ziel prüfen</span><span class="step">3 · Firmware übertragen</span></div>
+<section class="card" style="margin-top:18px">
+<h2>1 · Release hinzufügen</h2>
+<p class="muted">Du brauchst nur die kompilierte Firmware-BIN und das dafür signierte JSON-Manifest. Die privaten Schlüssel bleiben auf deinem Build-PC.</p>
+<form id="upload">
+<div class="row">
+<label>Firmware-BIN <input id="bin" type="file" accept=".bin" required></label>
+<label>Signiertes Manifest <input id="manifest" type="file" accept=".json" required></label>
+<button type="submit" id="upload-button">Prüfen und speichern</button>
+</div></form><div id="upload-message" class="hint">Noch kein Upload durchgeführt.</div>
 </section>
-<section class="card"><h2>Umgebung</h2><div class="meta">Gateway: <strong>Kueche · COM12</strong> (v0.6.1) &nbsp; · &nbsp; Ziel: <strong>1OG · COM15</strong> (erwartet v0.6.7)</div>
-<p class="warn">Diese erste Version arbeitet nur lokal auf diesem Windows-PC und ist kein unbeaufsichtigter Update-Dienst. Vor dem Start alle seriellen Monitore für COM12/COM15 schließen.</p></section>
-<section class="card"><div class="row"><h2>Altes Testrelease (nur Anzeige)</h2><span class="badge">Übertragung deaktiviert</span></div>
-<div id="release" class="meta">Prüfe Firmware und Signatur …</div><hr>
-<div class="row"><div class="muted">Historischer v0.6.9-Staging-Test; 1OG läuft bereits v0.6.9. Dieser Test wird nicht mehr gestartet.</div>
-<button id="start" disabled title="Legacy v0.6.9-Staging deaktiviert">Legacy-OTA deaktiviert</button></div>
-<p class="muted" style="font-size:13px">Keine automatische Bootaktivierung, kein BOOT CONFIRM und kein Neustart. Nach erfolgreichem Test bleibt die laufende Firmware aktiv.</p></section>
-<section class="card"><div class="row"><h2>OTA-Lauf</h2><span id="state" class="badge">–</span></div>
-<p id="message" class="muted">Noch kein OTA-Lauf gestartet.</p><div class="meta" id="times"></div>
-<pre id="output">Noch keine Ausgabe.</pre></section>
+<section class="card">
+<h2>2 · Ziel und Version auswählen</h2>
+<label for="release" class="label">Signaturgeprüfte Releases</label>
+<select id="release"><option value="">Lade Releases …</option></select>
+<div id="details" class="muted" style="margin-top:14px">Noch kein Release ausgewählt.</div>
+<div class="notice">Die Web-Übertragung ist zunächst ausschließlich für <strong>1OG v0.6.9 → v0.6.10</strong> freigegeben. Kueche ist das USB-Gateway. Bootaktivierung ist weiterhin manuell.</div>
+<div class="row"><div><strong>Gateway: Kueche · <span id="gateway">COM12</span></strong><div class="hint">1OG am Test-PC: <span id="target-port">COM15</span> · Beide USB-Ports müssen frei sein</div></div>
+<button id="stage" disabled>Signierte Firmware übertragen</button></div>
+</section>
+<section class="card">
+<div class="row"><h2>3 · Übertragung und Kontrolle</h2><strong id="state" class="muted">Bereit</strong></div>
+<p id="job-message" class="muted">Noch keine Übertragung gestartet.</p>
+<p id="job-time" class="hint"></p>
+<pre id="log">Noch keine Ausgabe.</pre>
+<p class="hint">Nach erfolgreicher Übertragung: Der SHA-256-Wert wurde auf dem Ziel geprüft, aber der aktive Bootslot bleibt unverändert. Bootwechsel und Bestätigung sind nicht Teil dieser Seite.</p>
+</section>
 <script>
-const csrf={{ csrf_token|tojson }};
-let activeVersion=null, ready=false, lastLines=0;
+const otaCsrf={{ csrf_token|tojson }};
 const $=id=>document.getElementById(id);
-function safeText(id,text){$(id).textContent=text;}
-async function loadRelease(){
-try{
-const res=await fetch('/api/ota/releases',{cache:'no-store'});if(!res.ok)throw Error('HTTP '+res.status);
-const data=await res.json();const x=data.releases[0];
-ready=false;activeVersion=null; // Legacy OTA intentionally disabled; only verified upload is enabled.
-safeText('release',ready?('v'+x.version+' · '+x.bytes.toLocaleString('de-DE')+' Byte · '+x.blocks.toLocaleString('de-DE')+' Blöcke\nSHA-256: '+x.sha256+'\nZiel: '+x.target+' · '+x.from_version+' ('+x.from_slot+') → '+x.version+' ('+x.to_slot+')'):
-('Nicht bereit: '+(x?.error||'Kein Release konfiguriert')));
-}catch(e){ready=false;safeText('release','Release-Prüfung fehlgeschlagen: '+e.message)}
+let releaseCsrf=null,items=[],activeJob=false;
+function info(x){return x===undefined||x===null?'–':String(x)}
+async function refreshList(){
+ try{
+  const [r1,r2]=await Promise.all([fetch('/api/releases',{cache:'no-store'}),fetch('/api/ota/releases',{cache:'no-store'})]);
+  if(!r1.ok||!r2.ok)throw Error('Release-Abfrage fehlgeschlagen');
+  const lib=await r1.json(),ota=await r2.json();
+  releaseCsrf=lib.upload_csrf;items=ota.releases;
+  $('gateway').textContent=ota.gateway_port;$('target-port').textContent=ota.target_port;
+  const current=$('release').value;$('release').replaceChildren();
+  const opt=document.createElement('option');opt.value='';opt.textContent='Release auswählen';$('release').append(opt);
+  for(const x of items){
+   const option=document.createElement('option');option.value=x.id;
+   option.textContent='v'+x.version+' · '+x.target+(x.transfer_enabled?' · Übertragung freigegeben':' · nur Ablage');
+   $('release').appendChild(option);
+  }
+  if(items.some(x=>x.id===current))$('release').value=current;
+  else if(items.length===1)$('release').value=items[0].id;
+  renderSelected();
+ }catch(e){$('details').textContent='Fehler: '+e.message;$('stage').disabled=true}
 }
-async function refresh(){
-try{
-const res=await fetch('/api/ota/job',{cache:'no-store'});if(!res.ok)throw Error('HTTP '+res.status);
-const x=await res.json();safeText('state',x.state);safeText('message',x.message||'');
-safeText('times','Start: '+(x.started||'–')+' · Ende: '+(x.ended||'–'));
-const lines=x.lines||[];if(lastLines!==lines.length||x.state==='idle'){safeText('output',lines.length?lines.join('\n'):'Noch keine Ausgabe.');lastLines=lines.length}
-$('start').disabled=!ready||x.state==='running';
-}catch(e){safeText('message','Statusabfrage fehlgeschlagen: '+e.message);$('start').disabled=true}
+function renderSelected(){
+ const x=items.find(v=>v.id===$('release').value);
+ $('stage').disabled=!x||!x.transfer_enabled||activeJob;
+ $('details').textContent=x?
+  ('Version v'+x.version+' · Ziel '+x.target+' · '+x.bytes.toLocaleString('de-DE')+' Byte\nSHA-256: '+x.sha256+'\n'+x.transfer_note):
+  'Kein Release ausgewählt. Bitte Firmware und Manifest hochladen.';
+ $('details').style.whiteSpace='pre-line';
 }
-$('start').addEventListener('click',async()=>{
-if(!ready||!activeVersion)return;
-if(!window.confirm('Signiertes v'+activeVersion+' jetzt auf 1OG in den inaktiven Slot übertragen?\nCOM12 und COM15 müssen frei sein.\nKein Bootwechsel.'))return;
-$('start').disabled=true;
-try{
-const r=await fetch('/api/ota/start',{method:'POST',headers:{'Content-Type':'application/json','X-OTA-CSRF':csrf},body:JSON.stringify({version:activeVersion})});
-const data=await r.json();if(!r.ok)throw Error(data.error||'HTTP '+r.status);
-lastLines=-1;await refresh();
-}catch(e){safeText('message','Start fehlgeschlagen: '+e.message);await refresh()}
+$('release').addEventListener('change',renderSelected);
+$('upload').addEventListener('submit',async e=>{
+ e.preventDefault();if(!releaseCsrf)return;
+ const image=$('bin').files[0],manifest=$('manifest').files[0];if(!image||!manifest)return;
+ $('upload-button').disabled=true;$('upload-message').textContent='Verifiziere Signatur und Firmware …';
+ try{
+  const data=new FormData();data.append('image',image);data.append('manifest',manifest);
+  const r=await fetch('/api/releases/upload',{method:'POST',headers:{'X-Release-CSRF':releaseCsrf},body:data});
+  const x=await r.json();if(!r.ok)throw Error(x.error||'HTTP '+r.status);
+  $('upload-message').textContent='Signatur OK: Release v'+x.release.version+' gespeichert.';
+  $('upload').reset();await refreshList();$('release').value=x.release.id;renderSelected();
+ }catch(err){$('upload-message').textContent='Upload fehlgeschlagen: '+err.message}
+ finally{$('upload-button').disabled=false}
 });
-let releaseCsrf=null;
-async function refreshLibrary(){
+$('stage').addEventListener('click',async()=>{
+ const x=items.find(v=>v.id===$('release').value);if(!x||!x.transfer_enabled||activeJob)return;
+ if(!confirm('1OG von v0.6.9 auf v0.6.10 in den inaktiven Slot übertragen?\nKueche COM12 und 1OG COM15 müssen am PC angeschlossen sein.\nKein Neustart oder Bootwechsel.'))return;
+ activeJob=true;renderSelected();
  try{
-  const r=await fetch('/api/releases',{cache:'no-store'});
-  if(!r.ok)throw Error('HTTP '+r.status);
-  const j=await r.json();releaseCsrf=j.upload_csrf;
-  const lines=j.releases.map(x=>'v'+x.version+' · Ziel '+x.target+' · '+x.bytes.toLocaleString('de-DE')+' Byte · SHA-256 '+x.sha256+' · Signatur OK');
-  safeText('uploaded-releases',lines.length?lines.join('\n\n'):'Noch keine geprüften Releases gespeichert.');
-  if(!j.public_key_present)safeText('upload-status','Öffentlicher Prüfschlüssel fehlt. Upload derzeit nicht möglich.');
- }catch(e){safeText('uploaded-releases','Fehler beim Laden: '+e.message)}
-}
-$('release-upload').addEventListener('submit',async e=>{
- e.preventDefault();
- if(!releaseCsrf)return;
- const image=$('upload-bin').files[0],manifest=$('upload-manifest').files[0];
- if(!image||!manifest)return;
- if(!confirm('Firmware und Manifest lokal prüfen und als Release speichern? Es erfolgt kein Flashen.'))return;
- $('upload-submit').disabled=true;
- safeText('upload-status','Prüfe Signatur und Firmware …');
- try{
-  const form=new FormData();form.append('image',image);form.append('manifest',manifest);
-  const r=await fetch('/api/releases/upload',{method:'POST',headers:{'X-Release-CSRF':releaseCsrf},body:form});
+  const r=await fetch('/api/ota/start',{method:'POST',headers:{'Content-Type':'application/json','X-OTA-CSRF':otaCsrf},body:JSON.stringify({release_id:x.id})});
   const j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);
-  safeText('upload-status','Release v'+j.release.version+' für '+j.release.target+' erfolgreich signaturgeprüft und gespeichert.');
-  $('release-upload').reset();await refreshLibrary();
- }catch(e){safeText('upload-status','Upload abgelehnt: '+e.message)}
- finally{$('upload-submit').disabled=false}
+  await refreshJob();
+ }catch(e){$('job-message').textContent='Start fehlgeschlagen: '+e.message;activeJob=false;renderSelected()}
 });
-(async()=>{await refreshLibrary();await loadRelease();await refresh();setInterval(refresh,2000)})();
+async function refreshJob(){
+ try{
+ const r=await fetch('/api/ota/job',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);
+ const j=await r.json();activeJob=j.state==='running';
+ $('state').textContent=j.state;$('job-message').textContent=j.message||'';
+ $('job-time').textContent='Beginn: '+info(j.started)+' · Ende: '+info(j.ended);
+ $('log').textContent=j.lines.length?j.lines.join('\n'):'Noch keine Ausgabe.';
+ renderSelected();
+ }catch(e){$('job-message').textContent='Statusfehler: '+e.message;$('stage').disabled=true}
+}
+(async()=>{await refreshList();await refreshJob();setInterval(refreshJob,2000)})();
 </script></body></html>
