@@ -91,6 +91,8 @@ def _run(release_id, port, mode):
         ]
         if mode == "deploy":
             args.append("--deploy")
+        elif mode == "activate_staged":
+            args.append("--activate-staged")
         elif mode == "status":
             args.append("--status-only")
         proc = subprocess.Popen(
@@ -107,7 +109,7 @@ def _run(release_id, port, mode):
         code = proc.wait()
         with lock:
             job["state"] = "passed" if code == 0 else "failed"
-            if code == 0 and mode == "deploy":
+            if code == 0 and mode in ("deploy", "activate_staged"):
                 job["progress"] = 100
                 job["message"] = "Update bestätigt: Ziel meldet neue Firmware als VALID."
             elif code == 0 and mode == "stage":
@@ -196,7 +198,7 @@ def start():
         return jsonify({"error": "CSRF-Prüfung fehlgeschlagen"}), 403
     data = request.get_json(silent=True) or {}
     release_id, port, mode = data.get("release_id"), data.get("gateway"), data.get("mode")
-    if port not in TRUSTED_GATEWAYS or mode not in ("status", "stage", "deploy"):
+    if port not in TRUSTED_GATEWAYS or mode not in ("status", "stage", "deploy", "activate_staged"):
         return jsonify({"error": "Unzulässiges Gateway oder Betriebsmodus"}), 400
     try:
         with GUARD:
