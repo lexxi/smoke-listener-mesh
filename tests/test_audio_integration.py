@@ -7,7 +7,8 @@ AUDIO=(ROOT/"firmware/mesh-v0.6.15/audio_monitor.h").read_text(encoding="utf-8")
 
 class AudioIntegrationTests(unittest.TestCase):
     def test_version_and_monitor_hook(self):
-        self.assertIn('CURRENT_FW_VERSION[]="0.6.15"',FIRMWARE)
+        self.assertIn('CURRENT_FW_VERSION[]=SMOKE_FIRMWARE_VERSION',FIRMWARE)
+        self.assertIn('#define SMOKE_FIRMWARE_VERSION "0.6.15"',FIRMWARE)
         self.assertIn('#include "audio_monitor.h"',FIRMWARE)
         self.assertIn("audioMonitorStart();",FIRMWARE)
     def test_no_alarm_mesh_packet_yet(self):
