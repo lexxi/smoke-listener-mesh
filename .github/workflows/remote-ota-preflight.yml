@@ -1,0 +1,44 @@
+name: Remote OTA Preflight
+on:
+  push:
+    paths:
+      - 'firmware/mesh-v0.6.11/**'
+      - 'firmware/mesh-v0.6.12/**'
+      - 'web/**'
+      - 'tools/ota/**'
+      - '.github/workflows/remote-ota-preflight.yml'
+  workflow_dispatch:
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r web/requirements.txt
+      - run: python -m compileall -q web tools/ota
+      - run: python tools/ota/verify_remote_sources.py
+  arduino-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install ESP32 Arduino Core
+        run: |
+          arduino-cli config init
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@3.3.12 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+      - name: Compile v0.6.11 and v0.6.12 with dummy development keys
+        run: |
+          for version in 0.6.11 0.6.12; do
+            dir="firmware/mesh-v${version}"
+            cp "$dir/mesh_secrets.h.example" "$dir/mesh_secrets.h"
+            cp "$dir/ota_public_key.h.example" "$dir/ota_public_key.h"
+            arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32C3 "$dir"
+          done
+      - name: Confirm real secrets are never committed
+        run: |
+          if git ls-files | grep -E '(^|/)(mesh_secrets\.h|ota_public_key\.h|signing-private\.pem)$'; then
+            echo 'Private material unexpectedly tracked'; exit 1
+          fi
