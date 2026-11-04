@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-Build and optionally sign all eight v0.6.15.a .. v0.6.15.h profiles.
+Build and optionally sign all eight v0.6.16.a .. v0.6.16.h profiles.
 USB flashing and remote OTA are deliberately not performed here.
 #>
 [CmdletBinding()]
 param(
-  [string]$Version = "0.6.15",
+  [string]$Version = "0.6.16",
   [string]$Fqbn = "esp32:esp32:XIAO_ESP32C3:UploadSpeed=921600,CDCOnBoot=default,CPUFreq=160,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=default,DebugLevel=none,EraseFlash=none",
   [string]$ArduinoCli = "arduino-cli",
   [string]$PrivateKey = "C:\mesh-ota-keys\signing-private.pem",
@@ -17,7 +17,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version muss numerisch sein, z.B. 0.6.15" }
+if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version muss numerisch sein, z.B. 0.6.16" }
 $sketchDir = Join-Path $repo ("firmware\mesh-v" + $Version)
 $sketch = Join-Path $sketchDir ("mesh-v" + $Version + ".ino")
 if (-not (Test-Path -LiteralPath $sketch)) { throw "Sketch fehlt: $sketch" }
