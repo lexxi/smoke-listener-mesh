@@ -1417,8 +1417,6 @@ void setup() {
   Serial.printf("[CONFIG] name=%s (NAME GET / NAME SET <name> / NAME RESET)\n",
     nodeName.length()?nodeName.c_str():"(unset)");
   bootNonce=((uint64_t)esp_random()<<32)|esp_random();
-  mgmtNonce=((uint64_t)esp_random()<<32)|esp_random();
-  if(!mgmtNonce)mgmtNonce=1;
   Serial.printf("Node=%s boot=%s network=%08lX\n",
     idString(nodeId).c_str(),idString(bootNonce).c_str(),(unsigned long)MESH_NETWORK_ID);
   rxQueue=xQueueCreate(RX_QUEUE_LENGTH,sizeof(RxEvent));
@@ -1429,6 +1427,9 @@ void setup() {
   Serial.printf("MAC=%s channel=%u\n",WiFi.macAddress().c_str(),CHANNEL);
   e=esp_now_init();
   if(e!=ESP_OK){Serial.printf("ERROR: espnow %d\n",(int)e);return;}
+  // Generate management challenge after WiFi has initialized the hardware RNG.
+  mgmtNonce=((uint64_t)esp_random()<<32)|esp_random();
+  if(!mgmtNonce)mgmtNonce=1;
   esp_now_register_recv_cb(onReceive);
   esp_now_peer_info_t peer={};
   memcpy(peer.peer_addr,BROADCAST,6);
