@@ -18,6 +18,21 @@ if ($Version -eq "0.6.15" -and -not $PSBoundParameters.ContainsKey("Features")) 
 }
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+if ($Version -eq "0.6.15") {
+  $header = Join-Path $repo "firmware\mesh-v0.6.15\feature_config.h"
+  if (-not (Test-Path $header)) { throw "Feature-Konfiguration fehlt: $header" }
+  $source = Get-Content -LiteralPath $header -Raw
+  $flags = @{"gateway"="FEATURE_GATEWAY";"audio"="FEATURE_AUDIO";"config_ap"="FEATURE_CONFIG_AP"}
+  foreach ($item in $flags.GetEnumerator()) {
+    $match = [regex]::Match($source, "(?m)^\s*#define\s+" + $item.Value + "\s+([01])\s*$")
+    if (-not $match.Success) { throw "Feature-Schalter nicht lesbar: $($item.Value)" }
+    $enabled = $match.Groups[1].Value -eq "1"
+    $declared = $Features -contains $item.Key
+    if ($enabled -ne $declared) {
+      throw "Feature-Abweichung: $($item.Value)=$([int]$enabled), signiert=$([int]$declared). Erst konfigurieren und dieselbe BIN neu kompilieren."
+    }
+  }
+}
 $python = Join-Path $repo "myenv\Scripts\python.exe"
 $nodes = @("000010637C6E27AC","000058FE7D6E27AC","000094457F6E27AC","0000A0E37E6E27AC")
 if (-not $Image) { $Image = Join-Path $repo ("firmware\mesh-v$Version\build\esp32.esp32.XIAO_ESP32C3\mesh-v$Version.ino.bin") }
