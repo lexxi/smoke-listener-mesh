@@ -49,6 +49,20 @@ class TransferTests(unittest.TestCase):
         plan = build_plan(self.image, self.manifest, self.pub)
         self.assertEqual(plan["features"], ["audio"])
 
+    def test_letter_label_is_signed_and_preserved(self):
+        self.manifest.unlink()
+        sign(SimpleNamespace(image=self.image, private_key=self.priv,
+            target="000094457F6E27AC", version="0.6.151", out=self.manifest,
+            overwrite=False, features="audio", label="0.6.15b"))
+        plan = build_plan(self.image, self.manifest, self.pub)
+        self.assertEqual(plan["version"], "0.6.151")
+        self.assertEqual(plan["label"], "0.6.15b")
+        doc = json.loads(self.manifest.read_text())
+        doc["feature_claim"]["label"] = "0.6.15c"
+        self.manifest.write_text(json.dumps(doc))
+        with self.assertRaisesRegex(ValueError, "[Ff]eature"):
+            build_plan(self.image, self.manifest, self.pub)
+
     def test_tampered_feature_claim_is_rejected(self):
         self.manifest.unlink()
         sign(SimpleNamespace(image=self.image, private_key=self.priv,
