@@ -57,14 +57,16 @@ def build_plan(image: Path, manifest: Path, public_key: Path) -> dict:
     except InvalidSignature as exc:
         raise ValueError("Invalid firmware publisher signature") from exc
     features = None
+    label = None
     if "feature_claim" in envelope:
         claim = envelope["feature_claim"]
-        if not isinstance(claim, dict) or set(claim) != {
-            "schema", "firmware_sha256", "target", "version", "features"
-        }:
+        if not isinstance(claim, dict) or set(claim) not in (
+            {"schema", "firmware_sha256", "target", "version", "features"},
+            {"schema", "firmware_sha256", "target", "version", "features", "label"},
+        ):
             raise ValueError("Invalid feature claim fields")
         expected_claim = feature_claim(
-            claim["features"], digest, target, signed["version"]
+            claim["features"], digest, target, signed["version"], claim.get("label")
         )
         if claim != expected_claim:
             raise ValueError("Feature metadata does not match signed firmware")
@@ -74,6 +76,7 @@ def build_plan(image: Path, manifest: Path, public_key: Path) -> dict:
         except InvalidSignature as exc:
             raise ValueError("Invalid signed feature metadata") from exc
         features = claim["features"]
+        label = claim.get("label")
     count = math.ceil(size / BLOCK_SIZE)
     if size > MAX_IMAGE_BYTES or count > 65535:
         raise ValueError("Image is too large for the planned transport")
@@ -82,6 +85,7 @@ def build_plan(image: Path, manifest: Path, public_key: Path) -> dict:
         "target": target,
         "version": signed["version"],
         "features": features,
+        "label": label,
         "size": size,
         "sha256": digest,
         "block_size": BLOCK_SIZE,
