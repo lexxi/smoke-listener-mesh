@@ -48,6 +48,52 @@ Beispiel für Rauchmelder: AUDIO=1, GATEWAY=0, CONFIG_AP=0.
 Beispiel für dedizierten USB-Gateway: AUDIO=0, GATEWAY=1, CONFIG_AP=0.
 Keine Abhängigkeit zu einem fest vorgegebenen Profilnamen mehr.
 
+## Arduino CLI unter Windows einrichten
+
+Die zentrale Build-Matrix verwendet **Arduino CLI** (`arduino-cli`),
+nicht den Compile-Knopf der Arduino IDE. Die Arduino IDE kann bereits
+installiert und funktionsfähig sein, obwohl `arduino-cli` in PowerShell
+noch nicht als Befehl gefunden wird.
+
+**1. Installation über Windows Package Manager (PowerShell):**
+
+```powershell
+winget install --id ArduinoSA.CLI --exact
+```
+
+Danach **ein neues PowerShell-Fenster öffnen**, damit die aktualisierte
+PATH-Umgebung übernommen wird.
+
+**2. CLI und bestehende Boards überprüfen:**
+
+```powershell
+arduino-cli version
+arduino-cli core list
+```
+
+In unserer Windows-Umgebung erkennt `arduino-cli core list` bereits
+`esp32:esp32 3.3.12`. Die vorhandenen Boardpakete werden
+weiterverwendet; eine zweite ESP32-Installation ist nicht erforderlich.
+Das Build-Skript verwendet standardmäßig das Boardprofil
+`esp32:esp32:XIAO_ESP32C3` mit den bisherigen Compiler-Einstellungen.
+
+**3. Reiner Compile-Test ohne Signatur und ohne OTA:**
+
+```powershell
+cd C:\pyprojects\smoke-listener-mesh
+.\tools\ota\build-release-matrix.ps1 -BuildOnly
+```
+
+Falls `arduino-cli` weiterhin nicht erkannt wird, zuerst den
+Installationspfad beziehungsweise die PATH-Variable prüfen.
+Alternativ kann der vollständige Pfad zur ausführbaren Datei
+über `-ArduinoCli "C:\Pfad\zu\arduino-cli.exe"` übergeben werden.
+
+Wenn `arduino-cli core list` kein `esp32:esp32` zeigt, vor einer
+Neuinstallation zuerst kontrollieren, ob Arduino CLI dasselbe
+Arduino15-Datenverzeichnis wie die Arduino IDE verwendet
+(typisch `%LOCALAPPDATA%\Arduino15`).
+
 ## Zentrale Build-Matrix
 
 `tools/ota/build-release-matrix.ps1` automatisiert das wiederholte
