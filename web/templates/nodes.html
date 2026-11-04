@@ -114,6 +114,16 @@ async function jobRefresh(){
   running=j.state==='running';
   $('state').textContent=j.state;$('message').textContent=j.message||'';
   $('log').textContent=j.lines?.length?j.lines.join('\n'):'Noch kein Protokoll.';
+  if(lastId && j.id===lastId && j.state!=='running'){
+   if(j.state==='passed' && j.mode?.startsWith('node_NAME_')){
+    const match=(j.lines||[]).join('\n').match(/\[MGMT\] REPLY[^\n]* name=([A-Za-z0-9_-]{1,19}|\(unset\))/g);
+    if(match?.length){
+     const last=match[match.length-1].match(/ name=(.*)$/);
+     if(last)$('name').value=last[1]==='(unset)'?'':last[1];
+    }
+   }
+   lastId=null;
+  }
   selection();
  }catch(e){$('message').textContent=e.message}
 }
