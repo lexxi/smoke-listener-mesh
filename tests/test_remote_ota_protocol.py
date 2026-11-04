@@ -55,6 +55,40 @@ class RemoteProtocolTests(unittest.TestCase):
         self.assertTrue(result["peer"])
         self.assertEqual(dummy.writes[0], f"MGMT {TARGET} STATUS\n".encode())
         self.assertFalse(dummy.is_open)
+    def test_name_command_preserves_case_and_parses_name(self):
+        class NameSerial(FakeSerial):
+            def readline(self):
+                if self.writes:
+                    return (
+                        f"[MGMT] REPLY origin={TARGET} action=NAME_SET result=0 "
+                        "nonce=ABCDEF0123456789 running=app1 boot=app1 state=2 "
+                        "staged=0 verified=0 peer=1 version=0.6.13 name=Keller_Abgang\\n"
+                    ).encode("ascii")
+                return b""
+        dummy = NameSerial()
+        with mock.patch.object(remote_ota.serial, "Serial", return_value=dummy), \\
+             mock.patch.object(remote_ota.time, "sleep", return_value=None):
+            reply = remote_ota.mgmt("COM14", TARGET, "NAME_SET",
+                                    "ABCDEF0123456789", "Keller_Abgang")
+        self.assertEqual(reply["name"], "Keller_Abgang")
+        self.assertEqual(dummy.writes[0],
+                         f"MGMT {TARGET} NAME_SET ABCDEF0123456789 Keller_Abgang\\n".encode())
+
+    def test_reject_invalid_names(self):
+        for name in ("", "two words", "äbc", "x" * 20, "bad;command"):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                remote_ota.mgmt("COM14", TARGET, "NAME_SET",
+                                "ABCDEF0123456789", name)
+
+    def test_manage_requires_version_013_before_sending_commands(self):
+        args = mock.Mock(manage_target=TARGET, manage_action="NAME_SET", manage_name="Foo",
+                         gateway="COM14")
+        old = {"version": "0.6.12", "state": 2, "nonce": "ABCDEF0123456789"}
+        with mock.patch.object(remote_ota, "mgmt", return_value=old) as action:
+            with self.assertRaisesRegex(RuntimeError, "v0.6.13"):
+                remote_ota.manage(args)
+        action.assert_called_once_with("COM14", TARGET)
+
     def test_privileged_command_requires_nonce(self):
         with self.assertRaises(ValueError):
             remote_ota.mgmt("COM14", TARGET, "ACTIVATE")
