@@ -14,11 +14,14 @@ class AudioIntegrationTests(unittest.TestCase):
         self.assertIn("enum PacketType : uint8_t { TEST=1, HEARTBEAT=2 };",FIRMWARE)
         self.assertIn("ALARM_CANDIDATE DIAGNOSTIC_ONLY NO_MESH_ALARM",AUDIO)
         self.assertNotIn("sendLocal(ALARM)",FIRMWARE)
-    def test_ap_removed_but_name_commands_preserved(self):
-        self.assertNotIn("#include <WebServer.h>",FIRMWARE)
-        self.assertNotIn("WiFi.softAP(",FIRMWARE)
-        self.assertNotIn("server.handleClient()",FIRMWARE)
-        self.assertNotIn("checkButton()",FIRMWARE)
+    def test_feature_profiles_are_compile_time(self):
+        config=(ROOT/"firmware/mesh-v0.6.15/feature_config.h").read_text(encoding="utf-8")
+        for profile in range(4):
+            self.assertIn(f"// {profile} ",config)
+        self.assertIn("#if SMOKE_FEATURE_AUDIO",FIRMWARE)
+        self.assertIn("#if SMOKE_FEATURE_AP",FIRMWARE)
+        self.assertIn("#include <WebServer.h>",FIRMWARE)
+        self.assertIn("WiFi.softAP(",FIRMWARE)
         for command in ('NAME GET','NAME SET ','NAME RESET'):
             self.assertIn(command,FIRMWARE)
 
