@@ -35,6 +35,19 @@ class MatrixTests(unittest.TestCase):
         self.assertIn("MGMT_TRUST_GATEWAY=0x00000CEC7E6E27ACULL", sketch)
         self.assertIn("origin==MGMT_TRUST_GATEWAY", sketch)
 
+    def test_json_target_array_is_not_double_wrapped(self):
+        self.assertIn("$parsed = ConvertFrom-Json -InputObject $json", SCRIPT)
+        self.assertNotIn("@(ConvertFrom-Json -InputObject $json)", SCRIPT)
+        self.assertIn("foreach ($target in $parsed)", SCRIPT)
+
+    def test_output_root_is_resolved_for_dotnet_writealltext(self):
+        self.assertIn("GetUnresolvedProviderPathFromPSPath($OutputRoot)", SCRIPT)
+        self.assertLess(
+            SCRIPT.index("GetUnresolvedProviderPathFromPSPath($OutputRoot)"),
+            SCRIPT.index("if (Test-Path -LiteralPath $OutputRoot)")
+        )
+        self.assertIn("[System.IO.File]::WriteAllText($variantSketch", SCRIPT)
+
     def test_safe_output(self):
         self.assertIn("Ausgabe existiert bereits",SCRIPT)
         self.assertNotIn("remote_ota.py",SCRIPT)
