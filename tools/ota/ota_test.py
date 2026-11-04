@@ -126,8 +126,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--gateway", default="COM12")
     ap.add_argument("--target-port", default="COM15")
-    ap.add_argument("--from-version", choices=["0.6.6","0.6.7"], default="0.6.6")
-    ap.add_argument("--to-version", choices=["0.6.7","0.6.8","0.6.9"], default="0.6.7")
+    ap.add_argument("--from-version", choices=["0.6.6","0.6.7","0.6.9"], default="0.6.6")
+    ap.add_argument("--to-version", choices=["0.6.7","0.6.8","0.6.9","0.6.10"], default="0.6.7")
     ap.add_argument("--image", type=Path, default=DEFAULT_IMAGE)
     ap.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     ap.add_argument("--public-key", type=Path, default=DEFAULT_KEY)
@@ -141,9 +141,9 @@ def main() -> int:
         ap.error("Gateway and target must use different COM ports")
     try:
         plan = build_plan(args.image, args.manifest, args.public_key)
-        if plan["target"] != TARGET_NODE or plan["version"] != args.to_version or (args.from_version, args.to_version) not in (("0.6.6","0.6.7"),("0.6.7","0.6.8"),("0.6.7","0.6.9")):
+        if plan["target"] != TARGET_NODE or plan["version"] != args.to_version or (args.from_version, args.to_version) not in (("0.6.6","0.6.7"),("0.6.7","0.6.8"),("0.6.7","0.6.9"),("0.6.9","0.6.10")):
             raise ValueError("Unexpected node/version or unsupported upgrade pair")
-        source_slot, next_slot = ("app0","app1") if args.from_version == "0.6.6" else ("app1","app0")
+        source_slot, next_slot = ("app0","app1") if args.from_version in ("0.6.6","0.6.9") else ("app1","app0")
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"STOP: signed release preflight: {exc}", file=sys.stderr)
         return 2
