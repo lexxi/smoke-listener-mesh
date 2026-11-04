@@ -221,6 +221,39 @@ und ist auf Hardware nicht validiert. Jede geplante Kombination einzeln
 bauen, Funktion und ESP-NOW/OTA-Grenzen testen. Nicht auf installierte
 Alarm-Knoten verteilen.
 
+## Zentrale USB-Gateway-Konfiguration
+
+Die Webapp liest die zentrale Konfiguration aus `web/gateways.json` beim Start.
+**Dies ist die einzige Stelle für COM-Port, Gateway-Namen und Gateway-Knoten-ID.**
+
+```json
+{
+  "logger_gateway": "COM16",
+  "gateways": {
+    "COM16": {"name": "Gateway", "node": "00000CEC7E6E27AC"},
+    "COM14": {"name": "Garage", "node": "000058FE7D6E27AC"},
+    "COM12": {"name": "Kueche", "node": "000094457F6E27AC"}
+  }
+}
+```
+
+- `logger_gateway`: welcher registrierte USB-Gateway für den Dashboard-Dauerlogger benutzt wird.
+- `gateways`: für Remote-OTA und Knotenverwaltung freigegebene COM-Ports samt
+  Namen und **16-stelliger Hardware-Knoten-ID**. Die übrigen Einträge sind Fallback-Gateways.
+- `web/gateway_config.py` validiert die Datei und stellt Werte für
+  `web/logger_control.py` und `web/remote.py` bereit.
+- Das Dashboard liest Name und Port aus `/api/logger/status`; es enthält keine
+  eigene COM-Port-Konstante.
+- Wenn ein Remote-OTA- oder Verwaltungsbefehl über den Logger-Gateway läuft,
+  wird dessen Web-Logger pausiert und danach bei Bedarf wieder gestartet.
+  Bei einem anderen Gateway bleibt der Logger unberührt.
+- **Nach jeder Änderung von `web/gateways.json` die Webapp neu starten.**
+  COM-Ports können sich nach Neuanschluss der Hardware ändern.
+- Der Web-Logger wird weiterhin **nur nach Klick auf „Logger starten“**
+  gestartet. Vorher alle externen Serial-Monitore/Logger auf diesem Port schließen.
+- `web/data/node_targets.json` ist eine **separate OTA-Zielknoten-Allowlist**;
+  die Gateway-Konfiguration ersetzt sie nicht.
+
 ## Webserver mit migrieren
 
 Die Webserver-Umstellung gehört zur einmaligen USB-Migration.
