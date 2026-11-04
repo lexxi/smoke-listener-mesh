@@ -48,15 +48,53 @@ Beispiel für Rauchmelder: AUDIO=1, GATEWAY=0, CONFIG_AP=0.
 Beispiel für dedizierten USB-Gateway: AUDIO=0, GATEWAY=1, CONFIG_AP=0.
 Keine Abhängigkeit zu einem fest vorgegebenen Profilnamen mehr.
 
-**Wichtig zum Release-Prozess:** Unterschiedliche Feature-Kombinationen
-erzeugen unterschiedliche Firmware-BINs. Die vorhandene Signatur bindet
-die **konkreten BIN-Bytes über SHA-256**, aber der Feature-Satz steht noch
-nicht ausdrücklich im signierten Manifest oder im Dashboard. Für jede
-Kombination eine eigene BIN, ihren SHA-256 und die Schalterstellung
-protokollieren. Dieselbe Versionsnummer lässt sich wegen der
-Monotonieprüfung nicht ohne Weiteres per OTA gegen eine andere Variante
-austauschen. Ein künftiger OTA-/Webapp-Schritt muss Feature-Metadaten
-verifizieren und anzeigen, bevor Varianten massenhaft verteilt werden.
+## Signierte Feature-Metadaten für neue Releases
+
+Der bestehende, vom ESP32-C3 geprüfte OTA-Payload (`signed` +
+`signature_der_hex`) bleibt byteweise und strukturell unverändert.
+Neue Manifeste können zusätzlich `feature_claim` und
+`feature_signature_der_hex` enthalten. Die Feature-Angaben sind dabei
+**separat mit ECDSA P-256 signiert** und an Ziel-ID, Version und
+Firmware-SHA-256 gebunden. Das Firmware-Image wird weiterhin vollständig
+über seinen signierten SHA-256 geprüft.
+
+Die **Server-Seite** verifiziert beide Signaturen und zeigt die Features in
+der Firmware-Auswahl sowie in den Releasedetails an. Ältere Releases ohne
+diesen Zusatz erscheinen als `Features unbekannt`, nicht als CORE.
+
+Beispiele für signierte v0.6.15-ZIPs nach dem Build:
+
+```powershell
+# Rauchmelder (FEATURE_AUDIO=1, alle anderen 0)
+.\tools\ota\prepare-web-bundle.ps1 -Version 0.6.15 -Features @("audio") -Image "PFAD_ZUR_AUDIO_BIN"
+
+# Schlanker Gateway (FEATURE_GATEWAY=1)
+.\tools\ota\prepare-web-bundle.ps1 -Version 0.6.15 -Features @("gateway") -Image "PFAD_ZUR_GATEWAY_BIN"
+
+# Reiner Mesh-Knoten
+.\tools\ota\prepare-web-bundle.ps1 -Version 0.6.15 -Features @() -Image "PFAD_ZUR_CORE_BIN"
+```
+
+`-Features` ist für v0.6.15 explizit anzugeben. Für alle
+Feature-Kombinationen sind **getrennte BIN-Dateien und ZIP-Pakete**
+erforderlich. Die Anwendung muss außerdem die gewünschte Knotenrolle
+prüfen; eine automatische Rolle/Hardware-Erkennung ist **noch nicht
+implementiert**.
+
+**Grenze:** Die zusätzliche Signatur beweist, dass der Herausgeber
+diese Feature-Angaben für den konkreten Firmware-Hash signiert hat.
+Sie beweist **nicht**, dass die beim Build verwendeten Schalter
+tatsächlich dazu passen. Deshalb jede BIN mit den gewählten Schaltern
+protokollieren und vor dem Signieren überprüfen. Auf dem Knoten selbst
+wird die zusätzliche Feature-Signatur noch nicht überprüft; die
+bestehende Gerätesignatur- und Hashprüfung bleibt erhalten.
+
+Gleiche Firmwareversion mit anderer Feature-BIN ist **kein** normaler
+Remote-OTA-Upgradepfad, da identische/ältere Versionen verweigert werden.
+Die dauerhafte Node-Feature-Inventarisierung erfordert später
+zusätzliche authentifizierte Telemetrie; die Webapp zeigt hier vorerst
+die Eigenschaften des **ausgewählten Releases**, nicht automatisch
+die Eigenschaften jeder bereits laufenden Firmware.
 
 Das NVS mit dem Namen bleibt bei normalem OTA erhalten;
 `NAME GET`, `NAME SET` und `NAME RESET` bleiben auch ohne AP erreichbar.
