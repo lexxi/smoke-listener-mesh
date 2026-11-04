@@ -27,10 +27,10 @@ hr{border:0;border-top:1px solid #33465d;margin:17px 0}
 </section>
 <section class="card"><h2>Umgebung</h2><div class="meta">Gateway: <strong>Kueche · COM12</strong> (v0.6.1) &nbsp; · &nbsp; Ziel: <strong>1OG · COM15</strong> (erwartet v0.6.7)</div>
 <p class="warn">Diese erste Version arbeitet nur lokal auf diesem Windows-PC und ist kein unbeaufsichtigter Update-Dienst. Vor dem Start alle seriellen Monitore für COM12/COM15 schließen.</p></section>
-<section class="card"><div class="row"><h2>Signiertes Release</h2><span class="badge">Bootaktivierung deaktiviert</span></div>
+<section class="card"><div class="row"><h2>Altes Testrelease (nur Anzeige)</h2><span class="badge">Übertragung deaktiviert</span></div>
 <div id="release" class="meta">Prüfe Firmware und Signatur …</div><hr>
-<div class="row"><div class="muted">Schreibt nur in den inaktiven Slot und kontrolliert danach den SHA-256-Wert.</div>
-<button id="start" disabled>OTA-Übertragung starten</button></div>
+<div class="row"><div class="muted">Historischer v0.6.9-Staging-Test; 1OG läuft bereits v0.6.9. Dieser Test wird nicht mehr gestartet.</div>
+<button id="start" disabled title="Legacy v0.6.9-Staging deaktiviert">Legacy-OTA deaktiviert</button></div>
 <p class="muted" style="font-size:13px">Keine automatische Bootaktivierung, kein BOOT CONFIRM und kein Neustart. Nach erfolgreichem Test bleibt die laufende Firmware aktiv.</p></section>
 <section class="card"><div class="row"><h2>OTA-Lauf</h2><span id="state" class="badge">–</span></div>
 <p id="message" class="muted">Noch kein OTA-Lauf gestartet.</p><div class="meta" id="times"></div>
@@ -44,7 +44,7 @@ async function loadRelease(){
 try{
 const res=await fetch('/api/ota/releases',{cache:'no-store'});if(!res.ok)throw Error('HTTP '+res.status);
 const data=await res.json();const x=data.releases[0];
-ready=Boolean(x&&x.ready);activeVersion=x?.version||null;
+ready=false;activeVersion=null; // Legacy OTA intentionally disabled; only verified upload is enabled.
 safeText('release',ready?('v'+x.version+' · '+x.bytes.toLocaleString('de-DE')+' Byte · '+x.blocks.toLocaleString('de-DE')+' Blöcke\nSHA-256: '+x.sha256+'\nZiel: '+x.target+' · '+x.from_version+' ('+x.from_slot+') → '+x.version+' ('+x.to_slot+')'):
 ('Nicht bereit: '+(x?.error||'Kein Release konfiguriert')));
 }catch(e){ready=false;safeText('release','Release-Prüfung fehlgeschlagen: '+e.message)}
