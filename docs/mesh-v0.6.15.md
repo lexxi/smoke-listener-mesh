@@ -111,6 +111,46 @@ und ist auf Hardware nicht validiert. Jede geplante Kombination einzeln
 bauen, Funktion und ESP-NOW/OTA-Grenzen testen. Nicht auf installierte
 Alarm-Knoten verteilen.
 
+## Explizite Zielrollen für Remote-OTA
+
+Ab v0.6.15 sperrt der Webserver **Stage, Aktivierung und vollständige OTA**
+für jeden Knoten ohne lokal freigegebene Zielrolle oder mit
+unpassenden signierten Features. Die reine Statusabfrage bleibt möglich.
+
+Einmalige lokale Konfiguration auf dem Webserver:
+
+```powershell
+Copy-Item .\web\node_roles.json.example .\web\data\node_roles.json
+```
+
+Vor Verwendung **Inhalt prüfen und anpassen**. Die Beispielzuordnungen
+sind Vorschläge, keine automatische Erkennung. Nicht eingetragene
+Knoten dürfen keine neuen Images per Webapp erhalten.
+
+Erlaubte Werte:
+
+| Rolle | Erforderliche signierte Features |
+| --- | --- |
+| `mesh` | weder `audio` noch `gateway` |
+| `listener` | `audio`, aber kein `gateway` |
+| `gateway` | `gateway`, aber kein `audio` |
+| `hybrid` | `gateway` und `audio` |
+
+`config_ap` ist für jede Rolle optional. Damit werden Fehlverteilungen
+verhindert, ohne eine bestimmte Knotenhistorie als Wahrheit anzunehmen.
+`web/data/node_roles.json` ist in `.gitignore` ausgeschlossen und
+wird nicht ins Repository eingecheckt.
+
+**Sicherheitsgrenze:** Die Rollenprüfung ist eine serverseitige
+Freigabeliste. Sie verhindert falsche Auswahl über diese Webapp,
+ist aber **keine Geräte- oder Hardware-Attestation**. Die aktuell
+laufenden Features werden noch nicht vom ESP32 gemeldet.
+Ein anderes OTA-Werkzeug kann diese Webapp-Prüfung umgehen.
+Fehlerhafte manuelle Freigabelisten bleiben möglich.
+
+Bestandsreleases bis v0.6.14 werden von der neuen Rollensperre
+nicht betroffen; die bisherige signierte OTA-Prüfung bleibt bestehen.
+
 ## Anschlüsse
 
 INMP441: SCK=GPIO6, WS=GPIO3, SD=GPIO10, L/R=GND, VDD=3V3, GND=GND.
