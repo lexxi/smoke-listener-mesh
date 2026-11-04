@@ -27,6 +27,14 @@ Die neue Firmware `firmware/mesh-v0.6.10/mesh-v0.6.10.ino` behält Protokoll 3 u
 
 Anleitung: [Firmware-Telemetrie v0.6.10](docs/mesh-firmware-version-telemetry-v0610.md).
 
+## Release-Verwaltung im Webinterface (Stand 04.11.2026)
+
+Die bereits laufende Flask-Weboberfläche unter **http://127.0.0.1:8088/ota** kann nun eine kompilierte Firmware-BIN und das zugehörige signierte JSON-Manifest über den Browser entgegennehmen. Erst nach ECDSA-P256-Signaturprüfung, ESP32-C3-Imageprüfung und SHA-256-Abgleich wird das Release lokal unter `web/data/releases/` gespeichert (nicht auf GitHub). Der private Signierschlüssel bleibt auf dem Build-PC.
+
+Die frühere fest verdrahtete Übertragung v0.6.9 für 1OG ist **deaktiviert**. Die Release-Verwaltung ist derzeit **nur Upload, Prüfung und Ablage**; OTA-Verteilung und Bootaktivierung folgen erst nach separatem Test.
+
+[Windows-Anleitung zur Release-Verwaltung](docs/ota-release-library-windows.md).
+
 ## OTA-Entwicklung (Stand 03.11.2026)
 
 - **v0.5.6 auf Hardware getestet:** Direkter Test 1OG → Garage: 16/16 Blöcke. Relay-Pfad Keller_Abgang → Garage → 1OG: erfolgreich 16/16 ACKs mit `hops=1`; ohne Garage 0/16; nach Wiedereinschalten erst im zweiten Anlauf 16/16. Paketverluste treten auf. Das ist ein **RAM-Transporttest, kein Firmware-Update**.
