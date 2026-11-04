@@ -99,7 +99,9 @@ def command_child(label: str, arguments: list[str]) -> None:
 def deploy(args, plan: dict) -> None:
     target = plan["target"]
     first = mgmt(args.gateway, target)
-    if first["running"] not in (0, 1) or first["boot"] != first["running"] or first["state"] not in (0, 2):
+    # USB-flashed images can return ESP_OTA_IMG_UNDEFINED (-1), encoded as 255.
+    # Reject pending, aborted or newly staged states as upgrade starting points.
+    if first["running"] not in (0, 1) or first["boot"] != first["running"] or first["state"] not in (2, 255):
         raise RuntimeError("Target boot state unsuitable for OTA; inspect running/boot/state")
     if numeric(plan["version"]) <= numeric(first["version"]):
         raise RuntimeError("Same/older signed release refused (no downgrade)")
