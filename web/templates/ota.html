@@ -54,7 +54,7 @@ progress{width:86%;height:18px}
 <p id="job-message" class="muted">Noch kein Vorgang.</p>
 <div class="row"><progress id="progress" max="100" value="0"></progress><span id="pct">0 %</span></div>
 <p id="times" class="muted"></p>
-<details open><summary>Technisches Protokoll</summary><div class="row" style="justify-content:flex-start;margin:12px 0"><button id="copy-log" type="button" class="secondary">Log kopieren</button><button id="download-log" type="button" class="secondary">Log als TXT speichern</button><span id="log-action-status" class="muted" aria-live="polite"></span></div><pre id="log">Noch keine Ausgabe.</pre></details>
+<details open><summary>Technisches Protokoll</summary><p class="muted" id="log-count">Anzeige: letzte maximal 450 Zeilen · Download: vollständig</p><div class="row" style="justify-content:flex-start;margin:12px 0"><button id="copy-log" type="button" class="secondary">Log kopieren</button><button id="download-log" type="button" class="secondary">Log als TXT speichern</button><span id="log-action-status" class="muted" aria-live="polite"></span></div><pre id="log">Noch keine Ausgabe.</pre></details>
 </section>
 <script>
 const $=id=>document.getElementById(id);
@@ -152,34 +152,39 @@ async function start(mode){
 $('check').addEventListener('click',()=>start('status'));
 $('stage').addEventListener('click',()=>start('stage'));
 $('deploy').addEventListener('click',()=>start('deploy'));
-function currentLogText(){return $('log').textContent||'';}
+async function getFullLog(){
+ const response=await fetch('/api/remote/log',{cache:'no-store'});
+ if(!response.ok){
+  const err=await response.json().catch(()=>({}));
+  throw Error(err.error||'HTTP '+response.status);
+ }
+ return response.text();
+}
 $('copy-log').addEventListener('click',async()=>{
- const log=currentLogText();
+ $('log-action-status').textContent='Lade vollständiges Protokoll …';
  try{
-  if(navigator.clipboard && navigator.clipboard.writeText){
-   await navigator.clipboard.writeText(log);
+  const full=await getFullLog();
+  if(navigator.clipboard?.writeText){
+   await navigator.clipboard.writeText(full);
   }else{
+   // Browser clipboard may be restricted on HTTP. Show selectable complete log.
+   $('log').textContent=full;
    const selection=window.getSelection(),range=document.createRange();
    range.selectNodeContents($('log'));selection.removeAllRanges();selection.addRange(range);
-   const ok=document.execCommand('copy');selection.removeAllRanges();
-   if(!ok)throw Error('Kopieren vom Browser blockiert');
+   const copied=document.execCommand('copy');
+   selection.removeAllRanges();
+   if(!copied)throw Error('Zwischenablage blockiert; Volltext im Protokoll markieren');
   }
-  $('log-action-status').textContent='Log in Zwischenablage kopiert.';
- }catch(e){
-  $('log-action-status').textContent='Automatisches Kopieren fehlgeschlagen: Log markieren und Strg+C verwenden.';
-  const selection=window.getSelection(),range=document.createRange();
-  range.selectNodeContents($('log'));selection.removeAllRanges();selection.addRange(range);
- }
+  $('log-action-status').textContent='Vollständiges Protokoll kopiert ('+full.split('\\n').length+' Zeilen).';
+ }catch(e){$('log-action-status').textContent='Kopieren fehlgeschlagen: '+e.message}
 });
 $('download-log').addEventListener('click',()=>{
- const contents=currentLogText();
- const blob=new Blob([contents+'\\n'],{type:'text/plain;charset=utf-8'});
- const url=URL.createObjectURL(blob);
+ // Server supplies the full persisted log as an attachment, not the 450 visible lines.
  const link=document.createElement('a');
- link.href=url;link.download='smoke-mesh-remote-ota-'+new Date().toISOString().replace(/[:.]/g,'-')+'.txt';
+ link.href='/api/remote/log/download';
+ link.download='smoke-mesh-ota.txt';
  document.body.appendChild(link);link.click();link.remove();
- setTimeout(()=>URL.revokeObjectURL(url),30000);
- $('log-action-status').textContent='Log als TXT bereitgestellt.';
+ $('log-action-status').textContent='Vollständiges Protokoll wird heruntergeladen.';
 });
 async function jobRefresh(){
  try{
@@ -189,6 +194,7 @@ async function jobRefresh(){
   $('times').textContent='Start: '+(j.started||'–')+' · Ende: '+(j.ended||'–');
   $('progress').value=j.progress||0;$('pct').textContent=(j.progress||0)+' %';
   $('log').textContent=j.lines.length?j.lines.join('\n'):'Noch kein Protokoll.';
+  $('log-count').textContent=j.log_line_count ? ('Anzeige: letzte '+Math.min(j.lines.length,450)+' von '+j.log_line_count+' Zeilen · Kopieren/Download: vollständig') : 'Anzeige: letzte maximal 450 Zeilen · Kopieren/Download: vollständiges Serverlog';
   renderSelection();
  }catch(e){$('job-message').textContent='Statusfehler: '+e.message}
 }
