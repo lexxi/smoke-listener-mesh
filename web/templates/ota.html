@@ -68,7 +68,19 @@ async function load(){
   ]);
   csrf=lib.upload_csrf;remoteCsrf=config.csrf;
   const previous=$('release').value;
-  releases=lib.releases;
+  // Sort semantic numeric versions newest first (e.g. 0.6.14 before 0.6.9).
+  const versionParts=v=>v.split('.').map(Number);
+  const compareVersions=(a,b)=>{
+   const left=versionParts(a),right=versionParts(b);
+   for(let i=0;i<3;i++){
+    if(left[i]!==right[i])return right[i]-left[i];
+   }
+   return 0;
+  };
+  releases=[...lib.releases].sort((a,b)=>
+   compareVersions(a.version,b.version)||
+   nodeName(a.target).localeCompare(nodeName(b.target),'de')||
+   a.target.localeCompare(b.target));
   $('release').replaceChildren();
   let o=document.createElement('option');o.value='';o.textContent='Release auswählen';$('release').append(o);
   for(const item of releases){
