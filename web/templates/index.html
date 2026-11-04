@@ -151,10 +151,10 @@ async function refreshLogger(){
   const r=await fetch('/api/logger/status',{cache:'no-store'});
   if(!r.ok)throw Error('HTTP '+r.status);
   const j=await r.json();loggerCsrf=j.token;
-  $('logger-state').textContent=j.running?'Läuft · PID '+j.pid:'Nicht von Webapp gestartet';
+  $('logger-state').textContent=j.ota_reserved?'Für OTA reserviert':(j.running?'Läuft · PID '+j.pid:'Nicht von Webapp gestartet');
   $('logger-note').textContent=j.note+(j.session?' · '+j.session:'');
-  $('logger-start').disabled=j.running;
-  $('logger-stop').disabled=!j.running;
+  $('logger-start').disabled=j.running||j.ota_reserved;
+  $('logger-stop').disabled=!j.running||j.ota_reserved;
   $('logger-start').title=j.running?'Logger läuft bereits – zuerst stoppen':'Garage-Logger starten';
   $('logger-stop').title=j.running?'Laufenden Garage-Logger stoppen':'Kein Logger über die Webapp gestartet';
  } catch(e){$('logger-state').textContent='Fehler: '+e.message;$('logger-start').disabled=true;$('logger-stop').disabled=true}
