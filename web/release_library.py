@@ -59,6 +59,7 @@ def _summary(plan: dict, release_id: str) -> dict:
     return {"id": release_id, "target": plan["target"],
             "version": plan["version"], "sha256": plan["sha256"],
             "features": plan.get("features"),
+            "label": plan.get("label"),
             "bytes": plan["size"], "blocks": plan["blocks"],
             "status": "verified", "transfer_enabled": False}
 
