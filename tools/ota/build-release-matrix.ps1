@@ -38,8 +38,9 @@ if (-not $BuildOnly) {
   foreach ($required in @($PrivateKey,$PublicKey,$python,$TargetsFile)) {
     if (-not (Test-Path -LiteralPath $required)) { throw "Signatur-Voraussetzung fehlt: $required" }
   }
-  $parsed = ConvertFrom-Json -InputObject (Get-Content -LiteralPath $TargetsFile -Raw)
-  if ($parsed -isnot [array]) { throw "node_targets.json muss ein JSON-Array sein" }
+  $json = Get-Content -LiteralPath $TargetsFile -Raw
+  if (-not $json.TrimStart().StartsWith("[")) { throw "node_targets.json muss ein JSON-Array sein" }
+  $parsed = @(ConvertFrom-Json -InputObject $json)
   foreach ($target in $parsed) {
     if ($target -isnot [string] -or $target -cnotmatch '^[0-9A-F]{16}$' -or $target -eq '0000000000000000') {
       throw "Ungueltige Ziel-ID"
