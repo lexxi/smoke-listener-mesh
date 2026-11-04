@@ -24,11 +24,18 @@ progress{width:86%;height:18px}
 <section class="card">
 <h2>1 · Firmware-Release bereitstellen</h2>
 <p class="muted">Nur die fertige BIN und das knotenspezifisch signierte JSON-Manifest hochladen. Kein privater Schlüssel im Webserver.</p>
+<form id="bundle-upload" class="row">
+<label>Komplettes signiertes Release-ZIP (für bis zu vier Knoten)
+<input id="bundle" type="file" accept=".zip,application/zip" required></label>
+<button id="bundle-button" type="submit">Release-Paket hochladen</button>
+</form>
+<p id="bundle-message" class="muted">Ein ZIP enthält eine Firmware-BIN und alle signierten Knotenmanifeste. Erstellung lokal mit <code>prepare-web-bundle.ps1</code>.</p>
+<details><summary>Alternativ: Einzelrelease mit BIN und Manifest</summary>
 <form id="upload" class="row">
 <label>Firmware-BIN<input id="bin" type="file" accept=".bin" required></label>
 <label>Signiertes Manifest<input id="manifest" type="file" accept=".json" required></label>
 <button id="upload-button" type="submit">Prüfen & speichern</button>
-</form><p id="upload-message" class="muted">Bereit.</p>
+</form><p id="upload-message" class="muted">Bereit.</p></details>
 </section>
 <section class="card">
 <h2>2 · Knoten und Gateway auswählen</h2>
@@ -97,6 +104,23 @@ function renderSelection(){
 }
 $('release').addEventListener('change',renderSelection);
 $('gateway').addEventListener('change',renderSelection);
+$('bundle-upload').addEventListener('submit',async e=>{
+ e.preventDefault();
+ if(!csrf)return;
+ const file=$('bundle').files[0];if(!file)return;
+ $('bundle-button').disabled=true;
+ $('bundle-message').textContent='Prüfe alle Signaturen und Dateien im Paket …';
+ try{
+  const data=new FormData();data.append('bundle',file);
+  const response=await fetch('/api/releases/upload-bundle',{method:'POST',headers:{'X-Release-CSRF':csrf},body:data});
+  const result=await response.json();
+  if(!response.ok)throw Error(result.error||'HTTP '+response.status);
+  $('bundle-message').textContent='Release-Paket geprüft: '+result.releases.length+' Knotenmanifeste, '+result.releases.filter(x=>!x.already_present).length+' neue Releases gespeichert.';
+  $('bundle-upload').reset();
+  await load();
+ }catch(err){$('bundle-message').textContent='Paket abgelehnt: '+err.message}
+ finally{$('bundle-button').disabled=false}
+});
 $('upload').addEventListener('submit',async e=>{
  e.preventDefault();if(!csrf)return;
  const bin=$('bin').files[0],manifest=$('manifest').files[0];if(!bin||!manifest)return;
