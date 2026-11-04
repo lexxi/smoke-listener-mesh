@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Smoke Mesh · OTA</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,Segoe UI,Arial,sans-serif;background:#0b1320;color:#e5edf7}
+*{box-sizing:border-box}body{max-width:1080px;margin:0 auto;padding:28px 18px}
+header{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:22px;flex-wrap:wrap}
+h1{margin:0;font-size:26px}h2{font-size:18px;margin:0 0 14px}a{color:#a9ccff;text-decoration:none}
+.card{border:1px solid #33465d;border-radius:12px;background:#162338;padding:20px;margin-bottom:16px}
+.muted{color:#a3b4c9}.warn{color:#ffd38a}.row{display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap}
+.meta{font-size:14px;color:#a3b4c9;line-height:1.8;white-space:pre-line}
+button{border:1px solid #41608b;background:#315987;color:#fff;border-radius:8px;padding:11px 17px;font-size:15px;cursor:pointer}
+button:hover:enabled{background:#4272ad}button:disabled{opacity:.45;cursor:not-allowed}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#08121f;border:1px solid #304560;padding:15px;border-radius:8px;font-family:Consolas,monospace;font-size:12px;max-height:420px;overflow-y:auto}
+.badge{display:inline-block;border-radius:5px;border:1px solid #3f5877;padding:4px 8px;color:#c1d5ee;font-size:12px}
+hr{border:0;border-top:1px solid #33465d;margin:17px 0}
+</style></head><body>
+<header><div><h1>Firmware-Updates</h1><div class="muted">Smoke Listener Mesh · lokale Testverwaltung</div></div><a href="/">← Mesh Monitor</a></header>
+<section class="card"><h2>Umgebung</h2><div class="meta">Gateway: <strong>Kueche · COM12</strong> (v0.6.1) &nbsp; · &nbsp; Ziel: <strong>1OG · COM15</strong> (erwartet v0.6.7)</div>
+<p class="warn">Diese erste Version arbeitet nur lokal auf diesem Windows-PC und ist kein unbeaufsichtigter Update-Dienst. Vor dem Start alle seriellen Monitore für COM12/COM15 schließen.</p></section>
+<section class="card"><div class="row"><h2>Signiertes Release</h2><span class="badge">Bootaktivierung deaktiviert</span></div>
+<div id="release" class="meta">Prüfe Firmware und Signatur …</div><hr>
+<div class="row"><div class="muted">Schreibt nur in den inaktiven Slot und kontrolliert danach den SHA-256-Wert.</div>
+<button id="start" disabled>OTA-Übertragung starten</button></div>
+<p class="muted" style="font-size:13px">Keine automatische Bootaktivierung, kein BOOT CONFIRM und kein Neustart. Nach erfolgreichem Test bleibt die laufende Firmware aktiv.</p></section>
+<section class="card"><div class="row"><h2>OTA-Lauf</h2><span id="state" class="badge">–</span></div>
+<p id="message" class="muted">Noch kein OTA-Lauf gestartet.</p><div class="meta" id="times"></div>
+<pre id="output">Noch keine Ausgabe.</pre></section>
+<script>
+const csrf={{ csrf_token|tojson }};
+let activeVersion=null, ready=false, lastLines=0;
+const $=id=>document.getElementById(id);
+function safeText(id,text){$(id).textContent=text;}
+async function loadRelease(){
+try{
+const res=await fetch('/api/ota/releases',{cache:'no-store'});if(!res.ok)throw Error('HTTP '+res.status);
+const data=await res.json();const x=data.releases[0];
+ready=Boolean(x&&x.ready);activeVersion=x?.version||null;
+safeText('release',ready?('v'+x.version+' · '+x.bytes.toLocaleString('de-DE')+' Byte · '+x.blocks.toLocaleString('de-DE')+' Blöcke\nSHA-256: '+x.sha256+'\nZiel: '+x.target+' · '+x.from_version+' ('+x.from_slot+') → '+x.version+' ('+x.to_slot+')'):
+('Nicht bereit: '+(x?.error||'Kein Release konfiguriert')));
+}catch(e){ready=false;safeText('release','Release-Prüfung fehlgeschlagen: '+e.message)}
+}
+async function refresh(){
+try{
+const res=await fetch('/api/ota/job',{cache:'no-store'});if(!res.ok)throw Error('HTTP '+res.status);
+const x=await res.json();safeText('state',x.state);safeText('message',x.message||'');
+safeText('times','Start: '+(x.started||'–')+' · Ende: '+(x.ended||'–'));
+const lines=x.lines||[];if(lastLines!==lines.length||x.state==='idle'){safeText('output',lines.length?lines.join('\n'):'Noch keine Ausgabe.');lastLines=lines.length}
+$('start').disabled=!ready||x.state==='running';
+}catch(e){safeText('message','Statusabfrage fehlgeschlagen: '+e.message);$('start').disabled=true}
+}
+$('start').addEventListener('click',async()=>{
+if(!ready||!activeVersion)return;
+if(!window.confirm('Signiertes v'+activeVersion+' jetzt auf 1OG in den inaktiven Slot übertragen?\nCOM12 und COM15 müssen frei sein.\nKein Bootwechsel.'))return;
+$('start').disabled=true;
+try{
+const r=await fetch('/api/ota/start',{method:'POST',headers:{'Content-Type':'application/json','X-OTA-CSRF':csrf},body:JSON.stringify({version:activeVersion})});
+const data=await r.json();if(!r.ok)throw Error(data.error||'HTTP '+r.status);
+lastLines=-1;await refresh();
+}catch(e){safeText('message','Start fehlgeschlagen: '+e.message);await refresh()}
+});
+(async()=>{await loadRelease();await refresh();setInterval(refresh,2000)})();
+</script></body></html>
