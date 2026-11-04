@@ -671,7 +671,8 @@ constexpr uint8_t MGMT_STATUS=1,MGMT_ARM=2,MGMT_VERIFY=3,MGMT_ACTIVATE=4,
   MGMT_REBOOT=5,MGMT_CONFIRM=6;
 uint64_t mgmtNonce=0;
 uint64_t mgmtTarget=0;
-uint32_t mgmtRequestSession=0,mgmtRebootAt=0;
+uint32_t mgmtRequestSession=0,mgmtRebootAt=0,mgmtRequestAt=0;
+bool mgmtActivationDone=false;
 uint8_t mgmtRequestedAction=0;
 bool mgmtWaiting=false;
 bool mgmtAllowed(uint64_t origin){
@@ -765,11 +766,12 @@ void mgmtReceive(const OtaFrame &f){
       const esp_partition_t *run=esp_ota_get_running_partition();
       activateStagedSlot();
       result=run && esp_ota_get_boot_partition()!=run?0:1;
+      if(result==0)mgmtActivationDone=true;
     }
   } else if(action==MGMT_REBOOT){
     const esp_partition_t *run=esp_ota_get_running_partition();
     const esp_partition_t *boot=esp_ota_get_boot_partition();
-    if(run && boot && run!=boot && !mgmtRebootAt){
+    if(run && boot && run!=boot && !mgmtRebootAt && mgmtActivationDone){
       mgmtRebootAt=millis()+1800UL;result=0;
     }
   } else if(action==MGMT_CONFIRM){
@@ -824,11 +826,15 @@ void mgmtSendSerial(const String &line){
   f.data[0]=action;memcpy(f.data+2,&nonce,sizeof(nonce));
   if(!otaSign(f,f.hmac)){Serial.println("[MGMT] ERROR hmac");return;}
   mgmtWaiting=true;mgmtTarget=target;mgmtRequestSession=f.session;mgmtRequestedAction=action;
+  mgmtRequestAt=millis();
   otaSend(f);
   Serial.printf("[MGMT] SENT target=%s action=%s session=%lu\n",
     idString(target).c_str(),mgmtActionName(action),(unsigned long)f.session);
 }
 void mgmtPendingWatchdog(){
+  if(mgmtWaiting && (uint32_t)(millis()-mgmtRequestAt)>4500UL){
+    Serial.println("[MGMT] TIMEOUT no_reply");mgmtWaiting=false;
+  }
   if(mgmtRebootAt && (int32_t)(millis()-mgmtRebootAt)>=0)ESP.restart();
   const esp_partition_t *run=esp_ota_get_running_partition();
   esp_ota_img_states_t state=ESP_OTA_IMG_UNDEFINED;
