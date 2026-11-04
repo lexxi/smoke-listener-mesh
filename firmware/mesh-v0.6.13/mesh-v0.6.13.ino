@@ -122,6 +122,7 @@ void otaSend(const OtaFrame &f);
 void mgmtReceive(const OtaFrame &f);
 void mgmtSendSerial(const String &line);
 void mgmtPendingWatchdog();
+bool validName(const String &name);
 
 uint32_t seenCursor=0, nextSequence=0, lastHeartbeat=0;
 uint32_t rxCount=0, txCount=0, relayCount=0, duplicateCount=0;
