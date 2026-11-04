@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("0.6.11","0.6.12")]
+    [ValidateSet("0.6.11","0.6.12","0.6.13")]
     [string]$Version = "0.6.11",
     [string]$From = "0.6.10"
 )
