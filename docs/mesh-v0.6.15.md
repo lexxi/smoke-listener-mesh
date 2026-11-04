@@ -221,6 +221,33 @@ und ist auf Hardware nicht validiert. Jede geplante Kombination einzeln
 bauen, Funktion und ESP-NOW/OTA-Grenzen testen. Nicht auf installierte
 Alarm-Knoten verteilen.
 
+## Webserver mit migrieren
+
+Die Webserver-Umstellung gehört zur einmaligen USB-Migration.
+Folgende Komponenten sind an vierteilige Versionskennungen angepasst:
+
+- `web/release_library.py`: signierte Releases `0.6.15.a` bis
+  `0.6.15.h` prüfen, speichern und auflisten;
+- `web/remote.py`: Remote-OTA-Start erst nach Prüfung der
+  Vier-Komponenten-Version, Feature-Signatur und freigegebenen Ziel-ID;
+- `web/templates/ota.html`: die echte Versionskennung bei Release-Auswahl,
+  Details und Start-Bestätigung anzeigen;
+- `web/app.py`: `fw=0.6.15.b` aus authentifizierten Mesh-Logs
+  in der Datenbank erhalten;
+- `tools/ota/remote_ota.py`: Remote-MGMT-Status mit optionalem
+  vierten Bestandteil einlesen, Code-Downgrade sperren und signierte
+  Feature-Wechsel bei gleichem Code-Stand erlauben.
+
+Den Webserver nach `git pull --ff-only` neu starten, damit die
+neuen Python-Module und die Webvorlage geladen werden.
+Vor dem ersten Remote-OTA die Statusabfrage für Gateway und Ziel
+prüfen. Falls ein noch nicht aktualisierter Gateway in der alten
+Firmware läuft, liefert er die neue Variantenkennung nicht vollständig.
+
+Bestehende historische Log-Datensätze behalten ihren bisherigen
+Versionswert; neue Empfangsdaten enthalten die vollständige
+vierstellige Version.
+
 ## Zielknoten-Freigabe statt fester Hardware-Rollen
 
 Ab v0.6.15 prüft der Webserver vor Stage, Aktivierung und OTA,
