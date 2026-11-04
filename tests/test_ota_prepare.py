@@ -63,6 +63,22 @@ class TransferTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "[Ff]eature"):
             build_plan(self.image, self.manifest, self.pub)
 
+    def test_native_four_component_version_signed(self):
+        self.manifest.unlink()
+        sign(SimpleNamespace(image=self.image, private_key=self.priv,
+            target="000094457F6E27AC", version="0.6.15.b", out=self.manifest,
+            overwrite=False, features="audio"))
+        plan = build_plan(self.image,self.manifest,self.pub)
+        self.assertEqual(plan["version"],"0.6.15.b")
+        self.assertEqual(plan["features"],["audio"])
+
+    def test_variant_letter_must_match_features(self):
+        self.manifest.unlink()
+        with self.assertRaisesRegex(ValueError, "letter"):
+            sign(SimpleNamespace(image=self.image, private_key=self.priv,
+                target="000094457F6E27AC", version="0.6.15.a",
+                out=self.manifest, overwrite=False, features="audio"))
+
     def test_tampered_feature_claim_is_rejected(self):
         self.manifest.unlink()
         sign(SimpleNamespace(image=self.image, private_key=self.priv,
