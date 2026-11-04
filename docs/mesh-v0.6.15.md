@@ -17,40 +17,56 @@ Noch **nicht** auf ESP32-C3 kompiliert, auf Hardware getestet oder auf Auswirkun
 OTA-Übertragungszeit, Watchdog, Laufzeit und Funkpaketverluste untersucht.
 **Nicht per OTA auf alle Knoten verteilen.**
 
-## Wählbare Firmware-Pakete (Compile-Zeit)
+## Unabhängige Firmware-Features
 
-In `firmware/mesh-v0.6.15/feature_config.h` wird über
-`SMOKE_FEATURE_PROFILE` festgelegt, welche optionalen Funktionen
-mitkompiliert werden. So entfällt ungenutzter Code aus dem finalen Image.
+In `firmware/mesh-v0.6.15/feature_config.h` lassen sich die Funktionen
+**vor dem Build** unabhängig ein- oder ausschalten:
 
-| Profil | Wert | Inhalt |
-| --- | --- | --- |
-| CORE | 0 | ESP-NOW-Mesh, Heartbeats, HMAC, Remote-OTA, Remote-/Serial-Namen |
-| AUDIO | 1 | CORE + INMP441-Audiodiagnose |
-| AP | 2 | CORE + bisheriger BOOT-Taster-Konfigurations-AP |
-| FULL | 3 | CORE + Audio + AP |
+```cpp
+#define FEATURE_GATEWAY   0
+#define FEATURE_AUDIO     1
+#define FEATURE_CONFIG_AP 0
+#define FEATURE_BATTERY   0
+#define FEATURE_BUZZER    0
+```
 
-**Standard ist AUDIO (1)**, damit bestehende v0.6.15-Tests ihre
-Audio-Diagnose behalten. Für einen dedizierten USB-Gateway-Knoten
-kann künftig CORE (0) sinnvoll sein. AP ist optional, nicht endgültig
-entfernt. Wähle das Profil vor jedem Build in der Header-Datei und
-kontrolliere die Compiler-Ausgabe. Der gewählte Funktionsumfang ist
-derzeit nicht kryptografisch im signierten Manifest codiert: Releases
-gleicher Version, aber unterschiedlicher Profile, müssen eindeutig
-benannt und im Build-Protokoll dokumentiert werden.
+| Schalter | Stand in v0.6.15 |
+| --- | --- |
+| `FEATURE_GATEWAY` | USB-Serial-Befehle zum Starten von Remote-OTA, AUTH, IMG, MGMT und OTA-Tests |
+| `FEATURE_AUDIO` | INMP441-Diagnose-Task (keine Funkalarme) |
+| `FEATURE_CONFIG_AP` | BOOT-Taster-Konfigurations-AP |
+| `FEATURE_BATTERY` | **Noch nicht implementiert; 1 löst Compilerfehler aus** |
+| `FEATURE_BUZZER` | **Noch nicht implementiert; 1 löst Compilerfehler aus** |
 
-Änderung eines Profils wirkt erst nach **Neukompilierung** und
-Neuinstallation. Keine Laufzeit-Auswahl in der Webapp.
+**Immer in CORE:** ESP-NOW-Mesh und Relaying, Heartbeats, HMAC, OTA-Ziel-
+und Relay-Protokoll, signierter OTA-Empfang, lokale Serial-Namenbefehle
+sowie authentifizierte Remote-Namensverwaltung auf dem Zielknoten.
+Deaktiviertes `FEATURE_GATEWAY` darf daher **nicht** den OTA-Empfang
+eines Rauchmelder-Knotens deaktivieren.
 
-Das NVS bleibt erhalten; `NAME GET`, `NAME SET` und `NAME RESET`
-funktionieren weiterhin seriell sowie remote ab beidseitiger v0.6.13.
-Wenn AP nicht aktiviert ist, benötigt man bei Funkausfall USB zur
-lokalen Namensänderung. GPIO9/BOOT behält seine Hardware-Bootfunktion.
+Beispiel für Rauchmelder: AUDIO=1, GATEWAY=0, CONFIG_AP=0.
+Beispiel für dedizierten USB-Gateway: AUDIO=0, GATEWAY=1, CONFIG_AP=0.
+Keine Abhängigkeit zu einem fest vorgegebenen Profilnamen mehr.
 
-**Noch nicht hardwarevalidiert:** Flash-Verbrauch und Verhalten
-für **alle vier Profile** müssen separat kompiliert und geprüft werden.
-Bei Profilen mit AP pausiert der Konfigurationsmodus wie bisher
-ESP-NOW; dieser Betriebszustand darf nicht zur Alarmierung dienen.
+**Wichtig zum Release-Prozess:** Unterschiedliche Feature-Kombinationen
+erzeugen unterschiedliche Firmware-BINs. Die vorhandene Signatur bindet
+die **konkreten BIN-Bytes über SHA-256**, aber der Feature-Satz steht noch
+nicht ausdrücklich im signierten Manifest oder im Dashboard. Für jede
+Kombination eine eigene BIN, ihren SHA-256 und die Schalterstellung
+protokollieren. Dieselbe Versionsnummer lässt sich wegen der
+Monotonieprüfung nicht ohne Weiteres per OTA gegen eine andere Variante
+austauschen. Ein künftiger OTA-/Webapp-Schritt muss Feature-Metadaten
+verifizieren und anzeigen, bevor Varianten massenhaft verteilt werden.
+
+Das NVS mit dem Namen bleibt bei normalem OTA erhalten;
+`NAME GET`, `NAME SET` und `NAME RESET` bleiben auch ohne AP erreichbar.
+Die Remote-Management-Befehle benötigen eine vertrauenswürdige
+Gateway-Identität und die bisherige Authentifizierung.
+
+Der Code wurde noch **nicht** in allen Feature-Kombinationen kompiliert
+und ist auf Hardware nicht validiert. Jede geplante Kombination einzeln
+bauen, Funktion und ESP-NOW/OTA-Grenzen testen. Nicht auf installierte
+Alarm-Knoten verteilen.
 
 ## Anschlüsse
 
