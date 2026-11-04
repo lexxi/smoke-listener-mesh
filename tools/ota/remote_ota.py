@@ -25,14 +25,20 @@ REPLY = re.compile(
     r"\[MGMT\] REPLY origin=([0-9A-F]{16}) action=([A-Z_]+) result=(\d+)"
     r" nonce=([0-9A-F]{16}) running=app(\d+) boot=app(\d+)"
     r" state=(\d+) staged=(\d+) verified=(\d+) peer=(\d+)"
-    r" version=(\d+\.\d+\.\d+)(?: name=([A-Za-z0-9_-]{1,19}|\(unset\)))?"
+    r" version=(\d+\.\d+\.\d+(?:\.[a-h])?)(?: name=([A-Za-z0-9_-]{1,19}|\(unset\)))?"
 )
 
 
 def numeric(v: str) -> tuple[int, int, int]:
-    if not re.fullmatch(r"\d{1,3}\.\d{1,3}\.\d{1,3}", v):
-        raise ValueError("Version must be numeric X.Y.Z")
-    return tuple(map(int, v.split(".")))
+    """Compare firmware code level without treating feature letter as newer."""
+    if not re.fullmatch(r"\d{1,3}\.\d{1,3}\.\d{1,3}(?:\.[a-h])?", v):
+        raise ValueError("Version must be X.Y.Z or X.Y.Z.a..h")
+    return tuple(map(int, v.split(".")[:3]))
+
+
+def is_upgrade(candidate: str, running: str) -> bool:
+    cand, current = numeric(candidate), numeric(running)
+    return cand > current or (cand == current and candidate != running)
 
 
 def mgmt(port_name: str, target: str, action: str = "STATUS",
@@ -111,7 +117,7 @@ def deploy(args, plan: dict) -> None:
     # Reject pending, aborted or newly staged states as upgrade starting points.
     if first["running"] not in (0, 1) or first["boot"] != first["running"] or first["state"] not in (2, 255):
         raise RuntimeError("Target boot state unsuitable for OTA; inspect running/boot/state")
-    if numeric(plan["version"]) <= numeric(first["version"]):
+    if not is_upgrade(plan["version"], first["version"]):
         raise RuntimeError("Same/older signed release refused (no downgrade)")
     if args.activate_staged:
         if not first["staged"] or not first["verified"]:
