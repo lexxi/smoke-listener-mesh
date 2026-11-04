@@ -107,6 +107,7 @@ function nodeCard(n) {
  top.append(el("div",n.name,"name"),el("span",statusText(n.status),"tag "+n.status));
  card.append(top,el("div",(n.location||"Standort unbekannt")+" · "+n.mac,"sub"));
  if(n.configured_name && n.configured_name!==n.name)card.append(el("div","Konfiguration: "+n.configured_name,"sub"));
+ card.append(el("div","Firmware: "+(n.firmware ? "v"+n.firmware : "Unbekannt (noch nicht gemeldet)"),"sub"));
  card.append(el("div","Letzter Empfang: "+(n.age_seconds===null?"noch keiner":n.age_seconds+" s")+" · "+time(n.last_seen),"sub"));
  card.append(el("div",n.role==="logger" ? "Rolle: USB-Logger · gesendet: "+(n.tx_packets||0) : "Pakete: "+n.packets+" · direkt: "+n.direct+" · via Relay: "+n.relayed,"sub"));
  if(n.role!=="logger")card.append(el("div","Letzter Weg: "+(n.hops===null?"–":n.hops+" Hop(s)")+" · RSSI: "+(n.rssi===null?"–":n.rssi+" dBm"),"sub"));
