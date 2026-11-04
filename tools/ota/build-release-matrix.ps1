@@ -30,6 +30,7 @@ $cli = Get-Command $ArduinoCli -ErrorAction Stop
 $python = Join-Path $repo "myenv\Scripts\python.exe"
 if (-not $TargetsFile) { $TargetsFile = Join-Path $repo "web\data\node_targets.json" }
 if (-not $OutputRoot) { $OutputRoot = Join-Path $repo ("firmware\mesh-v"+$Version+"\build\release-matrix-4part") }
+$OutputRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputRoot)
 if (Test-Path -LiteralPath $OutputRoot) {
   throw "Ausgabe existiert bereits: $OutputRoot. Neuen -OutputRoot angeben."
 }
@@ -40,7 +41,7 @@ if (-not $BuildOnly) {
   }
   $json = Get-Content -LiteralPath $TargetsFile -Raw
   if (-not $json.TrimStart().StartsWith("[")) { throw "node_targets.json muss ein JSON-Array sein" }
-  $parsed = @(ConvertFrom-Json -InputObject $json)
+  $parsed = ConvertFrom-Json -InputObject $json
   foreach ($target in $parsed) {
     if ($target -isnot [string] -or $target -cnotmatch '^[0-9A-F]{16}$' -or $target -eq '0000000000000000') {
       throw "Ungueltige Ziel-ID"
