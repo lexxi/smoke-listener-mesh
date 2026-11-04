@@ -14,7 +14,7 @@ import threading
 import time
 from pathlib import Path
 
-from flask import Blueprint, abort, jsonify, request
+from flask import Blueprint, abort, jsonify, request, send_file, Response
 
 from release_library import STORE, PUBLIC_KEY, GUARD, _identity, _verify
 from logger_control import pause_for_remote_ota, resume_after_remote_ota
@@ -30,7 +30,7 @@ process = None
 job = {
     "id": None, "state": "idle", "mode": None, "started": None, "ended": None,
     "release_id": None, "target": None, "gateway": None,
-    "progress": 0, "lines": [], "log_file": None, "message": "Noch kein Remote-OTA-Lauf.",
+    "progress": 0, "lines": [], "log_file": None, "log_line_count": 0, "message": "Noch kein Remote-OTA-Lauf.",
 }
 MAX_LINES = 450
 
@@ -58,6 +58,7 @@ def _verify_release(release_id):
 def _log(line):
     with lock:
         shortened = line.rstrip()[:900]
+        job["log_line_count"] = job.get("log_line_count", 0) + 1
         job["lines"].append(shortened)
         if job.get("log_file"):
             destination = ROOT / job["log_file"]
@@ -133,6 +134,43 @@ def _run(release_id, port, mode):
             job["ended"] = __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+def _saved_log():
+    """Only server-generated logs; fall back to newest completed job after restart."""
+    base = ROOT / "web" / "data" / "ota_jobs"
+    with lock:
+        current = job.get("log_file")
+    if current:
+        path = ROOT / current
+        if path.is_file() and path.parent.resolve() == base.resolve():
+            return path
+    if base.is_dir():
+        candidates = (item for item in base.glob("*.log") if item.is_file())
+        return max(candidates, key=lambda item: item.stat().st_mtime, default=None)
+    return None
+
+
+@bp.get("/api/remote/log")
+def full_log():
+    _local()
+    path = _saved_log()
+    if path is None:
+        return jsonify({"error": "Noch kein gespeichertes OTA-Protokoll vorhanden."}), 404
+    # No paths from the client. Stream rather than embed in JSON responses.
+    return send_file(path, mimetype="text/plain; charset=utf-8",
+                     as_attachment=False, max_age=0)
+
+
+@bp.get("/api/remote/log/download")
+def download_log():
+    _local()
+    path = _saved_log()
+    if path is None:
+        return jsonify({"error": "Noch kein gespeichertes OTA-Protokoll vorhanden."}), 404
+    return send_file(path, mimetype="text/plain; charset=utf-8",
+                     as_attachment=True, download_name="smoke-mesh-ota-"+path.stem+".txt",
+                     max_age=0)
+
+
 @bp.get("/api/remote/config")
 def config():
     _local()
@@ -174,7 +212,7 @@ def start():
             "id": secrets.token_hex(8), "state": "running", "mode": mode,
             "started": __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds"),
             "ended": None, "release_id": release_id, "target": plan["target"],
-            "gateway": port, "progress": 0, "lines": [],
+            "gateway": port, "progress": 0, "lines": [], "log_line_count": 0,
             "log_file": "web/data/ota_jobs/" + secrets.token_hex(8) + ".log",
             "message": "Remote-" + mode + " läuft über Gateway " + port,
         })
