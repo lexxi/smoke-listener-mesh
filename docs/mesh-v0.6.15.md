@@ -234,45 +234,29 @@ und ist auf Hardware nicht validiert. Jede geplante Kombination einzeln
 bauen, Funktion und ESP-NOW/OTA-Grenzen testen. Nicht auf installierte
 Alarm-Knoten verteilen.
 
-## Explizite Zielrollen für Remote-OTA
+## Zielknoten-Freigabe statt fester Hardware-Rollen
 
-Ab v0.6.15 sperrt der Webserver **Stage, Aktivierung und vollständige OTA**
-für jeden Knoten ohne lokal freigegebene Zielrolle oder mit
-unpassenden signierten Features. Die reine Statusabfrage bleibt möglich.
-
-Einmalige lokale Konfiguration auf dem Webserver:
+Ab v0.6.15 prüft der Webserver vor Stage, Aktivierung und OTA,
+ob das Ziel in `web/data/node_targets.json` eingetragen ist.
+Die Funktionswahl ist **nicht** an einen festen Knotentyp gebunden.
+Damit kann ein bisheriger Rauchmelder auch Gateway-Funktionen
+bekommen oder ein Gateway eine AUDIO-Variante erhalten,
+sofern die benötigten Bauteile vorhanden sind.
 
 ```powershell
-Copy-Item .\web\node_roles.json.example .\web\data\node_roles.json
+Copy-Item .\web\node_targets.json.example .\web\data\node_targets.json
 ```
 
-Vor Verwendung **Inhalt prüfen und anpassen**. Die Beispielzuordnungen
-sind Vorschläge, keine automatische Erkennung. Nicht eingetragene
-Knoten dürfen keine neuen Images per Webapp erhalten.
+Die Beispiel-IDs vor dem produktiven Signieren prüfen. Jeder
+registrierte Knoten darf jede der acht Varianten erhalten.
+Fehlende oder beschädigte Freigabelisten sperren OTA ab v0.6.15;
+alte Releases bis v0.6.14 sind davon ausgenommen.
+Die Statusabfrage wird weiterhin zugelassen.
 
-Erlaubte Werte:
-
-| Rolle | Erforderliche signierte Features |
-| --- | --- |
-| `mesh` | weder `audio` noch `gateway` |
-| `listener` | `audio`, aber kein `gateway` |
-| `gateway` | `gateway`, aber kein `audio` |
-| `hybrid` | `gateway` und `audio` |
-
-`config_ap` ist für jede Rolle optional. Damit werden Fehlverteilungen
-verhindert, ohne eine bestimmte Knotenhistorie als Wahrheit anzunehmen.
-`web/data/node_roles.json` ist in `.gitignore` ausgeschlossen und
-wird nicht ins Repository eingecheckt.
-
-**Sicherheitsgrenze:** Die Rollenprüfung ist eine serverseitige
-Freigabeliste. Sie verhindert falsche Auswahl über diese Webapp,
-ist aber **keine Geräte- oder Hardware-Attestation**. Die aktuell
-laufenden Features werden noch nicht vom ESP32 gemeldet.
-Ein anderes OTA-Werkzeug kann diese Webapp-Prüfung umgehen.
-Fehlerhafte manuelle Freigabelisten bleiben möglich.
-
-Bestandsreleases bis v0.6.14 werden von der neuen Rollensperre
-nicht betroffen; die bisherige signierte OTA-Prüfung bleibt bestehen.
+Diese Freigabe ist eine **serverseitige Auswahlkontrolle** und
+keine Geräte-Attestation. Der Empfänger überprüft unverändert
+die bereits bestehende Signatur der Firmware und ihren Hash.
+Die tatsächlich angeschlossenen Peripheriegeräte werden nicht erkannt.
 
 ## Anschlüsse
 
