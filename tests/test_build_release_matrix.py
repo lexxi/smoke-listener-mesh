@@ -28,6 +28,13 @@ class MatrixTests(unittest.TestCase):
         self.assertIn('$signer verify',SCRIPT)
         self.assertIn("if (-not $BuildOnly)",SCRIPT)
 
+    def test_v0616_is_default_and_has_trusted_usb_gateway(self):
+        self.assertIn('[string]$Version = "0.6.16"', SCRIPT)
+        sketch = (ROOT/"firmware/mesh-v0.6.16/mesh-v0.6.16.ino").read_text(encoding="utf-8")
+        self.assertIn('#define SMOKE_FIRMWARE_VERSION "0.6.16"', sketch)
+        self.assertIn("MGMT_TRUST_GATEWAY=0x00000CEC7E6E27ACULL", sketch)
+        self.assertIn("origin==MGMT_TRUST_GATEWAY", sketch)
+
     def test_safe_output(self):
         self.assertIn("Ausgabe existiert bereits",SCRIPT)
         self.assertNotIn("remote_ota.py",SCRIPT)
