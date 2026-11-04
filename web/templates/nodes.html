@@ -49,7 +49,7 @@ function nodeId(mac){
     parts.reverse().join('').padStart(16,'0'):null;
 }
 function versionAtLeast(v){
- const a=String(v||'').match(/^(\d+)\.(\d+)\.(\d+)$/);
+ const a=String(v||'').match(/^(\d+)\.(\d+)\.(\d+)(?:\.[a-h])?$/);
  return !!a && (+a[1]>0 || +a[2]>6 || (+a[2]===6 && +a[3]>=13));
 }
 async function discover(){

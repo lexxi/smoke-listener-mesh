@@ -7,10 +7,10 @@
 // remote management and diagnostic OTA transfers from the serial port.
 // Disable it on ordinary smoke listener nodes to avoid unused sender code.
 #ifndef FEATURE_GATEWAY
-#define FEATURE_GATEWAY 0
+#define FEATURE_GATEWAY 1
 #endif
 #ifndef FEATURE_AUDIO
-#define FEATURE_AUDIO 1
+#define FEATURE_AUDIO 0
 #endif
 #ifndef FEATURE_CONFIG_AP
 #define FEATURE_CONFIG_AP 0
