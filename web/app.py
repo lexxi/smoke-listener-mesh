@@ -25,6 +25,8 @@ from logger_control import bp as logger_blueprint
 app.register_blueprint(logger_blueprint)
 from release_library import bp as releases_blueprint
 app.register_blueprint(releases_blueprint)
+from remote import bp as remote_blueprint
+app.register_blueprint(remote_blueprint)
 lock = threading.RLock()
 db_path = ROOT / "web" / "data" / "mesh.db"
 log_dirs = [ROOT / "log", ROOT / "logs", ROOT / "scripts" / "log"]
