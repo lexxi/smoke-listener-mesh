@@ -8,13 +8,25 @@ Nach der einmaligen Installation der Remote-OTA-Basis **v0.6.11** auf allen C3 s
 
 Verfügbare Gateway-Rollen: Garage/COM14 oder Kueche/COM12. Der USB-Gateway-Knoten kann nicht seine eigene Firmware über sich selbst aktualisieren: für ihn muss der jeweils andere C3 als USB-Gateway dienen. Der Webapp-Garage-Logger wird bei Nutzung von COM14 automatisch pausiert und anschließend wieder gestartet.
 
+## Vorabprüfung (noch ohne USB)
+
+```powershell
+cd C:\pyprojects\smoke-listener-mesh
+git pull origin main
+.\myenv\Scripts\python.exe .\tools\ota\verify_remote_sources.py
+.\myenv\Scripts\python.exe -m unittest discover -s tests -p "test_remote_ota_protocol.py"
+.\tools\ota\prepare-firmware.ps1 -Version 0.6.11
+```
+
+Anschließend den Sketch v0.6.11 **nur kompilieren**, Ergebnis prüfen. Zusätzlich gibt es den GitHub-Actions-Workflow `.github/workflows/remote-ota-preflight.yml` für Python-Checks und Arduino-Kompilierung mit Dummy-Schlüsseln. **Ein erfolgreicher CI-Build ist keine reale OTA-/Rollback-Validierung.**
+
 ## Einmalige USB-Migration (nicht alle Geräte blind gleichzeitig flashen)
 
-1. `git pull origin main`. Die private `mesh_secrets.h` und `ota_public_key.h` aus dem zuletzt verwendeten Sketch **lokal** in `firmware/mesh-v0.6.11/` kopieren. Diese Dateien sind absichtlich nicht in Git.
+1. `git pull origin main`. Die privaten Header `mesh_secrets.h` und `ota_public_key.h` mit `tools/ota/prepare-firmware.ps1 -Version 0.6.11` **lokal** aus der funktionierenden v0.6.10 kopieren (nicht in Git).
 2. v0.6.11 in Arduino IDE mit ESP32 Core 3.3.12 / `XIAO_ESP32C3` und dem bisherigen Partition Scheme mit `app0`/`app1` kompilieren. `Erase All Flash` auf **Disabled** lassen. Compile-Warnungen und Größe notieren.
 3. **Garage** zuerst über COM14 auf v0.6.11 aktualisieren. Danach mit dem bestehenden Logger TEST/HEARTBEAT zwischen Garage und 1OG/Kueche prüfen. Keine gleichzeitige Logger-/OTA-Nutzung von COM14.
 4. **1OG** anschließend einmalig über USB auf v0.6.11 aktualisieren. Mit Garage als Gateway (COM14) im Browser den **Funkstatus** von 1OG prüfen. Noch kein OTA durchführen.
-5. Erst wenn Statusübertragung funktioniert, v0.6.12 im Arduino IDE kompilieren (privaten Header ebenfalls lokal kopieren), auf dem vertrauenswürdigen Windows-PC ein signiertes Release-Paket erzeugen und in der Webapp hochladen.
+5. Erst wenn Statusübertragung funktioniert, mit `tools/ota/prepare-firmware.ps1 -Version 0.6.12` die privaten Header lokal vorbereiten, v0.6.12 in Arduino IDE kompilieren, auf dem vertrauenswürdigen Windows-PC ein signiertes Release-Paket erzeugen und in der Webapp hochladen.
 6. **1OG v0.6.11 → v0.6.12** zunächst mit **Nur übertragen & prüfen** testen: Es darf sich kein Bootslot ändern. Danach für einen vollständigen Update-Test den Button **Vollständiges OTA-Update** verwenden. Achtung: Das führt derzeit eine erneute vollständige Übertragung durch; es nutzt den vorherigen Staging-Lauf nicht einfach wieder.
 7. Bootbestätigung (`state=2`) und tatsächliche v0.6.12-Heartbeats prüfen. Für den negativen Test absichtlich keine Bestätigung senden, dann den 90-Sekunden-Watchdog und Rollback beobachten. Die autonome Alarmdetektion ist dadurch **nicht** validiert.
 8. Erst nach positiven und negativen Tests **Kueche und FZRaum** einmalig über USB auf die geprüfte Remote-OTA-Basis aktualisieren. Zukünftige Releases dann nur über Webapp.
