@@ -59,7 +59,7 @@ progress{width:86%;height:18px}
 </section>
 <script>
 const $=id=>document.getElementById(id);
-let csrf=null,remoteCsrf=null,releases=[],running=false,nodeRoles={},roleConfigError=null;
+let csrf=null,remoteCsrf=null,releases=[],running=false,nodeTargets=[],targetConfigError=null;
 async function load(){
  try{
   const [lib,config]=await Promise.all([
@@ -67,7 +67,7 @@ async function load(){
     fetch('/api/remote/config',{cache:'no-store'}).then(r=>r.json())
   ]);
   csrf=lib.upload_csrf;remoteCsrf=config.csrf;
-  nodeRoles=config.node_roles||{};roleConfigError=config.role_config_error||null;
+  nodeTargets=config.node_targets||[];targetConfigError=config.target_config_error||null;
   const previous=$('release').value;
   // Sort semantic numeric versions newest first (e.g. 0.6.14 before 0.6.9).
   const versionParts=v=>v.split('.').map(Number);
@@ -86,7 +86,7 @@ async function load(){
   let o=document.createElement('option');o.value='';o.textContent='Release auswählen';$('release').append(o);
   for(const item of releases){
    o=document.createElement('option');o.value=item.id;
-   o.textContent='v'+item.version+' · '+(item.features===null?'Features unbekannt':(item.features.length?item.features.join('+').toUpperCase():'CORE'))+' · '+nodeName(item.target)+' · '+item.target;
+   o.textContent='v'+(item.label||item.version)+' · '+(item.features===null?'Features unbekannt':(item.features.length?item.features.join('+').toUpperCase():'CORE'))+' · '+nodeName(item.target)+' · '+item.target;
    $('release').append(o);
   }
   if(releases.some(r=>r.id===previous))$('release').value=previous;
@@ -105,26 +105,19 @@ async function load(){
 const nodes={'000010637C6E27AC':'1OG','000094457F6E27AC':'Kueche','000058FE7D6E27AC':'Garage','0000A0E37E6E27AC':'FZRaum'};
 function nodeName(id){return nodes[id]||'Unbekannter Knoten'}
 function selected(){return releases.find(r=>r.id===$('release').value)}
-function roleForFeatures(features){
- if(features===null)return null;
- const set=new Set(features);
- return set.has('gateway')?(set.has('audio')?'hybrid':'gateway'):(set.has('audio')?'listener':'mesh');
-}
 function renderSelection(){
  const x=selected(),gateway=$('gateway').value;
- const role=x?nodeRoles[x.target]:null;
- const expected=x?roleForFeatures(x.features):null;
  const isNew=x?x.version.split('.').map(Number).reduce((acc,n,i)=>acc+(i===0?n*1000000:i===1?n*1000:n),0)>=6015:false;
- const blocked=!!x&&isNew&&(!!roleConfigError||!role||!expected||role!==expected);
- const roleMessage=blocked?('\nOTA gesperrt: '+(roleConfigError||(!role?'keine Zielrolle konfiguriert':('Zielrolle '+role+' passt nicht zum Release '+(expected||'unbekannt'))))):'';
+ const blocked=!!x&&isNew&&(!!targetConfigError||!nodeTargets.includes(x.target)||x.features===null);
+ const targetMessage=blocked?('\nOTA gesperrt: '+(targetConfigError||(!nodeTargets.includes(x.target)?'Zielknoten nicht in node_targets.json freigegeben':'signierte Features fehlen'))):'';
 
  const forbidden=(gateway==='COM14'&&x?.target==='000058FE7D6E27AC')||
                  (gateway==='COM12'&&x?.target==='000094457F6E27AC');
  $('release-info').textContent=x?('Ziel: '+nodeName(x.target)+' · '+x.target+
-   '\nFirmware: v'+x.version+' · '+x.bytes.toLocaleString('de-DE')+' Bytes'+
+   '\nFirmware: v'+(x.label||x.version)+' (OTA '+x.version+') · '+x.bytes.toLocaleString('de-DE')+' Bytes'+
    '\nFeatures: '+(x.features===null?'unbekannt (älteres Release)':(x.features.length?x.features.join(', '):'CORE'))+
    '\nSHA-256: '+x.sha256+'\nSignatur: geprüft'+
-   (forbidden?'\nACHTUNG: Gateway und Ziel dürfen nicht identisch sein.':'')+roleMessage):
+   (forbidden?'\nACHTUNG: Gateway und Ziel dürfen nicht identisch sein.':'')+targetMessage):
    'Release auswählen oder neues Release hochladen.';
  $('check').disabled=!x||!gateway||forbidden||running;
  for(const id of ['stage','activate-staged','deploy'])$(id).disabled=!x||!gateway||forbidden||blocked||running;
