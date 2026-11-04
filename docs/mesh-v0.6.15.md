@@ -117,7 +117,7 @@ und die Remote-OTA-Software verlangen numerische `X.Y.Z`-Versionen.
 Der Buchstabe ist daher eine **zusätzlich signierte, menschenlesbare
 Variantenkennung**. Der ESP32 meldet über das bisherige Protokoll die
 numerische Version. Spätere Releases folgen demselben Schema,
-z. B. `0.6.16a` mit `0.6.160`. Der verwendete dritte
+z. B. `0.6.16a` mit `0.6.160`. Die Build-Matrix unterstützt bei vorhandener passender Firmwarequelle `0.6.15` bis `0.6.24`; darüber muss das Telemetrieformat erweitert werden. Der verwendete dritte
 Versionsbestandteil muss für die ESP-NOW-Status-Telemetrie <=255 sein;
 das Schema ist daher bei einem künftigen Versionssprung zu prüfen.
 
@@ -190,24 +190,10 @@ Die **Server-Seite** verifiziert beide Signaturen und zeigt die Features in
 der Firmware-Auswahl sowie in den Releasedetails an. Ältere Releases ohne
 diesen Zusatz erscheinen als `Features unbekannt`, nicht als CORE.
 
-Beispiele für signierte v0.6.15-ZIPs nach dem Build:
-
-```powershell
-# Rauchmelder (FEATURE_AUDIO=1, alle anderen 0)
-.\tools\ota\prepare-web-bundle.ps1 -Version 0.6.15 -Features @("audio") -Image "PFAD_ZUR_AUDIO_BIN"
-
-# Schlanker Gateway (FEATURE_GATEWAY=1)
-.\tools\ota\prepare-web-bundle.ps1 -Version 0.6.15 -Features @("gateway") -Image "PFAD_ZUR_GATEWAY_BIN"
-
-# Reiner Mesh-Knoten
-.\tools\ota\prepare-web-bundle.ps1 -Version 0.6.15 -Features @() -Image "PFAD_ZUR_CORE_BIN"
-```
-
-`-Features` ist für v0.6.15 explizit anzugeben. Für alle
-Feature-Kombinationen sind **getrennte BIN-Dateien und ZIP-Pakete**
-erforderlich. Die Anwendung muss außerdem die gewünschte Knotenrolle
-prüfen; eine automatische Rolle/Hardware-Erkennung ist **noch nicht
-implementiert**.
+Für neue Releases ausschließlich die zentrale
+`build-release-matrix.ps1` verwenden. Das ältere
+`prepare-web-bundle.ps1` ist nicht auf die neuen Variantenkennungen
+und automatisch erzeugten OTA-Buildversionen abgestimmt.
 
 **Grenze:** Die zusätzliche Signatur beweist, dass der Herausgeber
 diese Feature-Angaben für den konkreten Firmware-Hash signiert hat.
