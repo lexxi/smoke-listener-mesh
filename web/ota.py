@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -28,7 +29,7 @@ lock = threading.RLock()
 csrf_token = secrets.token_urlsafe(32)
 MAX_LINES = 300
 job = {"id": None, "state": "idle", "started": None, "ended": None,
-       "release_id": None, "pid": None, "returncode": None, "lines": [],
+       "release_id": None, "pid": None, "returncode": None, "lines": [], "progress": 0,
        "message": "Noch kein OTA-Lauf ausgeführt."}
 
 
@@ -60,6 +61,9 @@ def _supported(plan: dict) -> bool:
 
 def _append(line: str):
     with lock:
+        match = re.search(r"\[IMAGE\] NEXT index=(\d+)/(\d+)\b", line)
+        if match and int(match.group(2)) > 0:
+            job["progress"] = min(99, int(100 * int(match.group(1)) / int(match.group(2))))
         job["lines"].append(line.rstrip()[:700])
         if len(job["lines"]) > MAX_LINES:
             del job["lines"][:-MAX_LINES]
@@ -93,6 +97,8 @@ def _run(release_id: str):
         with lock:
             job["returncode"] = code
             job["state"] = "passed" if code == 0 else "failed"
+            if code == 0:
+                job["progress"] = 100
             job["message"] = ("Staging und SHA-256-Readback erfolgreich. Boot unverändert."
                               if code == 0 else "Staging fehlgeschlagen. Log prüfen; Boot nicht umstellen.")
     except Exception as exc:
@@ -158,7 +164,7 @@ def start():
             return jsonify({"error": "Ein OTA-Lauf ist bereits aktiv"}), 409
         job.update({"id": secrets.token_hex(6), "state": "running",
                     "started": _now(), "ended": None, "release_id": release_id,
-                    "pid": None, "returncode": None, "lines": [],
+                    "pid": None, "returncode": None, "lines": [], "progress": 0,
                     "message": "1OG v0.6.9 → v0.6.10: signiertes Staging gestartet; keine Bootaktivierung."})
     threading.Thread(target=_run, args=(release_id,), daemon=True).start()
     return jsonify({"accepted": True, "id": job["id"]}), 202
