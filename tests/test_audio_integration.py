@@ -14,6 +14,14 @@ class AudioIntegrationTests(unittest.TestCase):
         self.assertIn("enum PacketType : uint8_t { TEST=1, HEARTBEAT=2 };",FIRMWARE)
         self.assertIn("ALARM_CANDIDATE DIAGNOSTIC_ONLY NO_MESH_ALARM",AUDIO)
         self.assertNotIn("sendLocal(ALARM)",FIRMWARE)
+    def test_ap_removed_but_name_commands_preserved(self):
+        self.assertNotIn("#include <WebServer.h>",FIRMWARE)
+        self.assertNotIn("WiFi.softAP(",FIRMWARE)
+        self.assertNotIn("server.handleClient()",FIRMWARE)
+        self.assertNotIn("checkButton()",FIRMWARE)
+        for command in ('NAME GET','NAME SET ','NAME RESET'):
+            self.assertIn(command,FIRMWARE)
+
     def test_audio_is_task_based(self):
         self.assertIn("xTaskCreate(",AUDIO)
         self.assertIn("i2s_read(",AUDIO)
