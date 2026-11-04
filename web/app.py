@@ -108,7 +108,7 @@ def parse_line(line):
                 values["via"].upper(), values["boot"].upper(), int(values["seq"]),
                 int(values["hops"]), int(values["ttl"]),
                 int(values["rssi"]) if "rssi" in values else None, values["type"],
-                values.get("fw") if re.fullmatch(r"\d{1,3}\.\d{1,3}\.\d{1,3}", values.get("fw", "")) else None)
+                values.get("fw") if re.fullmatch(r"\d{1,3}\.\d{1,3}\.\d{1,3}(?:\.[a-h])?", values.get("fw", "")) else None)
     except (ValueError, OverflowError):
         return None
 
@@ -124,7 +124,7 @@ def parse_tx(line):
         timestamp = dt.datetime.strptime(stamp.group(1), "%Y-%m-%d %H:%M:%S")
         return (timestamp.isoformat(), values["origin"].upper(),
                 values["boot"].upper(), int(values["seq"]),
-                values.get("fw") if re.fullmatch(r"\d{1,3}\.\d{1,3}\.\d{1,3}", values.get("fw", "")) else None)
+                values.get("fw") if re.fullmatch(r"\d{1,3}\.\d{1,3}\.\d{1,3}(?:\.[a-h])?", values.get("fw", "")) else None)
     except (ValueError, OverflowError):
         return None
 
