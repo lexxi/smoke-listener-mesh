@@ -58,6 +58,7 @@ def _identity(plan: dict) -> str:
 def _summary(plan: dict, release_id: str) -> dict:
     return {"id": release_id, "target": plan["target"],
             "version": plan["version"], "sha256": plan["sha256"],
+            "features": plan.get("features"),
             "bytes": plan["size"], "blocks": plan["blocks"],
             "status": "verified", "transfer_enabled": False}
 
