@@ -29,7 +29,7 @@ progress{width:86%;height:18px}
 <input id="bundle" type="file" accept=".zip,application/zip" required></label>
 <button id="bundle-button" type="submit">Release-Paket hochladen</button>
 </form>
-<p id="bundle-message" class="muted">Ein ZIP enthält eine Firmware-BIN und alle signierten Knotenmanifeste. Erstellung lokal mit <code>prepare-web-bundle.ps1</code>.</p>
+<p id="bundle-message" class="muted">Ein ZIP enthält eine Firmware-BIN und alle signierten Knotenmanifeste. Erstellung lokal mit <code>build-release-matrix.ps1</code>.</p>
 <details><summary>Alternativ: Einzelrelease mit BIN und Manifest</summary>
 <form id="upload" class="row">
 <label>Firmware-BIN<input id="bin" type="file" accept=".bin" required></label>
@@ -70,7 +70,7 @@ async function load(){
   nodeTargets=config.node_targets||[];targetConfigError=config.target_config_error||null;
   const previous=$('release').value;
   // Sort semantic numeric versions newest first (e.g. 0.6.14 before 0.6.9).
-  const versionParts=v=>v.split('.').map(Number);
+  const versionParts=v=>v.split('.').slice(0,3).map(Number);
   const compareVersions=(a,b)=>{
    const left=versionParts(a),right=versionParts(b);
    for(let i=0;i<3;i++){
@@ -86,7 +86,7 @@ async function load(){
   let o=document.createElement('option');o.value='';o.textContent='Release auswählen';$('release').append(o);
   for(const item of releases){
    o=document.createElement('option');o.value=item.id;
-   o.textContent='v'+(item.label||item.version)+' · '+(item.features===null?'Features unbekannt':(item.features.length?item.features.join('+').toUpperCase():'CORE'))+' · '+nodeName(item.target)+' · '+item.target;
+   o.textContent='v'+item.version+' · '+(item.features===null?'Features unbekannt':(item.features.length?item.features.join('+').toUpperCase():'CORE'))+' · '+nodeName(item.target)+' · '+item.target;
    $('release').append(o);
   }
   if(releases.some(r=>r.id===previous))$('release').value=previous;
@@ -107,14 +107,14 @@ function nodeName(id){return nodes[id]||'Unbekannter Knoten'}
 function selected(){return releases.find(r=>r.id===$('release').value)}
 function renderSelection(){
  const x=selected(),gateway=$('gateway').value;
- const isNew=x?x.version.split('.').map(Number).reduce((acc,n,i)=>acc+(i===0?n*1000000:i===1?n*1000:n),0)>=6015:false;
+ const isNew=x?versionParts(x.version).reduce((acc,n,i)=>acc+(i===0?n*1000000:i===1?n*1000:n),0)>=6015:false;
  const blocked=!!x&&isNew&&(!!targetConfigError||!nodeTargets.includes(x.target)||x.features===null);
  const targetMessage=blocked?('\nOTA gesperrt: '+(targetConfigError||(!nodeTargets.includes(x.target)?'Zielknoten nicht in node_targets.json freigegeben':'signierte Features fehlen'))):'';
 
  const forbidden=(gateway==='COM14'&&x?.target==='000058FE7D6E27AC')||
                  (gateway==='COM12'&&x?.target==='000094457F6E27AC');
  $('release-info').textContent=x?('Ziel: '+nodeName(x.target)+' · '+x.target+
-   '\nFirmware: v'+(x.label||x.version)+' (OTA '+x.version+') · '+x.bytes.toLocaleString('de-DE')+' Bytes'+
+   '\nFirmware: v'+x.version+' · '+x.bytes.toLocaleString('de-DE')+' Bytes'+
    '\nFeatures: '+(x.features===null?'unbekannt (älteres Release)':(x.features.length?x.features.join(', '):'CORE'))+
    '\nSHA-256: '+x.sha256+'\nSignatur: geprüft'+
    (forbidden?'\nACHTUNG: Gateway und Ziel dürfen nicht identisch sein.':'')+targetMessage):
