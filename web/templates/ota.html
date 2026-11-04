@@ -15,6 +15,16 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#08121f;border:1px so
 hr{border:0;border-top:1px solid #33465d;margin:17px 0}
 </style></head><body>
 <header><div><h1>Firmware-Updates</h1><div class="muted">Smoke Listener Mesh · lokale Testverwaltung</div></div><a href="/">← Mesh Monitor</a></header>
+<section class="card"><div class="row"><h2>Release-Verwaltung</h2><span class="badge">Signaturprüfung vor Speicherung</span></div>
+<p class="muted">Kompilierte ESP32-C3-Firmware (*.bin) und zugehöriges signiertes Manifest (*.json) hochladen. Der Server benötigt keine Arduino-Header und keinen privaten Signierschlüssel.</p>
+<form id="release-upload">
+<div class="row"><label>Firmware-BIN <input id="upload-bin" type="file" accept=".bin,application/octet-stream" required></label>
+<label>Signiertes Manifest <input id="upload-manifest" type="file" accept=".json,application/json" required></label>
+<button id="upload-submit" type="submit">Release prüfen & speichern</button></div></form>
+<p id="upload-status" class="muted">Noch kein Release hochgeladen.</p>
+<h2>Geprüfte Releases</h2><div id="uploaded-releases" class="meta">Lade Release-Liste …</div>
+<p class="warn">Diese Releases werden nur gespeichert. OTA-Übertragung und Bootaktivierung aus der Release-Liste sind noch nicht freigeschaltet.</p>
+</section>
 <section class="card"><h2>Umgebung</h2><div class="meta">Gateway: <strong>Kueche · COM12</strong> (v0.6.1) &nbsp; · &nbsp; Ziel: <strong>1OG · COM15</strong> (erwartet v0.6.7)</div>
 <p class="warn">Diese erste Version arbeitet nur lokal auf diesem Windows-PC und ist kein unbeaufsichtigter Update-Dienst. Vor dem Start alle seriellen Monitore für COM12/COM15 schließen.</p></section>
 <section class="card"><div class="row"><h2>Signiertes Release</h2><span class="badge">Bootaktivierung deaktiviert</span></div>
@@ -58,5 +68,33 @@ const data=await r.json();if(!r.ok)throw Error(data.error||'HTTP '+r.status);
 lastLines=-1;await refresh();
 }catch(e){safeText('message','Start fehlgeschlagen: '+e.message);await refresh()}
 });
-(async()=>{await loadRelease();await refresh();setInterval(refresh,2000)})();
+let releaseCsrf=null;
+async function refreshLibrary(){
+ try{
+  const r=await fetch('/api/releases',{cache:'no-store'});
+  if(!r.ok)throw Error('HTTP '+r.status);
+  const j=await r.json();releaseCsrf=j.upload_csrf;
+  const lines=j.releases.map(x=>'v'+x.version+' · Ziel '+x.target+' · '+x.bytes.toLocaleString('de-DE')+' Byte · SHA-256 '+x.sha256+' · Signatur OK');
+  safeText('uploaded-releases',lines.length?lines.join('\n\n'):'Noch keine geprüften Releases gespeichert.');
+  if(!j.public_key_present)safeText('upload-status','Öffentlicher Prüfschlüssel fehlt. Upload derzeit nicht möglich.');
+ }catch(e){safeText('uploaded-releases','Fehler beim Laden: '+e.message)}
+}
+$('release-upload').addEventListener('submit',async e=>{
+ e.preventDefault();
+ if(!releaseCsrf)return;
+ const image=$('upload-bin').files[0],manifest=$('upload-manifest').files[0];
+ if(!image||!manifest)return;
+ if(!confirm('Firmware und Manifest lokal prüfen und als Release speichern? Es erfolgt kein Flashen.'))return;
+ $('upload-submit').disabled=true;
+ safeText('upload-status','Prüfe Signatur und Firmware …');
+ try{
+  const form=new FormData();form.append('image',image);form.append('manifest',manifest);
+  const r=await fetch('/api/releases/upload',{method:'POST',headers:{'X-Release-CSRF':releaseCsrf},body:form});
+  const j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);
+  safeText('upload-status','Release v'+j.release.version+' für '+j.release.target+' erfolgreich signaturgeprüft und gespeichert.');
+  $('release-upload').reset();await refreshLibrary();
+ }catch(e){safeText('upload-status','Upload abgelehnt: '+e.message)}
+ finally{$('upload-submit').disabled=false}
+});
+(async()=>{await refreshLibrary();await loadRelease();await refresh();setInterval(refresh,2000)})();
 </script></body></html>
