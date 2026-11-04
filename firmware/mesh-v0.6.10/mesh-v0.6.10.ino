@@ -1216,6 +1216,12 @@ void setup() {
     nodeName=prefs.getString("name","");
     prefs.end();
   } else Serial.println("[CONFIG] WARNING NVS not available");
+  // Preserve older 20..24 character names after introducing the version tail.
+  // The old configuration stays in NVS; only its on-air representation is shortened.
+  if(nodeName.length()>MAX_NAME_LENGTH) {
+    nodeName=nodeName.substring(0,MAX_NAME_LENGTH);
+    Serial.println("[CONFIG] WARNING long legacy name shortened on air for firmware telemetry");
+  }
   if(!validName(nodeName)) nodeName="";
   Serial.printf("[CONFIG] name=%s (NAME GET / NAME SET <name> / NAME RESET)\n",
     nodeName.length()?nodeName.c_str():"(unset)");
