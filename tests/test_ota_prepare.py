@@ -41,6 +41,32 @@ class TransferTests(unittest.TestCase):
         assembled = b"".join(c for _, c in payload)
         self.assertEqual(assembled[:plan["size"]], self.image.read_bytes())
 
+    def test_signed_feature_claim_roundtrip(self):
+        self.manifest.unlink()
+        sign(SimpleNamespace(image=self.image, private_key=self.priv,
+            target="000094457F6E27AC", version="0.6.15", out=self.manifest,
+            overwrite=False, features="audio"))
+        plan = build_plan(self.image, self.manifest, self.pub)
+        self.assertEqual(plan["features"], ["audio"])
+
+    def test_tampered_feature_claim_is_rejected(self):
+        self.manifest.unlink()
+        sign(SimpleNamespace(image=self.image, private_key=self.priv,
+            target="000094457F6E27AC", version="0.6.15", out=self.manifest,
+            overwrite=False, features="audio"))
+        doc = json.loads(self.manifest.read_text())
+        doc["feature_claim"]["features"] = ["gateway"]
+        self.manifest.write_text(json.dumps(doc))
+        with self.assertRaisesRegex(ValueError, "feature"):
+            build_plan(self.image, self.manifest, self.pub)
+
+    def test_unsigned_feature_claim_is_rejected(self):
+        doc = json.loads(self.manifest.read_text())
+        doc["feature_claim"] = {"features": ["audio"]}
+        self.manifest.write_text(json.dumps(doc))
+        with self.assertRaises(ValueError):
+            build_plan(self.image, self.manifest, self.pub)
+
     def test_tampered_image_rejected(self):
         raw = bytearray(self.image.read_bytes())
         raw[-1] ^= 1
