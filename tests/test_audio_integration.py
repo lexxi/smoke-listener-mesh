@@ -14,13 +14,15 @@ class AudioIntegrationTests(unittest.TestCase):
         self.assertIn("enum PacketType : uint8_t { TEST=1, HEARTBEAT=2 };",FIRMWARE)
         self.assertIn("ALARM_CANDIDATE DIAGNOSTIC_ONLY NO_MESH_ALARM",AUDIO)
         self.assertNotIn("sendLocal(ALARM)",FIRMWARE)
-    def test_feature_profiles_are_compile_time(self):
+    def test_independent_flags_and_gateway_gates(self):
         config=(ROOT/"firmware/mesh-v0.6.15/feature_config.h").read_text(encoding="utf-8")
-        for profile in range(4):
-            self.assertIn(f"// {profile} ",config)
-        self.assertIn("#if SMOKE_FEATURE_AUDIO",FIRMWARE)
-        self.assertIn("#if SMOKE_FEATURE_AP",FIRMWARE)
-        self.assertIn("#include <WebServer.h>",FIRMWARE)
+        for flag in ("FEATURE_GATEWAY", "FEATURE_AUDIO", "FEATURE_CONFIG_AP",
+                     "FEATURE_BATTERY", "FEATURE_BUZZER"):
+            self.assertIn("#ifndef "+flag,config)
+        self.assertIn("#error \"Battery and buzzer are not implemented",config)
+        for gate in ("SMOKE_FEATURE_AUDIO","SMOKE_FEATURE_AP","SMOKE_FEATURE_GATEWAY"):
+            self.assertIn("#if "+gate,FIRMWARE)
+        self.assertIn("void mgmtSendSerial(",FIRMWARE)
         self.assertIn("WiFi.softAP(",FIRMWARE)
         for command in ('NAME GET','NAME SET ','NAME RESET'):
             self.assertIn(command,FIRMWARE)
