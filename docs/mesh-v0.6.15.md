@@ -94,82 +94,83 @@ Neuinstallation zuerst kontrollieren, ob Arduino CLI dasselbe
 Arduino15-Datenverzeichnis wie die Arduino IDE verwendet
 (typisch `%LOCALAPPDATA%\Arduino15`).
 
-## Zentrale Build-Matrix und Variantenkennungen
+## Firmwareversion `Major.Minor.Patch.Variante`
 
-Der vollständige Build läuft mit `tools/ota/build-release-matrix.ps1`.
-**Standardmäßig werden alle acht** Kombinationen aus Audio,
-Gateway und Konfigurations-AP erzeugt, jeweils aus einer
-unveränderten lokalen Codebasis und mit eigenem Compiler-Verzeichnis.
+Ab v0.6.15 verwenden wir **eine echte vierteilige Versionskennung**
+in Firmware, Mesh-Telemetrie, signiertem OTA-Manifest, Remote-Status,
+Webserver und Build-System. Einmalige **USB-Umstellung aller Knoten**
+ist vorgesehen; installierte v0.6.14-Knoten können die neue
+Versionssemantik nicht nutzen.
 
-| Anzeige | Profil | Gateway | Audio | AP | Interne OTA-Version |
-| --- | --- | ---: | ---: | ---: | --- |
-| `0.6.15a` | CORE | 0 | 0 | 0 | `0.6.150` |
-| `0.6.15b` | AUDIO | 0 | 1 | 0 | `0.6.151` |
-| `0.6.15c` | GATEWAY | 1 | 0 | 0 | `0.6.152` |
-| `0.6.15d` | HYBRID | 1 | 1 | 0 | `0.6.153` |
-| `0.6.15e` | CORE+AP | 0 | 0 | 1 | `0.6.154` |
-| `0.6.15f` | AUDIO+AP | 0 | 1 | 1 | `0.6.155` |
-| `0.6.15g` | GATEWAY+AP | 1 | 0 | 1 | `0.6.156` |
-| `0.6.15h` | HYBRID+AP | 1 | 1 | 1 | `0.6.157` |
+| Version | Profil | Gateway | Audio | AP |
+| --- | --- | ---: | ---: | ---: |
+| `0.6.15.a` | CORE | 0 | 0 | 0 |
+| `0.6.15.b` | AUDIO | 0 | 1 | 0 |
+| `0.6.15.c` | GATEWAY | 1 | 0 | 0 |
+| `0.6.15.d` | HYBRID | 1 | 1 | 0 |
+| `0.6.15.e` | CORE + AP | 0 | 0 | 1 |
+| `0.6.15.f` | AUDIO + AP | 0 | 1 | 1 |
+| `0.6.15.g` | GATEWAY + AP | 1 | 0 | 1 |
+| `0.6.15.h` | HYBRID + AP | 1 | 1 | 1 |
 
-**Warum zwei Versionsangaben?** Der vorhandene ESP32-Firmwareverifier
-und die Remote-OTA-Software verlangen numerische `X.Y.Z`-Versionen.
-Der Buchstabe ist daher eine **zusätzlich signierte, menschenlesbare
-Variantenkennung**. Der ESP32 meldet über das bisherige Protokoll die
-numerische Version. Spätere Releases folgen demselben Schema,
-z. B. `0.6.16a` mit `0.6.160`. Die Build-Matrix unterstützt bei vorhandener passender Firmwarequelle `0.6.15` bis `0.6.24`; darüber muss das Telemetrieformat erweitert werden. Der verwendete dritte
-Versionsbestandteil muss für die ESP-NOW-Status-Telemetrie <=255 sein;
-das Schema ist daher bei einem künftigen Versionssprung zu prüfen.
+Die ersten drei Zahlen bestimmen die **Code-Generation**.
+Der vierte Bestandteil ist die **Feature-Variante**, kein
+Release-Rang. Eine signierte Aktualisierung `0.6.15.h` →
+`0.6.15.a` ist deshalb gestattet. Das gleiche Image nochmals
+auf dieselbe Variante zu installieren wird verweigert.
+Ein Code-Downgrade `0.6.16.a` → `0.6.15.h` bleibt gesperrt.
 
-Der signierte Feature-Satz und das signierte Label werden durch die
-Server-Signaturprüfung an die exakten BIN-Bytes, Ziel-ID und numerische
-Version gebunden. **Gleiche numerische OTA-Version für unterschiedliche
-BINs ist ausgeschlossen.** Ein Wechsel von `0.6.15h` zurück zu
-`0.6.15a` wird vom Downgrade-Schutz blockiert. Ein neueres Release
-(z. B. `0.6.16a`) kann den Wechsel wieder ermöglichen.
+Die signierte Feature-Liste muss zur Variante passen.
+Die bestehende ECDSA-Signatur, die SHA-256-Imageprüfung,
+das Boot-Readback und die Boot-Bestätigung bleiben erhalten.
 
-### Ausführen
+### Einheitliche Build-Matrix
 
 ```powershell
 git pull --ff-only
 
-# Zuerst alle 8 Varianten bauen (ohne Signatur / OTA):
+# Alle acht Varianten ohne Signierung kompilieren:
 .\tools\ota\build-release-matrix.ps1 -BuildOnly
 
-# Danach für alle ausdrücklich registrierten Knoten signieren:
+# Erst nach erfolgreichem Test:
 Copy-Item .\web\node_targets.json.example .\web\data\node_targets.json
-# Liste web/data/node_targets.json vor Verwendung überprüfen!
+# Freigegebene IDs in node_targets.json überprüfen
 .\tools\ota\build-release-matrix.ps1
 ```
 
-Arduino-CLI, Board-Core `esp32:esp32`, private Firmware-Header sowie
-`myenv` mit `cryptography` müssen vorhanden sein. Zum Signieren
-kommen privater und öffentlicher Schlüssel hinzu.
+Die Build-Matrix kompiliert jede Kombination aus einem isolierten
+Quellverzeichnis. Für jeden Build wird `SMOKE_FIRMWARE_VERSION`
+auf die passende Version gesetzt. Firmware-Quellen und private
+Header werden nicht verändert. Je Variante entstehen eine BIN
+und – bei aktivierter Signierung – zielknotenspezifische
+Manifeste und ein OTA-ZIP.
 
-Ein Build erzeugt Unterordner je Kennung unter
-`firmware/mesh-v0.6.15/build/release-matrix-8/`.
-Bei erneutem Lauf nicht überschreiben: mit `-OutputRoot` einen
-**neuen** Ausgabepfad angeben. Pro Variante werden BIN, SHA-256,
-optional ein signiertes ZIP sowie ein gemeinsamer
-`build-report.json` erzeugt.
+Ausgabeverzeichnis:
+`firmware/mesh-v0.6.15/build/release-matrix-4part/`.
+Bei einem zweiten Lauf mit `-OutputRoot` einen neuen Pfad
+angeben; vorhandene Exporte werden nicht überschrieben.
 
-`web/data/node_targets.json` enthält ausschließlich eine Liste
-freigegebener ESP32-C3-Knoten-IDs. **Jeder** registrierte Knoten
-kann jedes der acht Firmware-Images bekommen; es gibt keine
-fest verdrahtete AUDIO-/GATEWAY-Rolle mehr. Das Signierskript
-generiert für jede Variante die passenden knotenspezifischen
-Manifeste und prüft jede Signatur vor dem ZIP-Export.
+Jeder in `web/data/node_targets.json` freigegebene ESP32-C3
+kann alle acht Varianten erhalten. Die bisherige starre Rollenbindung
+ist entfernt; die Wahl der Variante bleibt eine bewusste
+Administrationsentscheidung.
 
-Die Ausgabe von `-BuildOnly` enthält bei `Targets` bewusst 0,
-weil nicht signiert wird. Die Build-Matrix sendet keine Daten per
-Funk und flasht keine Geräte.
+### Übertragung und Migration
 
-**Hardwaregrenze:** Kompilierbar bedeutet nicht, dass jede Funktion
-auf jedem ESP tatsächlich verwendet werden kann. AUDIO benötigt
-einen angeschlossenen INMP441, Batterie/Buzzer sind noch
-nicht implementiert. Ein USB-Gateway muss physisch am
-Server angeschlossen sein. OTA, Audio-Task und AP sind noch
-nicht gemeinsam auf Hardware validiert.
+- Auf **allen Knoten einmalig per USB flashen**, damit jeder Empfänger
+  den neuen Versionsvergleich beherrscht. Vorher ESP-NOW/OTA-Hardwaretests
+  an einem Testknoten durchführen.
+- Die Mesh-Heartbeat-Telemetrie transportiert die Variante in einem
+  authentifizierten Versionsmarker; ältere Knoten erkennen den Marker
+  nicht als vollständige vierteilige Version.
+- Remote-Management über den USB-Gateway meldet `version=0.6.15.b`
+  oder entsprechend andere Varianten.
+- Die Webapp erkennt und sortiert die vierteilige Version und
+  verwendet sie unverändert beim Upload und OTA.
+- Nach dem Flashen mindestens Heartbeats, Namensverwaltung,
+  Gateway-Kommandos, OTA-Stage/Verify sowie Rollback testen.
+- Noch **kein produktiver Rauchalarm**: Die AUDIO-Integration
+  erzeugt nur Diagnoseereignisse, keine Alarmweiterleitung.
 
 ## Signierte Feature-Metadaten für neue Releases
 
@@ -203,8 +204,8 @@ protokollieren und vor dem Signieren überprüfen. Auf dem Knoten selbst
 wird die zusätzliche Feature-Signatur noch nicht überprüft; die
 bestehende Gerätesignatur- und Hashprüfung bleibt erhalten.
 
-Gleiche Firmwareversion mit anderer Feature-BIN ist **kein** normaler
-Remote-OTA-Upgradepfad, da identische/ältere Versionen verweigert werden.
+Wechsel zwischen Varianten derselben Codeversion sind per OTA zulässig,
+nachdem die Knoten einmalig per USB auf die neue Firmware gebracht wurden.
 Die dauerhafte Node-Feature-Inventarisierung erfordert später
 zusätzliche authentifizierte Telemetrie; die Webapp zeigt hier vorerst
 die Eigenschaften des **ausgewählten Releases**, nicht automatisch
