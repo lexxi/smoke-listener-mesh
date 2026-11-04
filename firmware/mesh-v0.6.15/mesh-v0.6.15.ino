@@ -677,11 +677,14 @@ void activateStagedSlot() {
 }
 
 // Remote management extension for experimental web-only updates.
-// The gateway is any USB-connected trusted mesh node (Kueche or Garage).
+// Management commands are accepted only from explicitly trusted gateway node IDs.
+// This embedded allowlist is independent from web/gateways.json; receiver firmware
+// must be rebuilt and deployed when trusted gateway identities change.
 // A fresh boot-local nonce is required for every state-changing command.
 // Successful commands rotate the nonce, so replayed frames do not execute again.
 constexpr uint64_t MGMT_TRUST_KUECHE=0x000094457F6E27ACULL;
 constexpr uint64_t MGMT_TRUST_GARAGE=0x000058FE7D6E27ACULL;
+constexpr uint64_t MGMT_TRUST_GATEWAY=0x00000CEC7E6E27ACULL;
 constexpr uint8_t MGMT_STATUS=1,MGMT_ARM=2,MGMT_VERIFY=3,MGMT_ACTIVATE=4,
   MGMT_REBOOT=5,MGMT_CONFIRM=6,MGMT_NAME_GET=7,MGMT_NAME_SET=8,
   MGMT_NAME_RESET=9,MGMT_RESTART=10;
@@ -692,7 +695,8 @@ bool mgmtActivationDone=false;
 uint8_t mgmtRequestedAction=0;
 bool mgmtWaiting=false;
 bool mgmtAllowed(uint64_t origin){
-  return origin==MGMT_TRUST_KUECHE || origin==MGMT_TRUST_GARAGE;
+  return origin==MGMT_TRUST_KUECHE || origin==MGMT_TRUST_GARAGE ||
+         origin==MGMT_TRUST_GATEWAY;
 }
 const char *mgmtActionName(uint8_t action){
   switch(action){
