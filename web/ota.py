@@ -151,6 +151,8 @@ def ota_start():
     _local_only()
     if request.headers.get("X-OTA-CSRF") != csrf_token:
         return jsonify({"error": "Ungültiger CSRF-Schutz."}), 403
+    return jsonify({"error": "Altes v0.6.9-Staging deaktiviert: Ziel 1OG läuft bereits v0.6.9. Release-Upload ist separat verfügbar."}), 409
+
     data = request.get_json(silent=True) or {}
     version = data.get("version")
     if version not in RELEASES:
