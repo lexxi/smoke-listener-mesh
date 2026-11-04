@@ -27,6 +27,16 @@ Die neue Firmware `firmware/mesh-v0.6.10/mesh-v0.6.10.ino` behält Protokoll 3 u
 
 Anleitung: [Firmware-Telemetrie v0.6.10](docs/mesh-firmware-version-telemetry-v0610.md).
 
+## OTA per Weboberfläche für 1OG v0.6.10 (Staging)
+
+Die Seite **http://127.0.0.1:8088/ota** führt nun durch drei Schritte: **signiertes Release hochladen → Ziel/Version auswählen → Firmware übertragen und SHA-256 kontrollieren**. Für den ersten kontrollierten Hardwaretest ist nur **1OG: v0.6.9 (app0) → v0.6.10 (app1)** freigeschaltet.
+
+**Beide Geräte müssen dabei weiterhin per USB am Windows-PC hängen:** Kueche als Gateway an COM12 und 1OG zur lokalen Autorisierung an COM15. Die Webapp startet **keinen Bootwechsel, Neustart oder BOOT CONFIRM**. Ein Web-OTA-Staging-Erfolg bedeutet nicht, dass die neue Firmware bereits läuft.
+
+Zum Erstellen des signierten 1OG-Releases dient `tools/ota/prepare-web-release.ps1 -Node 1OG -Version 0.6.10`; der private Signierschlüssel bleibt lokal.
+
+Die Funktion ist **implementiert, aber noch nicht auf der Hardware validiert**. [Windows-Testanleitung](docs/web-ota-stage-1og-v0610.md).
+
 ## Release-Verwaltung im Webinterface (Stand 04.11.2026)
 
 Die bereits laufende Flask-Weboberfläche unter **http://127.0.0.1:8088/ota** kann nun eine kompilierte Firmware-BIN und das zugehörige signierte JSON-Manifest über den Browser entgegennehmen. Erst nach ECDSA-P256-Signaturprüfung, ESP32-C3-Imageprüfung und SHA-256-Abgleich wird das Release lokal unter `web/data/releases/` gespeichert (nicht auf GitHub). Der private Signierschlüssel bleibt auf dem Build-PC.
