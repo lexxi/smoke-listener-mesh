@@ -13,6 +13,8 @@ small,.muted{color:#95a7c0}small{font-size:12px}
 .sessionbar select{max-width:min(100%,460px);background:#1a2a40;border:1px solid #476077;border-radius:8px;color:#e6edf7;padding:9px 12px;font:inherit}
 .sessionbar button{background:#263c57;border:1px solid #476077;border-radius:8px;color:#e6edf7;padding:9px 12px;cursor:pointer}
 .sessionbar button:hover{background:#344b6c}
+.sessionbar button:disabled{background:#121d2e;border-color:#2b394b;color:#6f839c;cursor:not-allowed;opacity:.55}
+.sessionbar button:disabled:hover{background:#121d2e}
 .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
 .panel{background:#152237;border:1px solid #2a3b54;border-radius:12px;padding:18px;margin-bottom:16px}
 .metric{font-size:30px;font-weight:700;margin-top:8px}.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -42,7 +44,7 @@ th{color:#b6c5d9;font-weight:600}
 <section class="panel sessionbar" aria-label="Garage USB-Logger">
 <strong>Garage · COM14</strong>
 <span id="logger-state" class="muted">Loggerstatus wird geladen …</span>
-<button id="logger-start" type="button" disabled>Logger starten</button>
+<button id="logger-start" type="button" disabled title="Nur wenn Garage-Logger gestoppt ist">Logger starten</button>
 <button id="logger-stop" type="button" disabled>Logger stoppen</button>
 <small id="logger-note" class="muted">Der Web-Logger belegt COM14 exklusiv; bestehende PowerShell-Logger vorher beenden.</small>
 </section>
@@ -152,10 +154,16 @@ async function refreshLogger(){
   $('logger-note').textContent=j.note+(j.session?' · '+j.session:'');
   $('logger-start').disabled=j.running;
   $('logger-stop').disabled=!j.running;
+  $('logger-start').title=j.running?'Logger läuft bereits – zuerst stoppen':'Garage-Logger starten';
+  $('logger-stop').title=j.running?'Laufenden Garage-Logger stoppen':'Kein Logger über die Webapp gestartet';
  } catch(e){$('logger-state').textContent='Fehler: '+e.message;$('logger-start').disabled=true;$('logger-stop').disabled=true}
 }
 async function commandLogger(action){
  if(!loggerCsrf)return;
+ if(action==='start'&&$('logger-start').disabled)return;
+ if(action==='stop'&&$('logger-stop').disabled)return;
+ $('logger-start').disabled=true;
+ $('logger-stop').disabled=true;
  if(action==='start'&&!confirm('Garage Logger an COM14 starten? Einen bisher laufenden PowerShell-Logger oder Serial Monitor vorher schließen.'))return;
  try{
   const r=await fetch('/api/logger/'+action,{method:'POST',headers:{'X-Logger-CSRF':loggerCsrf}});
