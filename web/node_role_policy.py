@@ -26,7 +26,7 @@ def load_targets(path: Path = TARGETS_FILE) -> set[str]:
     return result
 
 def check_release_target(plan: dict, targets: set[str]) -> None:
-    version = tuple(map(int, plan["version"].split(".")))
+    version = tuple(map(int, plan["version"].split(".")[:3]))
     if version < (0, 6, 15):
         return
     if plan.get("features") is None:
