@@ -43,6 +43,7 @@ pre{font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;b
 <div class="row"><h2>3 · Übertragung und Kontrolle</h2><strong id="state" class="muted">Bereit</strong></div>
 <p id="job-message" class="muted">Noch keine Übertragung gestartet.</p>
 <p id="job-time" class="hint"></p>
+<div class="row"><progress id="progress" value="0" max="100" style="width:85%;height:18px"></progress><span id="percentage">0 %</span></div>
 <pre id="log">Noch keine Ausgabe.</pre>
 <p class="hint">Nach erfolgreicher Übertragung: Der SHA-256-Wert wurde auf dem Ziel geprüft, aber der aktive Bootslot bleibt unverändert. Bootwechsel und Bestätigung sind nicht Teil dieser Seite.</p>
 </section>
@@ -108,6 +109,7 @@ async function refreshJob(){
  const j=await r.json();activeJob=j.state==='running';
  $('state').textContent=j.state;$('job-message').textContent=j.message||'';
  $('job-time').textContent='Beginn: '+info(j.started)+' · Ende: '+info(j.ended);
+ $('progress').value=j.progress||0;$('percentage').textContent=(j.progress||0)+' %';
  $('log').textContent=j.lines.length?j.lines.join('\n'):'Noch keine Ausgabe.';
  renderSelected();
  }catch(e){$('job-message').textContent='Statusfehler: '+e.message;$('stage').disabled=true}
