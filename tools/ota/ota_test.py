@@ -36,6 +36,7 @@ class TargetConsole:
         self.lines = queue.Queue(maxsize=4096)
         self.history = collections.deque(maxlen=1500)
         self.stop = threading.Event()
+        self.quiet_display = threading.Event()
         self.ser = serial.Serial(port=None, baudrate=115200, timeout=0.25, write_timeout=5)
         # Avoid deliberately toggling reset/control lines when opening port.
         self.ser.dtr = False
@@ -59,7 +60,7 @@ class TargetConsole:
         self.history.append(line)
         self.logfile.write(f"{datetime.datetime.now().astimezone().isoformat()} TARGET {line}\n")
         self.logfile.flush()
-        if any(tag in line for tag in
+        if not self.quiet_display.is_set() and any(tag in line for tag in
                ("[FLASH]", "[BOOT]", "[IMAGE] RESULT", "[IMAGE] FLASH_", "[AUTH] REJECT")):
             print("1OG:", line, flush=True)
         try:
@@ -201,7 +202,12 @@ def main() -> int:
             print("\nCAUTION: BOOT ACTIVATE changes otadata. Rollback is not hardware-tested.")
             print("The device will NOT reboot automatically. USB recovery must be available.")
             phrase = f"ACTIVATE 1OG {args.to_version}"
-            confirmation = input(f"Type exactly '{phrase}' to proceed: ")
+            # Keep background serial reader/logging active but never write over user input.
+            target.quiet_display.set()
+            try:
+                confirmation = input(f"Type exactly '{phrase}' to proceed: ").strip()
+            finally:
+                target.quiet_display.clear()
             if confirmation != phrase:
                 print(f"CANCELLED. Boot remains {source_slot}.", flush=True)
                 return 0
