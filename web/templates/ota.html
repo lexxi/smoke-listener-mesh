@@ -3,116 +3,141 @@
 <title>Smoke Mesh · Firmware</title>
 <style>
 :root{color-scheme:dark;font-family:system-ui,"Segoe UI",sans-serif;background:#0b1320;color:#e5edf7}
-*{box-sizing:border-box}body{max-width:1020px;margin:auto;padding:24px 18px}
-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 24px}
-h1{font-size:27px;margin:0}h2{font-size:19px;margin:0 0 14px}
-a{color:#a9ccff;text-decoration:none}.muted{color:#a3b4c9}.hint{font-size:13px;color:#a3b4c9}
-.card{background:#162338;border:1px solid #33465d;border-radius:12px;padding:20px;margin:0 0 16px}
-.row{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}
-button{background:#345b89;border:1px solid #587ca9;color:white;border-radius:8px;padding:11px 16px;cursor:pointer;font:inherit}
-button:disabled{opacity:.4;cursor:not-allowed}.label{font-size:13px;color:#a3b4c9}
-input[type=file]{display:block;max-width:100%;margin:7px 0 12px}
-select{background:#0e1d31;border:1px solid #547399;border-radius:8px;color:#e5edf7;padding:12px;width:100%;font:inherit}
-pre{font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;background:#08121f;padding:14px;border:1px solid #304560;border-radius:8px;max-height:360px;overflow:auto}
-.notice{border-left:3px solid #ba9045;padding:9px 14px;color:#f4d59e;background:#2c291f;margin:13px 0;border-radius:4px}
-.good{color:#91e7b5}.bad{color:#f6a4a4}
-.steps{display:flex;gap:10px;flex-wrap:wrap}.step{background:#1d324d;padding:8px 13px;border-radius:8px;font-size:13px}
+*{box-sizing:border-box}body{max-width:1040px;margin:0 auto;padding:26px 18px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+h1{margin:0;font-size:28px}h2{font-size:19px;margin:0 0 14px}a{color:#9dccff;text-decoration:none}
+.card{background:#162338;border:1px solid #33465d;border-radius:12px;padding:22px;margin-bottom:16px}
+.row{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.muted,small{color:#a4b8d0}.notice{color:#f5d598;border-left:3px solid #bf8c37;background:#29281f;padding:12px 15px;border-radius:4px;margin:15px 0}
+label{display:block;color:#c5d4e8}input[type=file]{display:block;max-width:100%;margin-top:7px}
+select{font:inherit;border:1px solid #456181;border-radius:8px;background:#0d1c30;color:#e6edf7;padding:11px;width:100%;margin-top:6px}
+button{font:inherit;color:#f5f9ff;background:#345d8b;border:1px solid #597eae;border-radius:8px;padding:11px 17px;cursor:pointer}
+button:disabled{opacity:.38;cursor:not-allowed}
+.secondary{background:#253b55}.danger{background:#754a3a;border-color:#aa755b}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto;border:1px solid #33465d;border-radius:8px;background:#081321;padding:14px;font-size:12px;line-height:1.5}
+details{margin-top:15px}summary{cursor:pointer;color:#bad4f6}
+progress{width:86%;height:18px}
+@media(max-width:650px){body{padding:16px 10px}.card{padding:16px}}
 </style></head><body>
-<header><div><h1>Firmware-Verwaltung</h1><div class="muted">Smoke Listener Mesh · Windows-Test</div></div><a href="/">← Mesh Monitor</a></header>
-<div class="steps"><span class="step">1 · Release bereitstellen</span><span class="step">2 · Ziel prüfen</span><span class="step">3 · Firmware übertragen</span></div>
-<section class="card" style="margin-top:18px">
-<h2>1 · Release hinzufügen</h2>
-<p class="muted">Du brauchst nur die kompilierte Firmware-BIN und das dafür signierte JSON-Manifest. Die privaten Schlüssel bleiben auf deinem Build-PC.</p>
-<form id="upload">
+<header><div><h1>Firmware-Updates</h1><div class="muted">Smoke Listener Mesh · signiertes ESP-NOW OTA</div></div><a href="/">← Mesh Monitor</a></header>
+<div class="notice">Fern-OTA erfordert <strong>v0.6.11 oder neuer auf Gateway UND Ziel</strong>. Die neue Funktion ist noch nicht auf Hardware getestet. Die letzte USB-Firmware-Runde erst nach erfolgreichem Compile und kontrollierten Tests durchführen.</div>
+<section class="card">
+<h2>1 · Firmware-Release bereitstellen</h2>
+<p class="muted">Nur die fertige BIN und das knotenspezifisch signierte JSON-Manifest hochladen. Kein privater Schlüssel im Webserver.</p>
+<form id="upload" class="row">
+<label>Firmware-BIN<input id="bin" type="file" accept=".bin" required></label>
+<label>Signiertes Manifest<input id="manifest" type="file" accept=".json" required></label>
+<button id="upload-button" type="submit">Prüfen & speichern</button>
+</form><p id="upload-message" class="muted">Bereit.</p>
+</section>
+<section class="card">
+<h2>2 · Knoten und Gateway auswählen</h2>
+<label>Signiertes Release<select id="release"><option value="">Releases laden …</option></select></label>
+<div style="margin-top:14px"><label>USB-Gateway<select id="gateway"><option value="">Gateway laden …</option></select></label></div>
+<p id="release-info" class="muted" style="white-space:pre-line">Noch kein Release ausgewählt.</p>
+<div class="notice">Nur der ausgewählte Gateway-C3 muss dauerhaft per USB am Webserver hängen. Der Zielknoten wird ausschließlich über ESP-NOW erreicht. Wird Garage als Gateway gewählt, pausiert die Webapp den COM14-Logger automatisch.</div>
 <div class="row">
-<label>Firmware-BIN <input id="bin" type="file" accept=".bin" required></label>
-<label>Signiertes Manifest <input id="manifest" type="file" accept=".json" required></label>
-<button type="submit" id="upload-button">Prüfen und speichern</button>
-</div></form><div id="upload-message" class="hint">Noch kein Upload durchgeführt.</div>
+<button id="check" class="secondary" disabled>Funkstatus prüfen</button>
+<button id="stage" class="secondary" disabled>Nur übertragen & prüfen</button>
+<button id="deploy" class="danger" disabled>Vollständiges OTA-Update</button>
+</div>
+<small>Vollständig: Signatur → Übertragen → Flash-Readback → Aktivierung → Neustart → Mesh-Prüfung → Bootbestätigung. Bei ausbleibender Bestätigung soll der ESP32-Bootloader nach erneutem Neustart zurückrollen. Kein Ersatz für eine Alarmfunktionsprüfung.</small>
 </section>
-<section class="card">
-<h2>2 · Ziel und Version auswählen</h2>
-<label for="release" class="label">Signaturgeprüfte Releases</label>
-<select id="release"><option value="">Lade Releases …</option></select>
-<div id="details" class="muted" style="margin-top:14px">Noch kein Release ausgewählt.</div>
-<div class="notice">Die Web-Übertragung ist zunächst ausschließlich für <strong>1OG v0.6.9 → v0.6.10</strong> freigegeben. Kueche ist das USB-Gateway. Bootaktivierung ist weiterhin manuell.</div>
-<div class="row"><div><strong>Gateway: Kueche · <span id="gateway">COM12</span></strong><div class="hint">1OG am Test-PC: <span id="target-port">COM15</span> · Beide USB-Ports müssen frei sein</div></div>
-<button id="stage" disabled>Signierte Firmware übertragen</button></div>
-</section>
-<section class="card">
-<div class="row"><h2>3 · Übertragung und Kontrolle</h2><strong id="state" class="muted">Bereit</strong></div>
-<p id="job-message" class="muted">Noch keine Übertragung gestartet.</p>
-<p id="job-time" class="hint"></p>
-<div class="row"><progress id="progress" value="0" max="100" style="width:85%;height:18px"></progress><span id="percentage">0 %</span></div>
-<pre id="log">Noch keine Ausgabe.</pre>
-<p class="hint">Nach erfolgreicher Übertragung: Der SHA-256-Wert wurde auf dem Ziel geprüft, aber der aktive Bootslot bleibt unverändert. Bootwechsel und Bestätigung sind nicht Teil dieser Seite.</p>
+<section class="card"><div class="row"><h2>3 · Ergebnis</h2><strong id="state" class="muted">Bereit</strong></div>
+<p id="job-message" class="muted">Noch kein Vorgang.</p>
+<div class="row"><progress id="progress" max="100" value="0"></progress><span id="pct">0 %</span></div>
+<p id="times" class="muted"></p>
+<details open><summary>Technisches Protokoll</summary><pre id="log">Noch keine Ausgabe.</pre></details>
 </section>
 <script>
-const otaCsrf={{ csrf_token|tojson }};
 const $=id=>document.getElementById(id);
-let releaseCsrf=null,items=[],activeJob=false;
-function info(x){return x===undefined||x===null?'–':String(x)}
-async function refreshList(){
+let csrf=null,remoteCsrf=null,releases=[],running=false;
+async function load(){
  try{
-  const [r1,r2]=await Promise.all([fetch('/api/releases',{cache:'no-store'}),fetch('/api/ota/releases',{cache:'no-store'})]);
-  if(!r1.ok||!r2.ok)throw Error('Release-Abfrage fehlgeschlagen');
-  const lib=await r1.json(),ota=await r2.json();
-  releaseCsrf=lib.upload_csrf;items=ota.releases;
-  $('gateway').textContent=ota.gateway_port;$('target-port').textContent=ota.target_port;
-  const current=$('release').value;$('release').replaceChildren();
-  const opt=document.createElement('option');opt.value='';opt.textContent='Release auswählen';$('release').append(opt);
-  for(const x of items){
-   const option=document.createElement('option');option.value=x.id;
-   option.textContent='v'+x.version+' · '+x.target+(x.transfer_enabled?' · Übertragung freigegeben':' · nur Ablage');
-   $('release').appendChild(option);
+  const [lib,config]=await Promise.all([
+    fetch('/api/releases',{cache:'no-store'}).then(r=>r.json()),
+    fetch('/api/remote/config',{cache:'no-store'}).then(r=>r.json())
+  ]);
+  csrf=lib.upload_csrf;remoteCsrf=config.csrf;
+  const previous=$('release').value;
+  releases=lib.releases;
+  $('release').replaceChildren();
+  let o=document.createElement('option');o.value='';o.textContent='Release auswählen';$('release').append(o);
+  for(const item of releases){
+   o=document.createElement('option');o.value=item.id;
+   o.textContent='v'+item.version+' · '+nodeName(item.target)+' · '+item.target;
+   $('release').append(o);
   }
-  if(items.some(x=>x.id===current))$('release').value=current;
-  else if(items.length===1)$('release').value=items[0].id;
-  renderSelected();
- }catch(e){$('details').textContent='Fehler: '+e.message;$('stage').disabled=true}
+  if(releases.some(r=>r.id===previous))$('release').value=previous;
+  else if(releases.length===1)$('release').value=releases[0].id;
+  const gwPrevious=$('gateway').value;
+  $('gateway').replaceChildren();
+  for(const gw of config.gateways){
+   o=document.createElement('option');o.value=gw.port;o.textContent=gw.name+' · '+gw.port;
+   $('gateway').append(o);
+  }
+  if(config.gateways.some(g=>g.port===gwPrevious))$('gateway').value=gwPrevious;
+  else if(config.gateways.some(g=>g.port==='COM14'))$('gateway').value='COM14';
+  renderSelection();
+ }catch(e){$('release-info').textContent='Fehler beim Laden der Releases: '+e.message}
 }
-function renderSelected(){
- const x=items.find(v=>v.id===$('release').value);
- $('stage').disabled=!x||!x.transfer_enabled||activeJob;
- $('details').textContent=x?
-  ('Version v'+x.version+' · Ziel '+x.target+' · '+x.bytes.toLocaleString('de-DE')+' Byte\nSHA-256: '+x.sha256+'\n'+x.transfer_note):
-  'Kein Release ausgewählt. Bitte Firmware und Manifest hochladen.';
- $('details').style.whiteSpace='pre-line';
+const nodes={'000010637C6E27AC':'1OG','000094457F6E27AC':'Kueche','000058FE7D6E27AC':'Garage','0000A0E37E6E27AC':'FZRaum'};
+function nodeName(id){return nodes[id]||'Unbekannter Knoten'}
+function selected(){return releases.find(r=>r.id===$('release').value)}
+function renderSelection(){
+ const x=selected(),gateway=$('gateway').value;
+ const forbidden=(gateway==='COM14'&&x?.target==='000058FE7D6E27AC')||
+                 (gateway==='COM12'&&x?.target==='000094457F6E27AC');
+ $('release-info').textContent=x?('Ziel: '+nodeName(x.target)+' · '+x.target+
+   '\nFirmware: v'+x.version+' · '+x.bytes.toLocaleString('de-DE')+' Bytes'+
+   '\nSHA-256: '+x.sha256+'\nSignatur: geprüft'+
+   (forbidden?'\nACHTUNG: Gateway und Ziel dürfen nicht identisch sein.':'')):
+   'Release auswählen oder neues Release hochladen.';
+ for(const id of ['check','stage','deploy'])$(id).disabled=!x||!gateway||forbidden||running;
 }
-$('release').addEventListener('change',renderSelected);
+$('release').addEventListener('change',renderSelection);
+$('gateway').addEventListener('change',renderSelection);
 $('upload').addEventListener('submit',async e=>{
- e.preventDefault();if(!releaseCsrf)return;
- const image=$('bin').files[0],manifest=$('manifest').files[0];if(!image||!manifest)return;
- $('upload-button').disabled=true;$('upload-message').textContent='Verifiziere Signatur und Firmware …';
+ e.preventDefault();if(!csrf)return;
+ const bin=$('bin').files[0],manifest=$('manifest').files[0];if(!bin||!manifest)return;
+ $('upload-button').disabled=true;$('upload-message').textContent='Prüfe Image und Signatur …';
  try{
-  const data=new FormData();data.append('image',image);data.append('manifest',manifest);
-  const r=await fetch('/api/releases/upload',{method:'POST',headers:{'X-Release-CSRF':releaseCsrf},body:data});
-  const x=await r.json();if(!r.ok)throw Error(x.error||'HTTP '+r.status);
-  $('upload-message').textContent='Signatur OK: Release v'+x.release.version+' gespeichert.';
-  $('upload').reset();await refreshList();$('release').value=x.release.id;renderSelected();
- }catch(err){$('upload-message').textContent='Upload fehlgeschlagen: '+err.message}
+  const data=new FormData();data.append('image',bin);data.append('manifest',manifest);
+  const res=await fetch('/api/releases/upload',{method:'POST',headers:{'X-Release-CSRF':csrf},body:data});
+  const j=await res.json();if(!res.ok)throw Error(j.error||'HTTP '+res.status);
+  $('upload-message').textContent='Signatur OK · Release v'+j.release.version+' gespeichert.';
+  $('upload').reset();await load();$('release').value=j.release.id;renderSelection();
+ }catch(e){$('upload-message').textContent='Upload abgelehnt: '+e.message}
  finally{$('upload-button').disabled=false}
 });
-$('stage').addEventListener('click',async()=>{
- const x=items.find(v=>v.id===$('release').value);if(!x||!x.transfer_enabled||activeJob)return;
- if(!confirm('1OG von v0.6.9 auf v0.6.10 in den inaktiven Slot übertragen?\nKueche COM12 und 1OG COM15 müssen am PC angeschlossen sein.\nKein Neustart oder Bootwechsel.'))return;
- activeJob=true;renderSelected();
+async function start(mode){
+ const item=selected(),gateway=$('gateway').value;
+ if(!item||!gateway||running)return;
+ let question='Ziel: '+nodeName(item.target)+'\nRelease: v'+item.version+'\nGateway: '+gateway+'\n';
+ if(mode==='status')question+='Nur Statusabfrage; kein Flashen.';
+ if(mode==='stage')question+='Firmware in den inaktiven Slot übertragen und verifizieren. Kein Bootwechsel.';
+ if(mode==='deploy')question+='ACHTUNG: Firmware übertragen, Boot aktivieren, Gerät NEUSTARTEN und nach Mesh-Prüfung bestätigen. Experimentell! Ein Ausfall kann einen manuellen Rettungsflash erfordern.';
+ if(!confirm(question))return;
+ running=true;renderSelection();
  try{
-  const r=await fetch('/api/ota/start',{method:'POST',headers:{'Content-Type':'application/json','X-OTA-CSRF':otaCsrf},body:JSON.stringify({release_id:x.id})});
-  const j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);
-  await refreshJob();
- }catch(e){$('job-message').textContent='Start fehlgeschlagen: '+e.message;activeJob=false;renderSelected()}
-});
-async function refreshJob(){
- try{
- const r=await fetch('/api/ota/job',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);
- const j=await r.json();activeJob=j.state==='running';
- $('state').textContent=j.state;$('job-message').textContent=j.message||'';
- $('job-time').textContent='Beginn: '+info(j.started)+' · Ende: '+info(j.ended);
- $('progress').value=j.progress||0;$('percentage').textContent=(j.progress||0)+' %';
- $('log').textContent=j.lines.length?j.lines.join('\n'):'Noch keine Ausgabe.';
- renderSelected();
- }catch(e){$('job-message').textContent='Statusfehler: '+e.message;$('stage').disabled=true}
+  const res=await fetch('/api/remote/start',{method:'POST',headers:{'Content-Type':'application/json','X-Remote-CSRF':remoteCsrf},body:JSON.stringify({release_id:item.id,gateway,mode})});
+  const j=await res.json();if(!res.ok)throw Error(j.error||'HTTP '+res.status);
+  await jobRefresh();
+ }catch(e){$('job-message').textContent='Startfehler: '+e.message;running=false;renderSelection()}
 }
-(async()=>{await refreshList();await refreshJob();setInterval(refreshJob,2000)})();
+$('check').addEventListener('click',()=>start('status'));
+$('stage').addEventListener('click',()=>start('stage'));
+$('deploy').addEventListener('click',()=>start('deploy'));
+async function jobRefresh(){
+ try{
+  const r=await fetch('/api/remote/job',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);
+  const j=await r.json();running=j.state==='running';
+  $('state').textContent=j.state;$('job-message').textContent=j.message||'';
+  $('times').textContent='Start: '+(j.started||'–')+' · Ende: '+(j.ended||'–');
+  $('progress').value=j.progress||0;$('pct').textContent=(j.progress||0)+' %';
+  $('log').textContent=j.lines.length?j.lines.join('\n'):'Noch kein Protokoll.';
+  renderSelection();
+ }catch(e){$('job-message').textContent='Statusfehler: '+e.message}
+}
+(async()=>{await load();await jobRefresh();setInterval(jobRefresh,2000)})();
 </script></body></html>
