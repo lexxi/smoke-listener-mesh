@@ -94,74 +94,82 @@ Neuinstallation zuerst kontrollieren, ob Arduino CLI dasselbe
 Arduino15-Datenverzeichnis wie die Arduino IDE verwendet
 (typisch `%LOCALAPPDATA%\Arduino15`).
 
-## Zentrale Build-Matrix
+## Zentrale Build-Matrix und Variantenkennungen
 
-`tools/ota/build-release-matrix.ps1` automatisiert das wiederholte
-Kompilieren, den BIN-Export und das Signieren. Es ändert **keine**
-`#define`-Werte in `feature_config.h`, sondern übergibt pro Build
-explizite Makros an Arduino-CLI (`compiler.cpp.extra_flags`).
-Jede Variante hat ein eigenes Build-Verzeichnis und eine eigene BIN.
-Verbotene Kombinationen (Batterie/Buzzer vor Implementierung)
-werden nicht erzeugt.
+Der vollständige Build läuft mit `tools/ota/build-release-matrix.ps1`.
+**Standardmäßig werden alle acht** Kombinationen aus Audio,
+Gateway und Konfigurations-AP erzeugt, jeweils aus einer
+unveränderten lokalen Codebasis und mit eigenem Compiler-Verzeichnis.
 
-Voraussetzungen:
-- Arduino-CLI installiert (`arduino-cli` im `PATH`).
-- ESP32 Arduino-Core und dasselbe XIAO_ESP32C3-Boardprofil wie bisher.
-- `mesh_secrets.h` und `ota_public_key.h` lokal im Firmwareverzeichnis.
-- Python-Venv `myenv` mit `cryptography` und private/öffentliche OTA-Schlüssel
-  unter `C:\mesh-ota-keys\` (nur für Signierung).
-- Lokal geprüfte `web/data/node_roles.json` mit den explizit erlaubten
-  Knotenrollen. Ohne sie baut `-BuildOnly`, signiert aber nichts.
+| Anzeige | Profil | Gateway | Audio | AP | Interne OTA-Version |
+| --- | --- | ---: | ---: | ---: | --- |
+| `0.6.15a` | CORE | 0 | 0 | 0 | `0.6.150` |
+| `0.6.15b` | AUDIO | 0 | 1 | 0 | `0.6.151` |
+| `0.6.15c` | GATEWAY | 1 | 0 | 0 | `0.6.152` |
+| `0.6.15d` | HYBRID | 1 | 1 | 0 | `0.6.153` |
+| `0.6.15e` | CORE+AP | 0 | 0 | 1 | `0.6.154` |
+| `0.6.15f` | AUDIO+AP | 0 | 1 | 1 | `0.6.155` |
+| `0.6.15g` | GATEWAY+AP | 1 | 0 | 1 | `0.6.156` |
+| `0.6.15h` | HYBRID+AP | 1 | 1 | 1 | `0.6.157` |
+
+**Warum zwei Versionsangaben?** Der vorhandene ESP32-Firmwareverifier
+und die Remote-OTA-Software verlangen numerische `X.Y.Z`-Versionen.
+Der Buchstabe ist daher eine **zusätzlich signierte, menschenlesbare
+Variantenkennung**. Der ESP32 meldet über das bisherige Protokoll die
+numerische Version. Spätere Releases folgen demselben Schema,
+z. B. `0.6.16a` mit `0.6.160`. Der verwendete dritte
+Versionsbestandteil muss für die ESP-NOW-Status-Telemetrie <=255 sein;
+das Schema ist daher bei einem künftigen Versionssprung zu prüfen.
+
+Der signierte Feature-Satz und das signierte Label werden durch die
+Server-Signaturprüfung an die exakten BIN-Bytes, Ziel-ID und numerische
+Version gebunden. **Gleiche numerische OTA-Version für unterschiedliche
+BINs ist ausgeschlossen.** Ein Wechsel von `0.6.15h` zurück zu
+`0.6.15a` wird vom Downgrade-Schutz blockiert. Ein neueres Release
+(z. B. `0.6.16a`) kann den Wechsel wieder ermöglichen.
+
+### Ausführen
 
 ```powershell
 git pull --ff-only
-.\tools\ota\prepare-firmware.ps1 -Version 0.6.15 -From 0.6.14
 
-# Erst nur die vier Standardvarianten kompilieren:
+# Zuerst alle 8 Varianten bauen (ohne Signatur / OTA):
 .\tools\ota\build-release-matrix.ps1 -BuildOnly
 
-# Mit lokaler Rollenfreigabe vier Standardvarianten bauen und signieren:
+# Danach für alle ausdrücklich registrierten Knoten signieren:
+Copy-Item .\web\node_targets.json.example .\web\data\node_targets.json
+# Liste web/data/node_targets.json vor Verwendung überprüfen!
 .\tools\ota\build-release-matrix.ps1
-
-# Alle 8 Kombinationen aus Gateway/Audio/AP, zunächst ohne Signaturen:
-.\tools\ota\build-release-matrix.ps1 -AllCombinations -BuildOnly
 ```
 
-Standard: CORE, AUDIO, GATEWAY, HYBRID (je ohne AP).
-`-AllCombinations` ergänzt dieselben vier Varianten mit AP.
-Die vier Rollen entsprechen `mesh`, `listener`, `gateway`,
-`hybrid` in der lokal verwalteten Knoten-Rollenliste.
-Das Skript signiert jede BIN **nur für die freigegebenen Ziel-IDs der
-passenden Rolle** und verifiziert anschließend jede Signatur.
+Arduino-CLI, Board-Core `esp32:esp32`, private Firmware-Header sowie
+`myenv` mit `cryptography` müssen vorhanden sein. Zum Signieren
+kommen privater und öffentlicher Schlüssel hinzu.
 
-Artefakte unter
-`firmware/mesh-v0.6.15/build/release-matrix/<profil>/`:
+Ein Build erzeugt Unterordner je Kennung unter
+`firmware/mesh-v0.6.15/build/release-matrix-8/`.
+Bei erneutem Lauf nicht überschreiben: mit `-OutputRoot` einen
+**neuen** Ausgabepfad angeben. Pro Variante werden BIN, SHA-256,
+optional ein signiertes ZIP sowie ein gemeinsamer
+`build-report.json` erzeugt.
 
-- `export/mesh-v0.6.15.ino.bin` – kompilierte Firmware
-- `package/firmware.bin` + signierte Knoten-Manifeste, falls Zielrolle freigegeben
-- `smoke-mesh-v0.6.15-<profil>-ota.zip` – OTA-Paket je Variante und Rolle
-- `build-report.json` im Root: Features, Build-Flags, SHA-256, Größe,
-  erlaubte Ziele und Ausgabepfade
+`web/data/node_targets.json` enthält ausschließlich eine Liste
+freigegebener ESP32-C3-Knoten-IDs. **Jeder** registrierte Knoten
+kann jedes der acht Firmware-Images bekommen; es gibt keine
+fest verdrahtete AUDIO-/GATEWAY-Rolle mehr. Das Signierskript
+generiert für jede Variante die passenden knotenspezifischen
+Manifeste und prüft jede Signatur vor dem ZIP-Export.
 
-**Keine automatischen Uploads oder OTA-Updates.** Das Build-Skript
-bricht ab, wenn das Ausgabe-Verzeichnis bereits existiert, damit keine
-älteren Releases unbemerkt überschrieben werden. Für weitere Läufe
-einen **neuen** Pfad mit `-OutputRoot` angeben. Die ZIPs und BINs
-bleiben unter den bestehenden `.gitignore`-Buildverzeichnissen.
+Die Ausgabe von `-BuildOnly` enthält bei `Targets` bewusst 0,
+weil nicht signiert wird. Die Build-Matrix sendet keine Daten per
+Funk und flasht keine Geräte.
 
-**Einschränkung:** Der Signer sieht die angegebenen Compiler-Flags,
-nicht nachträglich den tatsächlichen Funktionsumfang im Binärcode.
-Es gibt noch keine kryptografische Rückmeldung der laufenden Features
-vom Knoten. Die alte Arduino-IDE-Funktion `Export compiled Binary`
-wird durch den separaten Arduino-CLI-Build ersetzt; Board-FQBN und
-Arduino-Core-Version müssen für vergleichbare Builds gleich bleiben.
-
-**OTA-Versionierung:** Zwei unterschiedliche Firmware-BINs mit
-identischer Version lassen sich nicht regulär nacheinander OTA
-installieren, weil das Downgrade-Schutzprotokoll gleiche Versionen
-ablehnt. Die Build-Matrix produziert Varianten **für verschiedene
-Zielknotenrollen**, nicht zum Hin-und-Herwechseln derselben Version
-auf einem Gerät.
+**Hardwaregrenze:** Kompilierbar bedeutet nicht, dass jede Funktion
+auf jedem ESP tatsächlich verwendet werden kann. AUDIO benötigt
+einen angeschlossenen INMP441, Batterie/Buzzer sind noch
+nicht implementiert. Ein USB-Gateway muss physisch am
+Server angeschlossen sein. OTA, Audio-Task und AP sind noch
+nicht gemeinsam auf Hardware validiert.
 
 ## Signierte Feature-Metadaten für neue Releases
 
