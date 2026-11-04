@@ -85,7 +85,7 @@ async function load(){
   let o=document.createElement('option');o.value='';o.textContent='Release auswählen';$('release').append(o);
   for(const item of releases){
    o=document.createElement('option');o.value=item.id;
-   o.textContent='v'+item.version+' · '+nodeName(item.target)+' · '+item.target;
+   o.textContent='v'+item.version+' · '+(item.features===null?'Features unbekannt':(item.features.length?item.features.join('+').toUpperCase():'CORE'))+' · '+nodeName(item.target)+' · '+item.target;
    $('release').append(o);
   }
   if(releases.some(r=>r.id===previous))$('release').value=previous;
@@ -110,6 +110,7 @@ function renderSelection(){
                  (gateway==='COM12'&&x?.target==='000094457F6E27AC');
  $('release-info').textContent=x?('Ziel: '+nodeName(x.target)+' · '+x.target+
    '\nFirmware: v'+x.version+' · '+x.bytes.toLocaleString('de-DE')+' Bytes'+
+   '\nFeatures: '+(x.features===null?'unbekannt (älteres Release)':(x.features.length?x.features.join(', '):'CORE'))+
    '\nSHA-256: '+x.sha256+'\nSignatur: geprüft'+
    (forbidden?'\nACHTUNG: Gateway und Ziel dürfen nicht identisch sein.':'')):
    'Release auswählen oder neues Release hochladen.';
