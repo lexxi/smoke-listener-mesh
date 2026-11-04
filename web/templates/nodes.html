@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smoke Mesh · Knotenverwaltung</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,"Segoe UI",sans-serif;background:#0b1320;color:#e5edf7}
+*{box-sizing:border-box}body{max-width:1100px;margin:0 auto;padding:24px 18px}
+header,.row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+header{margin-bottom:20px}h1{margin:0}a{color:#9dccff;text-decoration:none}
+.card{background:#162338;border:1px solid #33465d;border-radius:12px;padding:20px;margin-bottom:15px}
+.muted,small{color:#a4b8d0}label{display:block;color:#c5d4e8}
+select,input{font:inherit;border:1px solid #456181;border-radius:8px;background:#0d1c30;color:#e6edf7;padding:10px;width:100%;margin-top:6px}
+button{font:inherit;color:#f5f9ff;background:#345d8b;border:1px solid #597eae;border-radius:8px;padding:10px 14px;cursor:pointer}
+button:disabled{opacity:.38;cursor:not-allowed}.danger{background:#754a3a;border-color:#aa755b}
+.notice{background:#29281f;border-left:3px solid #bf8c37;color:#f5d598;padding:12px;margin:12px 0}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto;background:#081321;padding:14px;border-radius:8px;font-size:12px}
+table{border-collapse:collapse;width:100%}th,td{padding:9px;border-bottom:1px solid #33465d;text-align:left}
+tr.pick{cursor:pointer}tr.pick:hover{background:#20324b}tr.selected{background:#243a57}
+@media(max-width:640px){body{padding:10px}.card{padding:12px}table{font-size:12px}}
+</style></head><body>
+<header><div><h1>Knotenverwaltung</h1><div class="muted">Smoke Listener Mesh · Discover · Name · Neustart</div></div>
+<div class="row"><a href="/">← Monitor</a><a href="/ota">Firmwareupdates</a></div></header>
+<div class="notice">Remote-Benennung und eigenständiger Neustart erfordern <b>v0.6.13 auf Gateway und Ziel</b>. Discover zeigt bereits empfangene Mesh-Knoten; es ist keine aktive Funk-Suche. Namen bleiben über Neustarts im NVS gespeichert. Alarmfunktionen laufen unabhängig von dieser Seite.</div>
+<section class="card">
+<div class="row"><h2>1 · Discover</h2><button id="discover">Discover / Aktualisieren</button></div>
+<p class="muted">Erkannte Knoten aus den empfangenen Mesh-Meldungen. Funkstatus kann danach gezielt abgefragt werden.</p>
+<table><thead><tr><th>Name</th><th>Node-ID</th><th>Firmware</th><th>Online</th></tr></thead><tbody id="nodes"><tr><td colspan="4">Knoten werden geladen …</td></tr></tbody></table>
+<p id="discovery" class="muted"></p>
+</section>
+<section class="card">
+<h2>2 · Ausgewählten Knoten verwalten</h2>
+<div class="row"><label style="flex:1;min-width:200px">USB-Gateway<select id="gateway"></select></label>
+<label style="flex:2;min-width:240px">Zielknoten<select id="target"></select></label></div>
+<p id="selected-info" class="muted"></p>
+<div class="row" style="margin:12px 0"><button id="status">Funkstatus</button><button id="get">NAME GET</button></div>
+<div class="row"><label style="flex:2;min-width:230px">Neuer Name (1–19 Zeichen, A–Z, a–z, 0–9, - oder _)
+<input id="name" maxlength="19" placeholder="z. B. Werkstatt" autocomplete="off"></label>
+<button id="set">NAME SET</button><button id="reset" class="danger">NAME RESET</button>
+<button id="restart" class="danger">Neustart</button></div>
+<small>Neustart ist ein eigener Befehl, unabhängig von OTA-Aktivierung. Nicht während eines Firmwareupdates ausführen.</small>
+</section>
+<section class="card"><div class="row"><h2>3 · Ergebnis</h2><strong id="state">Bereit</strong></div>
+<p id="message" class="muted"></p><pre id="log">Noch keine Ausgabe.</pre></section>
+<script>
+const $=id=>document.getElementById(id);
+let nodes=[],gateways=[],csrf='',running=false,lastId=null;
+function nodeId(mac){
+ const parts=(mac||'').toUpperCase().split(':');
+ return parts.length===6&&parts.every(x=>/^[0-9A-F]{2}$/.test(x))?
+    parts.reverse().join('').padStart(16,'0'):null;
+}
+function versionAtLeast(v){
+ const a=String(v||'').match(/^(\d+)\.(\d+)\.(\d+)$/);
+ return !!a && (+a[1]>0 || +a[2]>6 || (+a[2]===6 && +a[3]>=13));
+}
+async function discover(){
+ $('discovery').textContent='Lese bekannte Mesh-Knoten …';
+ try{
+  const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);
+  const data=await r.json();nodes=(data.nodes||[]).filter(n=>nodeId(n.mac));
+  const previous=$('target').value;
+  $('target').replaceChildren();
+  $('nodes').replaceChildren();
+  for(const n of nodes){
+   const id=nodeId(n.mac),o=document.createElement('option');o.value=id;
+   o.textContent=(n.name||n.mac)+' · '+id;
+   $('target').append(o);
+   const tr=document.createElement('tr');tr.className='pick';
+   for(const v of [n.name||n.mac,id,n.firmware||'unbekannt',n.status||'–']){
+    const td=document.createElement('td');td.textContent=v;tr.append(td);
+   }
+   tr.addEventListener('click',()=>{$('target').value=id;selection()});
+   $('nodes').append(tr);
+  }
+  if(nodes.some(n=>nodeId(n.mac)===previous))$('target').value=previous;
+  $('discovery').textContent=nodes.length+' Knoten gefunden · Stand '+new Date().toLocaleTimeString('de-AT');
+  selection();
+ }catch(e){$('discovery').textContent='Discover fehlgeschlagen: '+e.message}
+}
+function selection(){
+ const t=$('target').value,g=$('gateway').value;
+ const n=nodes.find(n=>nodeId(n.mac)===t);
+ const forbidden=gateways.find(x=>x.port===g)?.node===t;
+ $('selected-info').textContent=n?('Firmware: '+(n.firmware||'unbekannt')+' · Status: '+(n.status||'–')+
+ (forbidden?' · Gateway darf nicht Ziel sein':'')+
+ (!versionAtLeast(n.firmware)?' · Remote-Namensverwaltung erst ab v0.6.13':'')):'Kein Ziel gewählt.';
+ for(const id of ['status','get','set','reset','restart'])
+   $(id).disabled=running||!n||!g||forbidden||(id!=='status'&&!versionAtLeast(n.firmware));
+ for(const tr of $('nodes').children)tr.classList.toggle('selected',tr.children[1]?.textContent===t);
+}
+async function load(){
+ const r=await fetch('/api/remote/config',{cache:'no-store'});if(!r.ok)throw Error('Gateway-Konfiguration fehlt');
+ const j=await r.json();csrf=j.csrf;gateways=j.gateways;
+ for(const gw of gateways){const o=document.createElement('option');o.value=gw.port;o.textContent=gw.name+' · '+gw.port;$('gateway').append(o)}
+ if(gateways.some(x=>x.port==='COM14'))$('gateway').value='COM14';
+ await discover();await jobRefresh();
+}
+async function action(a){
+ const t=$('target').value,g=$('gateway').value,n=$('name').value.trim();
+ if(running||!t||!g)return;
+ if(a==='NAME_SET'&&!/^[A-Za-z0-9_-]{1,19}$/.test(n)){alert('Ungültiger Name (1–19 Zeichen A-Z a-z 0-9 - _)');return}
+ if((a==='NAME_SET'||a==='NAME_RESET'||a==='RESTART')&&
+    !confirm('Ziel: '+t+'\nBefehl: '+a+(a==='NAME_SET'?' '+n:'')+'\nWirklich ausführen?'))return;
+ running=true;selection();
+ try{
+  const r=await fetch('/api/remote/node-action',{method:'POST',headers:{'Content-Type':'application/json','X-Remote-CSRF':csrf},
+   body:JSON.stringify({target:t,gateway:g,action:a,name:a==='NAME_SET'?n:''})});
+  const j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);
+  lastId=j.job_id;await jobRefresh();
+ }catch(e){running=false;$('message').textContent='Fehler: '+e.message;selection()}
+}
+async function jobRefresh(){
+ try{
+  const r=await fetch('/api/remote/job',{cache:'no-store'});const j=await r.json();
+  running=j.state==='running';
+  $('state').textContent=j.state;$('message').textContent=j.message||'';
+  $('log').textContent=j.lines?.length?j.lines.join('\n'):'Noch kein Protokoll.';
+  selection();
+ }catch(e){$('message').textContent=e.message}
+}
+$('discover').onclick=discover;$('gateway').onchange=selection;$('target').onchange=selection;
+for(const [id,a] of [['status','STATUS'],['get','NAME_GET'],['set','NAME_SET'],['reset','NAME_RESET'],['restart','RESTART']])
+ $(id).onclick=()=>action(a);
+load().catch(e=>$('message').textContent=e.message);setInterval(jobRefresh,2000);
+</script></body></html>
