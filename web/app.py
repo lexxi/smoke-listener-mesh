@@ -44,18 +44,26 @@ def database():
         ttl INTEGER NOT NULL,
         rssi INTEGER,
         packet_type TEXT NOT NULL,
+        firmware TEXT,
         source_file TEXT NOT NULL,
         source_offset INTEGER NOT NULL,
         UNIQUE(source_file, source_offset)
     )""")
+    columns = {r[1] for r in conn.execute("PRAGMA table_info(receptions)")}
+    if "firmware" not in columns:
+        conn.execute("ALTER TABLE receptions ADD COLUMN firmware TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_origin_time ON receptions(origin, received_at DESC)")
     conn.execute("""CREATE TABLE IF NOT EXISTS transmissions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sent_at TEXT NOT NULL, origin TEXT NOT NULL,
         boot TEXT NOT NULL, seq INTEGER NOT NULL,
         source_file TEXT NOT NULL, source_offset INTEGER NOT NULL,
+        firmware TEXT,
         UNIQUE(source_file, source_offset)
     )""")
+    txcols = {r[1] for r in conn.execute("PRAGMA table_info(transmissions)")}
+    if "firmware" not in txcols:
+        conn.execute("ALTER TABLE transmissions ADD COLUMN firmware TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_time ON transmissions(sent_at DESC)")
     return conn
 
@@ -95,7 +103,8 @@ def parse_line(line):
         return (timestamp.isoformat(), values["origin"].upper(), values.get("name", ""),
                 values["via"].upper(), values["boot"].upper(), int(values["seq"]),
                 int(values["hops"]), int(values["ttl"]),
-                int(values["rssi"]) if "rssi" in values else None, values["type"])
+                int(values["rssi"]) if "rssi" in values else None, values["type"],
+                values.get("fw") if re.fullmatch(r"\d{1,3}\.\d{1,3}\.\d{1,3}", values.get("fw", "")) else None)
     except (ValueError, OverflowError):
         return None
 
@@ -110,7 +119,8 @@ def parse_tx(line):
     try:
         timestamp = dt.datetime.strptime(stamp.group(1), "%Y-%m-%d %H:%M:%S")
         return (timestamp.isoformat(), values["origin"].upper(),
-                values["boot"].upper(), int(values["seq"]))
+                values["boot"].upper(), int(values["seq"]),
+                values.get("fw") if re.fullmatch(r"\d{1,3}\.\d{1,3}\.\d{1,3}", values.get("fw", "")) else None)
     except (ValueError, OverflowError):
         return None
 
@@ -152,16 +162,16 @@ def ingest():
                         if parsed:
                             cursor = conn.execute(
                                 """INSERT OR IGNORE INTO receptions
-                                (received_at,origin,name,via,boot,seq,hops,ttl,rssi,packet_type,source_file,source_offset)
-                                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""", parsed + (key, start))
+                                (received_at,origin,name,via,boot,seq,hops,ttl,rssi,packet_type,firmware,source_file,source_offset)
+                                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""", parsed + (key, start))
                             count += cursor.rowcount
                         else:
                             sent = parse_tx(line.decode("utf-8", errors="replace"))
                             if sent:
                                 conn.execute(
                                     """INSERT OR IGNORE INTO transmissions
-                                    (sent_at,origin,boot,seq,source_file,source_offset)
-                                    VALUES (?,?,?,?,?,?)""", sent + (key, start))
+                                    (sent_at,origin,boot,seq,firmware,source_file,source_offset)
+                                    VALUES (?,?,?,?,?,?,?)""", sent + (key, start))
                     offsets[key] = ((stat.st_dev, stat.st_ino), f.tell())
         return count
 
@@ -185,7 +195,7 @@ def snapshot(selected_file=None):
     nodes = {mac: {**entry, "name": entry["configured_name"] or entry["location"] or mac,
                    "last_seen": None, "age_seconds": None, "status": "unknown",
                    "packets": 0, "direct": 0, "relayed": 0, "rssi": None,
-                   "hops": None, "via": None, "last_type": None}
+                   "hops": None, "via": None, "last_type": None, "firmware": None}
              for mac, entry in settings.items()}
     with database() as conn:
         if chosen is None:
@@ -235,7 +245,8 @@ def snapshot(selected_file=None):
                     status="online" if age <= 45 else "stale" if age <= 120 else "offline",
                     packets=counters["packets"], direct=counters["direct"] or 0,
                     relayed=counters["relayed"] or 0, rssi=last["rssi"],
-                    hops=last["hops"], via=last["via"], last_type=last["packet_type"])
+                    hops=last["hops"], via=last["via"], last_type=last["packet_type"],
+                    firmware=last["firmware"])
     logger_mac = None
     if active_logger:
         logger_mac = mac_from_origin(active_logger["origin"])
@@ -252,6 +263,7 @@ def snapshot(selected_file=None):
                 role="logger", last_seen=sent_at, age_seconds=age,
                 status="online" if age <= 45 else "stale" if age <= 120 else "offline",
                 tx_packets=logger_tx, last_type="TX",
+                firmware=active_logger["firmware"],
                 hops=None, via=None, rssi=None,
             )
     for node in nodes.values():
