@@ -22,7 +22,7 @@ ACTIONS = {"STATUS", "ARM", "VERIFY", "ACTIVATE", "REBOOT", "CONFIRM",
            "NAME_GET", "NAME_SET", "NAME_RESET", "RESTART"}
 NAME = re.compile(r"[A-Za-z0-9_-]{1,19}\Z")
 REPLY = re.compile(
-    r"\[MGMT\] REPLY origin=([0-9A-F]{16}) action=([A-Z]+) result=(\d+)"
+    r"\[MGMT\] REPLY origin=([0-9A-F]{16}) action=([A-Z_]+) result=(\d+)"
     r" nonce=([0-9A-F]{16}) running=app(\d+) boot=app(\d+)"
     r" state=(\d+) staged=(\d+) verified=(\d+) peer=(\d+)"
     r" version=(\d+\.\d+\.\d+)(?: name=([A-Za-z0-9_-]{1,19}|\(unset\)))?"
