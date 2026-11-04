@@ -46,6 +46,7 @@ progress{width:86%;height:18px}
 <div class="row">
 <button id="check" class="secondary" disabled>Funkstatus prüfen</button>
 <button id="stage" class="secondary" disabled>Nur übertragen & prüfen</button>
+<button id="activate-staged" class="danger" disabled>Geprüftes Image aktivieren & neu starten</button>
 <button id="deploy" class="danger" disabled>Vollständiges OTA-Update</button>
 </div>
 <small>Vollständig: Signatur → Übertragen → Flash-Readback → Aktivierung → Neustart → Mesh-Prüfung → Bootbestätigung. Bei ausbleibender Bestätigung soll der ESP32-Bootloader nach erneutem Neustart zurückrollen. Kein Ersatz für eine Alarmfunktionsprüfung.</small>
@@ -100,7 +101,7 @@ function renderSelection(){
    '\nSHA-256: '+x.sha256+'\nSignatur: geprüft'+
    (forbidden?'\nACHTUNG: Gateway und Ziel dürfen nicht identisch sein.':'')):
    'Release auswählen oder neues Release hochladen.';
- for(const id of ['check','stage','deploy'])$(id).disabled=!x||!gateway||forbidden||running;
+ for(const id of ['check','stage','activate-staged','deploy'])$(id).disabled=!x||!gateway||forbidden||running;
 }
 $('release').addEventListener('change',renderSelection);
 $('gateway').addEventListener('change',renderSelection);
@@ -140,6 +141,7 @@ async function start(mode){
  let question='Ziel: '+nodeName(item.target)+'\nRelease: v'+item.version+'\nGateway: '+gateway+'\n';
  if(mode==='status')question+='Nur Statusabfrage; kein Flashen.';
  if(mode==='stage')question+='Firmware in den inaktiven Slot übertragen und verifizieren. Kein Bootwechsel.';
+ if(mode==='activate_staged')question+='ACHTUNG: Bereits im Flash geprüftes Image erneut gegen signiertes Manifest verifizieren, Bootpartition UMSCHALTEN, Ziel NEUSTARTEN und nach Mesh-Prüfung bestätigen. Kein erneuter Firmwaretransfer. Nur für denselben vorher übertragenen Release!';
  if(mode==='deploy')question+='ACHTUNG: Firmware übertragen, Boot aktivieren, Gerät NEUSTARTEN und nach Mesh-Prüfung bestätigen. Experimentell! Ein Ausfall kann einen manuellen Rettungsflash erfordern.';
  if(!confirm(question))return;
  running=true;renderSelection();
@@ -152,6 +154,7 @@ async function start(mode){
 $('check').addEventListener('click',()=>start('status'));
 $('stage').addEventListener('click',()=>start('stage'));
 $('deploy').addEventListener('click',()=>start('deploy'));
+$('activate-staged').addEventListener('click',()=>start('activate_staged'));
 async function getFullLog(){
  const response=await fetch('/api/remote/log',{cache:'no-store'});
  if(!response.ok){
