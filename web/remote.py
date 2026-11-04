@@ -30,7 +30,7 @@ process = None
 job = {
     "id": None, "state": "idle", "mode": None, "started": None, "ended": None,
     "release_id": None, "target": None, "gateway": None,
-    "progress": 0, "lines": [], "message": "Noch kein Remote-OTA-Lauf.",
+    "progress": 0, "lines": [], "log_file": None, "message": "Noch kein Remote-OTA-Lauf.",
 }
 MAX_LINES = 450
 
@@ -57,7 +57,13 @@ def _verify_release(release_id):
 
 def _log(line):
     with lock:
-        job["lines"].append(line.rstrip()[:900])
+        shortened = line.rstrip()[:900]
+        job["lines"].append(shortened)
+        if job.get("log_file"):
+            destination = ROOT / job["log_file"]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with destination.open("a", encoding="utf-8") as out:
+                out.write(shortened + "\n")
         if len(job["lines"]) > MAX_LINES:
             del job["lines"][:-MAX_LINES]
         m = re.search(r"\[IMAGE\] NEXT index=(\d+)/(\d+)", line)
@@ -169,6 +175,7 @@ def start():
             "started": __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds"),
             "ended": None, "release_id": release_id, "target": plan["target"],
             "gateway": port, "progress": 0, "lines": [],
+            "log_file": "web/data/ota_jobs/" + secrets.token_hex(8) + ".log",
             "message": "Remote-" + mode + " läuft über Gateway " + port,
         })
     threading.Thread(target=_run, args=(release_id, port, mode), daemon=True).start()
