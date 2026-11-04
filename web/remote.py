@@ -279,6 +279,7 @@ def node_action():
 def _run_node_action(target, port, action, name):
     global process
     paused = False
+    reserved = False
     try:
         if port == LOGGER_PORT:
             paused = pause_for_remote_ota()
