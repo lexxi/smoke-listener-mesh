@@ -117,7 +117,7 @@ def sign(args: argparse.Namespace) -> None:
     signature = key.sign(canonical_bytes(data), ec.ECDSA(hashes.SHA256()))
     manifest = {"signed": data, "signature_der_hex": signature.hex()}
     if getattr(args, "features", None) is not None:
-        names = args.features.split(",") if args.features else []
+        names = args.features.split(",") if args.features and args.features != "none" else []
         claim = feature_claim(names, digest, target, args.version, getattr(args, "label", None))
         manifest["feature_claim"] = claim
         manifest["feature_signature_der_hex"] = key.sign(
