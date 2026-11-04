@@ -43,7 +43,8 @@ def mgmt(port_name: str, target: str, action: str = "STATUS",
     if action != "STATUS":
         command += " " + nonce
     print(f"[REMOTE] {action} target={target} gateway={port_name}", flush=True)
-    with serial.Serial(port=None, baudrate=115200, timeout=0.35, write_timeout=5) as ser:
+    ser = serial.Serial(port=None, baudrate=115200, timeout=0.35, write_timeout=5)
+    try:
         ser.dtr = False
         ser.rts = False
         ser.port = port_name
@@ -74,6 +75,9 @@ def mgmt(port_name: str, target: str, action: str = "STATUS",
                 return status
             if line.startswith("[MGMT] ERROR") or line.startswith("[MGMT] TIMEOUT"):
                 raise RuntimeError(f"Gateway: {line}")
+    finally:
+        if ser.is_open:
+            ser.close()
     raise RuntimeError(f"{action}: no authenticated reply from target; do NOT assume that command failed or succeeded")
 
 
