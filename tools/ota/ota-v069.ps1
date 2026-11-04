@@ -2,6 +2,7 @@ param(
     [string]$Gateway = "COM12",
     [string]$TargetPort = "COM15",
     [switch]$Activate,
+    [switch]$ActivateOnly,
     [switch]$DryRun
 )
 $ErrorActionPreference = "Stop"
@@ -20,7 +21,8 @@ try {
         "--from-version", "0.6.7", "--to-version", "0.6.9",
         "--image", $image, "--manifest", $manifest, "--public-key", $publicKey)
     if ($DryRun) { $argList += "--dry-run" }
-    if ($Activate) { $argList += "--activate" }
+    if ($Activate -or $ActivateOnly) { $argList += "--activate" }
+    if ($ActivateOnly) { $argList += "--activate-only" }
     & $python @argList
     if ($LASTEXITCODE -ne 0) {
         throw "v0.6.9 OTA stopped/failed; inspect log before reset."
