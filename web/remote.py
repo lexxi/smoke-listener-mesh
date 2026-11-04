@@ -52,6 +52,10 @@ def _verify_release(release_id):
     plan = _verify(image, manifest)
     if _identity(plan) != release_id:
         raise ValueError("Signiertes Release entspricht nicht der Release-ID")
+    # Legacy signed firmware is still accepted. New feature-capable builds
+    # must carry an additional publisher-signed claim, never a guessed role.
+    if tuple(map(int, plan["version"].split("."))) >= (0, 6, 15) and plan.get("features") is None:
+        raise ValueError("v0.6.15+ benötigt signierte Feature-Metadaten für Remote-OTA")
     return image, manifest, plan
 
 
