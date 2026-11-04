@@ -58,6 +58,11 @@ Neue Manifeste können zusätzlich `feature_claim` und
 Firmware-SHA-256 gebunden. Das Firmware-Image wird weiterhin vollständig
 über seinen signierten SHA-256 geprüft.
 
+Die Remote-OTA-Webschnittstelle verweigert für **v0.6.15 und neuer**
+ein Release ohne separat signierte Feature-Angaben; ältere Versionen
+bleiben kompatibel. Ein Signatur- oder Metadatenfehler führt ebenfalls
+zum Abbruch **vor** dem Flashen.
+
 Die **Server-Seite** verifiziert beide Signaturen und zeigt die Features in
 der Firmware-Auswahl sowie in den Releasedetails an. Ältere Releases ohne
 diesen Zusatz erscheinen als `Features unbekannt`, nicht als CORE.
