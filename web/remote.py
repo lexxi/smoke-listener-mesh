@@ -222,6 +222,87 @@ def start():
     return jsonify({"accepted": True, "job_id": job["id"]}), 202
 
 
+@bp.post("/api/remote/node-action")
+def node_action():
+    _local()
+    if request.headers.get("X-Remote-CSRF") != csrf:
+        return jsonify({"error": "CSRF-Prüfung fehlgeschlagen"}), 403
+    data = request.get_json(silent=True) or {}
+    target, port, action, name = (data.get("target"), data.get("gateway"),
+                                  data.get("action"), data.get("name", ""))
+    if not isinstance(target, str) or not re.fullmatch(r"[0-9A-F]{16}", target):
+        return jsonify({"error": "Ungültige Knoten-ID"}), 400
+    if port not in TRUSTED_GATEWAYS or target == TRUSTED_GATEWAYS[port][1]:
+        return jsonify({"error": "Ungültiges Gateway oder Gateway=Ziel"}), 400
+    if action not in ("STATUS", "NAME_GET", "NAME_SET", "NAME_RESET", "RESTART"):
+        return jsonify({"error": "Unzulässiger Managementbefehl"}), 400
+    if action == "NAME_SET":
+        if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,19}", name):
+            return jsonify({"error": "Name: 1–19 Zeichen A-Z a-z 0-9 - _"}), 400
+    elif name:
+        return jsonify({"error": "Unzulässiger Namensparameter"}), 400
+    with lock:
+        if job["state"] == "running":
+            return jsonify({"error": "Ein OTA- oder Managementvorgang läuft bereits"}), 409
+        job.update({
+            "id": secrets.token_hex(8), "state": "running", "mode": "node_" + action,
+            "started": __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds"),
+            "ended": None, "release_id": None, "target": target,
+            "gateway": port, "progress": 0, "lines": [], "log_line_count": 0,
+            "log_file": "web/data/ota_jobs/" + secrets.token_hex(8) + ".log",
+            "message": "Knotenverwaltung: " + action + " über " + port,
+        })
+    threading.Thread(target=_run_node_action, args=(target, port, action, name), daemon=True).start()
+    return jsonify({"accepted": True, "job_id": job["id"]}), 202
+
+
+def _run_node_action(target, port, action, name):
+    global process
+    paused = False
+    try:
+        if port == "COM14":
+            paused = pause_for_remote_ota()
+            _log("[WEB] Garage-Logger für Knotenverwaltung pausiert.")
+            time.sleep(0.7)
+        args = [sys.executable, "-u", str(SCRIPT), "--gateway", port,
+                "--manage-target", target, "--manage-action", action]
+        if action == "NAME_SET":
+            args += ["--manage-name", name]
+        proc = subprocess.Popen(
+            args, cwd=ROOT, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            encoding="utf-8", errors="replace", text=True, bufsize=1,
+        )
+        with lock:
+            process = proc
+        assert proc.stdout is not None
+        with proc.stdout:
+            for line in proc.stdout:
+                _log(line)
+        code = proc.wait()
+        with lock:
+            job["state"] = "passed" if code == 0 else "failed"
+            job["message"] = ("Befehl abgeschlossen: " + action if code == 0 else
+                              "Befehl fehlgeschlagen; Protokoll prüfen.")
+            if code == 0:
+                job["progress"] = 100
+    except Exception as exc:
+        _log("[WEB] ERROR: " + str(exc))
+        with lock:
+            job["state"] = "failed"
+            job["message"] = "Knotenverwaltung fehlgeschlagen."
+    finally:
+        if port == "COM14":
+            try:
+                resume_after_remote_ota(paused)
+                _log("[WEB] Garage-Logger wieder freigegeben.")
+            except Exception as exc:
+                _log("[WEB] WARN: Logger-Neustart fehlgeschlagen: " + str(exc))
+        with lock:
+            process = None
+            job["ended"] = __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds")
+
+
 @atexit.register
 def shutdown():
     global process
