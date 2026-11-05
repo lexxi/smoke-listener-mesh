@@ -1,64 +1,184 @@
-# Webapp: Knotenregistrierung und Gateway-Start
+# Webapp: Knotenverwaltung, Gateway und Logger (Stand 05.11.2026)
 
-Diese Funktionen liegen im Branch `feature/web-node-registration` und müssen vor dem
-Merge auf Windows getestet werden.
+Diese Funktionen sind seit **PR #4** in `main` und wurden auf der
+Windows-Testinstallation praktisch geprüft. Die aktuellen Seiten:
 
-## Neu geflashten C3 registrieren
+- [Monitor](http://127.0.0.1:8088/) – Knotenstatus, USB-Logger und Empfangslogs
+- [Knotenverwaltung](http://127.0.0.1:8088/nodes) – Discover, Gerätebefehle, Stammdaten und Gateways
+- [Firmware / OTA](http://127.0.0.1:8088/ota) – signierte Releases und Remote-OTA
 
-1. Über `Knotenverwaltung / Discover` warten, bis der Knoten nach einem
-   authentifizierten Funkpaket erscheint.
-2. Knoten auswählen, Inventarname und Standort eingeben und bei Bedarf
-   `Für signierte OTA-Updates freigeben` wählen.
-3. `Knoten speichern` schreibt in die vorhandene `config/nodes.csv` und
-   die lokale `web/data/node_targets.json`. Die Freigabe ist keine Signatur.
-   Für einen neuen Empfänger muss ein neues signiertes Paket mit dessen
-   Manifest erstellt werden.
-4. `NAME SET` separat ausführen, damit der Gerätename im NVS gespeichert
-   wird. Firmware vor v0.6.16 akzeptiert den neuen dedizierten
-   COM16-Gateway eventuell noch nicht als Management-Sender.
+> **Sicherheit:** Entwicklungs- und Testsystem, keine zertifizierte Brandmelde-
+> oder Alarmierungsanlage. Funk-HEARTBEATs beweisen nicht die Funktion des
+> Rauchwarnmelders oder der akustischen Detektion.
 
-Maximal fünf OTA-Empfänger werden unterstützt. Der dedizierte USB-Gateway
-bleibt ein separates Gerät. Die eingetragenen Ports in `web/gateways.json`
-sind bislang eine Betreiberkonfiguration.
+## 1. Windows-Start
 
-## Standard-Gateway per Web wählen
+Im Repository-Stammverzeichnis und in der bestehenden Python-Umgebung:
 
-In `Knotenverwaltung` oder `Firmware / OTA` gewünschten Gateway auswählen und
-`Als Standard-Gateway speichern` anklicken. Ab dem nächsten Seitenaufruf
-wird diese Auswahl vorausgewählt. Die Präferenz liegt in
-`web/data/gateway_preferences.json` und erfordert keinen Neustart.
+```powershell
+git switch main
+git pull --ff-only
+python -m pip install -r .\web\requirements.txt
+python .\web\app.py
+```
 
-**Unterscheidung:** Das ändert nur den vorausgewählten Sender für
-Remote-Management und OTA. Der **physische USB-Logger** bleibt auf dem
-`logger_gateway` aus `web/gateways.json`.
+Standardadresse: `http://127.0.0.1:8088`. Der Webserver startet den
+konfigurierten **COM16-Logger automatisch**; keinen zweiten Logger oder
+Arduino Serial Monitor parallel an COM16 öffnen. Der manuelle Logger
+`python scripts/logging.py --port COM16` ist nur für unabhängige
+Diagnoseläufe gedacht, **wenn die Webapp den Port nicht nutzt**.
 
-Im Abschnitt **USB-Gateways verwalten** können weitere USB-Gateways per
-COM-Port, Name und Node-ID hinzugefügt und entfernt werden. Neue
-Einstellungen werden in `web/data/managed_gateways.json` gespeichert und
-**erst nach einem vollständigen Neustart der Webapp aktiv**. COM16 als
-dedizierter Logger ist vor dem Löschen geschützt. COM12 (Küche) und
-COM14 (Garage) sind standardmäßig nicht mehr als USB-Gateways eingetragen,
-bleiben aber Mesh-Knoten und OTA-Empfänger. Die Firmware-Vertrauensanker
-werden dadurch **nicht** geändert: Ein neuer USB-Gateway muss von den
-Ziel-Firmwares bereits für Management-Befehle zugelassen sein.
+Beim Start wird der Logger-Prozess mit eigener PID erzeugt. Die Oberfläche
+unterscheidet zusätzlich den **seriellen Verbindungszustand**:
 
-## Logger-Start
+| Anzeige | Bedeutung |
+| --- | --- |
+| **Verbunden** | Der Logger hat den COM-Port erfolgreich geöffnet |
+| **Verbindung wird aufgebaut** | Logger-Prozess läuft; die serielle Verbindung ist noch nicht bestätigt |
+| **Nicht verbunden** | Verbindung fehlgeschlagen oder unterbrochen; automatischer Wiederholungsversuch |
+| **Gestoppt** | Kein von der Webapp verwalteter Logger-Prozess |
+| **Für OTA reserviert** | COM16 ist vorübergehend für einen Remote-Management-/OTA-Vorgang reserviert |
 
-Ein Start über `python web/app.py` startet den konfigurierten USB-Logger
-einmalig. Während einer Remote-Aktion wird der Logger reserviert und
-nach Bedarf wieder gestartet. Auf dem Dashboard steht ein Warnhinweis,
-wenn kein Web-Logger läuft; dann sind Online/Offline-Anzeigen nicht aktuell.
+Eine **PID allein ist kein Verbindungsnachweis**. Der Logger versucht bei
+USB-Unterbrechung standardmäßig alle fünf Sekunden die Verbindung wieder
+aufzubauen. Beim Wiederanstecken des C3 ist normalerweise kein Webapp-
+Neustart nötig. „Verbunden“ beweist lediglich, dass der COM-Port geöffnet
+werden konnte, nicht, dass die Geräteidentität kryptografisch geprüft wurde.
 
-Wenn COM16 durch einen fremden seriellen Prozess belegt ist, darf die
-Webapp diesen Prozess nicht beenden. Ein Loggerfehler ist am angezeigten
-Status und im Diagnose-Log zu prüfen.
+Solange die serielle Verbindung fehlt, sind Online-/Überfällig-/Offline-
+Anzeigen nicht als **aktueller Mesh-Zustand** belastbar. Das Dashboard zeigt
+dafür eine Warnung; Empfangs- und historische Logs bleiben verfügbar.
 
-## Prüfschritte
+## 2. Knoten erkennen und registrieren
+
+1. In der Knotenverwaltung **Discover / Aktualisieren** anklicken.
+2. Den neuen Knoten anhand seiner **Node-ID** auswählen.
+3. Unter **Knoten registrieren** den **Inventarnamen** und **Standort**
+   eintragen und, falls gewünscht, **Für signierte OTA-Updates freigeben**.
+4. **Knoten speichern** anklicken. Danach Seite neu laden und gespeicherte
+   Werte prüfen.
+
+**Discover ist keine aktive Funksuche.** Es zeigt Knoten, die bereits in
+authentifizierten Mesh-Logs vorkommen. Ein frisch geflashter C3 muss zunächst
+empfangen werden.
+
+| Feld | Speicherort | Auswirkung |
+| --- | --- | --- |
+| Name im Inventar | `config/nodes.csv` | Bezeichnung im Dashboard |
+| Standort | `config/nodes.csv` | Standort-/Raumzuordnung; ohne Firmwareänderung editierbar |
+| OTA-Freigabe | `web/data/node_targets.json` | Aufnahme in die lokale Liste der signierbaren OTA-Empfänger |
+| Gerätename | NVS im ESP32-C3 | Separat per **NAME SET** setzen; über authentifizierte Meldungen übertragener Name |
+
+Die **Inventarbezeichnung ist nicht automatisch der Firmware-Gerätename**.
+Nach der Registrierung deshalb derzeit noch separat **NAME SET** ausführen,
+falls auch der Name im ESP32 geändert werden soll. **NAME GET**, **NAME
+RESET**, **Funkstatus** und **Neustart** sind eigene Remote-Befehle.
+Eine automatische Namensübernahme bei Registrierung ist noch offen.
+
+**Standort ändern:** Knoten (z. B. Küche) in Discover auswählen, nur
+`Standort` ändern, die bestehende OTA-Freigabe unverändert lassen und
+speichern. Das funktioniert auch bei Knoten, die früher zusätzlich als
+USB-Gateway eingetragen waren.
+
+Maximal **fünf OTA-Empfänger**, zusätzlich zum dedizierten Gateway.
+Die OTA-Liste ist eine **Freigabeliste**, kein Ersatz für
+signierte Manifeste. Nach Registrierung eines neuen Empfängers enthalten
+bereits signierte ZIP-Pakete **noch kein Manifest für diesen Knoten**;
+ein neues signiertes Bundle muss erstellt werden.
+
+`config/nodes.csv` gehört aktuell zum Repository: Änderungen über die
+Webapp können deshalb `git status` als geänderte Datei erscheinen lassen.
+`web/data/` ist dagegen von Git ausgeschlossen. Vor `git pull` lokale
+Änderungen prüfen und nicht blind verwerfen.
+
+## 3. USB-Gateways verwalten
+
+Aktuelle Standardkonfiguration:
+
+| Gateway | Node-ID | Verwendung |
+| --- | --- | --- |
+| **COM16 – Gateway** | `00000CEC7E6E27AC` | Dedizierter USB-Logger und Management-/OTA-Gateway |
+
+**COM12/Küche** und **COM14/Garage** sind standardmäßig **nicht mehr**
+als USB-Gateways konfiguriert. Küche und Garage bleiben aber normale
+Mesh-Knoten und OTA-Ziele; ihre Standortverwaltung wird nicht gesperrt.
+
+Unter **Knotenverwaltung → USB-Gateways verwalten** können zusätzliche
+USB-Gateways mit **COM-Port**, **Name** und **16-stelliger Node-ID** angelegt
+oder entfernt werden. Der dedizierte COM16-Logger ist vor dem Löschen
+geschützt. Die Webapp speichert diese Konfiguration in:
+
+```text
+web/data/managed_gateways.json
+```
+
+**Nach Änderungen muss die gesamte Webapp neu gestartet werden.**
+Die laufende Konfiguration wechselt nicht mitten in einem OTA-Job. Die
+Ausgangskonfiguration steht in `web/gateways.json`.
+
+Den **Standard-Gateway für Remote-Aktionen** unter **Knotenverwaltung**
+oder **Firmware / OTA** auswählen und **Als Standard-Gateway speichern**
+anklicken. Diese Auswahl wird separat in
+`web/data/gateway_preferences.json` abgelegt, ist ohne Neustart wirksam
+und ändert **nicht** den physischen USB-Logger-Port.
+
+**Wichtig:** Eine Webapp-Zuordnung autorisiert einen Gateway nicht in
+der Firmware anderer C3. Der Zielknoten muss dessen Management-Identität
+bereits als vertrauenswürdig akzeptieren. Für den dedizierten COM16-
+Gateway wurde dies mit Firmware `0.6.16.h` praktisch getestet. Ein
+älterer Knoten mit `0.6.15.h` kann deshalb trotz erfolgreichem Discover
+auf Remote-STATUS mit `TIMEOUT no_reply` reagieren; dann ist der
+Firmware-Vertrauensstand zu prüfen.
+
+## 4. Remote-Management und OTA
+
+Bei Remote-STATUS, NAME-Befehlen oder einem OTA-Vorgang über COM16 wird
+der von der Webapp verwaltete Logger pausiert und der Port für den Job
+reserviert. Anschließend wird der zuvor laufende Logger wieder gestartet.
+Die Webapp beendet dabei **keine fremden seriellen Programme**.
+
+Unter `/ota` werden signierte Releases lokal geprüft und in
+`web/data/releases/` abgelegt. Für `0.6.16` existieren
+Build-Profile `a` bis `h` (`core`, `audio`, `gateway`,
+`hybrid` jeweils mit/ohne Config-AP). Build- und Signiermatrix:
+
+```powershell
+.\tools\ota\build-release-matrix.ps1 -Version 0.6.16
+```
+
+Dazu werden Arduino CLI, lokale private Header und private
+Signierschlüssel benötigt. Das Skript flasht **keine** Hardware.
+Freigeschaltete OTA-Ziele stammen aus
+`web/data/node_targets.json`. Release-Bundles für neue Empfänger
+müssen neu signiert werden. Die eigentliche Alarmdetektion ist durch
+ein erfolgreiches OTA **nicht validiert**.
+
+## 5. Funktionstest nach Änderungen
 
 ```powershell
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-Nach dem Neustart der Webapp überprüfen: Logger-Autostart, Auswahl des
-Standard-Gateways, Persistenz nach Browserreload, node registration, OTA
-Freigabe und korrekte Pausierung des Loggers bei Remote-STATUS.
+Zusätzlich in der Windows-Webapp prüfen:
+
+1. COM16 angesteckt: **Verbunden**, neue authentifizierte Heartbeats.
+2. COM16 ausgesteckt: **Nicht verbunden** trotz laufender Logger-PID;
+   nach Wiedereinstecken automatische Verbindung.
+3. Standort von Küche ändern und nach Browser-Refresh prüfen.
+4. Standard-Gateway speichern und auf beiden Verwaltungsseiten prüfen.
+5. Über COM16 Remote-STATUS durchführen; Logger-Pausierung und
+   Wiederanlauf nach Jobende kontrollieren.
+6. Gateway-Eintrag ergänzen/entfernen: Speichern und Neustart der Webapp
+   kontrollieren; COM16 muss als dedizierter Logger erhalten bleiben.
+
+Die Schritte wurden für PR #4 auf der Windows-Testinstallation geprüft.
+Sie ersetzen keinen End-to-End-Test der Rauchalarm-Erkennung.
+
+## Noch offen
+
+- Inventarname und `NAME SET` zu einer kontrollierten Registrierung
+  zusammenführen; Erfolg des Fernbefehls separat bestätigen.
+- Gateway-Identität über den geöffneten seriellen COM-Port zusätzlich
+  bestätigen; bislang werden Verbindungsereignisse ausgewertet.
+- Optional später: Laufzeit-Inventar aus der Git-verfolgten
+  `config/nodes.csv` in eine ausschließlich lokale Datenhaltung migrieren.
