@@ -36,7 +36,10 @@ class NodeTargetTests(unittest.TestCase):
             self.assertEqual(module.load_targets(path),set())
             path.write_text(json.dumps([NODE]),encoding="utf-8")
             self.assertEqual(module.load_targets(path),{NODE})
-            for invalid in ([NODE,NODE], ["NOT_A_NODE"], {"node":NODE}, [NODE]*5):
+            five = ["0000" + f"{i:012X}" for i in range(1, 6)]
+            path.write_text(json.dumps(five), encoding="utf-8")
+            self.assertEqual(module.load_targets(path), set(five))
+            for invalid in ([NODE,NODE], ["NOT_A_NODE"], {"node":NODE}, [NODE]*6):
                 path.write_text(json.dumps(invalid),encoding="utf-8")
                 with self.assertRaises(ValueError):
                     module.load_targets(path)

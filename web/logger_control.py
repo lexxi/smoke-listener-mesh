@@ -1,6 +1,6 @@
 """Control the configured USB gateway logger from the local dashboard.
 
-Does not open the port until explicitly started. Never kills unrelated processes.
+Starts the configured logger when the Web server starts. Never kills unrelated processes.
 """
 from __future__ import annotations
 import atexit
@@ -22,7 +22,7 @@ token = secrets.token_urlsafe(32)
 process = None
 output_handle = None
 session = None
-note = "Logger nicht über die Webapp gestartet."
+note = "Logger noch nicht gestartet."
 
 
 def local():
@@ -34,11 +34,45 @@ def running():
     return process is not None and process.poll() is None
 
 
+
+def connection_state():
+    """Read the logger's latest serial connect/disconnect event.
+
+    A live Python PID is not proof of an open serial connection.
+    """
+    if not running() or session is None:
+        return "stopped"
+    try:
+        with session.open("rb") as stream:
+            stream.seek(0, 2)
+            length = stream.tell()
+            stream.seek(max(0, length - 65536))
+            lines = stream.read().decode("utf-8", errors="replace").splitlines()
+        for line in reversed(lines):
+            if "[LOGGER] Disconnected:" in line:
+                return "disconnected"
+            if "[LOGGER] Connected to " in line:
+                return "connected"
+    except OSError:
+        pass
+    return "connecting"
+
+
 def status_data():
-    return {"port": PORT, "name": LOGGER_NAME, "running": running(),
-            "pid": process.pid if running() else None,
-            "session": str(session.relative_to(ROOT)) if session else None,
-            "note": note, "token": token, "ota_reserved": ota_reserved}
+    is_running = running()
+    serial_state = connection_state() if is_running else "stopped"
+    current_note = note
+    if serial_state == "connecting":
+        current_note = f"{PORT}: Logger gestartet, wartet auf serielle Verbindung."
+    elif serial_state == "disconnected":
+        current_note = f"{PORT}: keine serielle Verbindung; Logger versucht erneut zu verbinden."
+    if not is_running and process is not None:
+        current_note = f"Logger beendet (Exit-Code {process.returncode}). COM-Port/Diagnoselog prüfen."
+    return {"port": PORT, "name": LOGGER_NAME, "running": is_running,
+            "pid": process.pid if is_running and process is not None else None,
+            "connected": serial_state == "connected", "connection_state": serial_state,
+            "session": str(session.relative_to(ROOT)) if session and session.is_relative_to(ROOT) else (str(session) if session else None),
+            "note": current_note, "token": token, "ota_reserved": ota_reserved}
 
 
 # Reservation prevents the dashboard from reopening {PORT} during remote OTA.
@@ -63,7 +97,7 @@ def _start_owned_locked():
     global process, output_handle, session, note
     output = ROOT / "log"
     output.mkdir(parents=True, exist_ok=True)
-    session = output / ("mesh_" + dt.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log")
+    session = output / ("mesh_" + dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f") + ".log")
     diagnostics = output / ("logger_control_" + dt.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log")
     output_handle = diagnostics.open("a", encoding="utf-8", buffering=1)
     try:
@@ -78,6 +112,24 @@ def _start_owned_locked():
         process = None
         raise
     note = f"{LOGGER_NAME}-Logger läuft auf {PORT}."
+
+
+def autostart():
+    """Start our own logger once, only from the actual Web server entrypoint.
+
+    A COM port owned by another process is never seized. In that case our
+    logger process exits, and the status endpoint reports the failure.
+    """
+    global note
+    with guard:
+        if ota_reserved or running():
+            return status_data()
+        try:
+            _start_owned_locked()
+            note = f"{LOGGER_NAME}-Logger automatisch auf {PORT} gestartet."
+        except (OSError, ValueError) as exc:
+            note = f"Logger-Autostart fehlgeschlagen: {exc}"
+        return status_data()
 
 
 def pause_for_remote_ota():

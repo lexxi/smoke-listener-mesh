@@ -14,8 +14,8 @@ def load_targets(path: Path = TARGETS_FILE) -> set[str]:
     if not path.is_file():
         return set()
     payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, list) or len(payload) > 4:
-        raise ValueError("node_targets.json muss eine Liste mit maximal vier Zielknoten sein")
+    if not isinstance(payload, list) or len(payload) > 5:
+        raise ValueError("node_targets.json muss eine Liste mit maximal fünf Zielknoten sein")
     result = set()
     for node in payload:
         if not isinstance(node, str) or not re.fullmatch(r"[0-9A-F]{16}", node) or int(node,16)==0:

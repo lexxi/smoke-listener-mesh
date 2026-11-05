@@ -25,7 +25,7 @@ progress{width:86%;height:18px}
 <h2>1 · Firmware-Release bereitstellen</h2>
 <p class="muted">Nur die fertige BIN und das knotenspezifisch signierte JSON-Manifest hochladen. Kein privater Schlüssel im Webserver.</p>
 <form id="bundle-upload" class="row">
-<label>Komplettes signiertes Release-ZIP (für bis zu vier Knoten)
+<label>Komplettes signiertes Release-ZIP (für bis zu fünf Knoten)
 <input id="bundle" type="file" accept=".zip,application/zip" required></label>
 <button id="bundle-button" type="submit">Release-Paket hochladen</button>
 </form>
@@ -41,8 +41,9 @@ progress{width:86%;height:18px}
 <h2>2 · Knoten und Gateway auswählen</h2>
 <label>Signiertes Release<select id="release"><option value="">Releases laden …</option></select></label>
 <div style="margin-top:14px"><label>USB-Gateway<select id="gateway"><option value="">Gateway laden …</option></select></label></div>
+<div><button id="save-default-gateway" type="button">Als Standard-Gateway speichern</button> <small id="gateway-saved" class="muted"></small></div>
 <p id="release-info" class="muted" style="white-space:pre-line">Noch kein Release ausgewählt.</p>
-<div class="notice">Nur der ausgewählte Gateway-C3 muss dauerhaft per USB am Webserver hängen. Der Zielknoten wird ausschließlich über ESP-NOW erreicht. Wird Garage als Gateway gewählt, pausiert die Webapp den COM14-Logger automatisch.</div>
+<div class="notice">Nur der ausgewählte Gateway-C3 muss dauerhaft per USB am Webserver hängen. Der Zielknoten wird ausschließlich über ESP-NOW erreicht. Wird der konfigurierte Logger-Gateway für eine Remote-Aktion verwendet, pausiert die Webapp dessen Logger automatisch.</div>
 <div class="row">
 <button id="check" class="secondary" disabled>Funkstatus prüfen</button>
 <button id="stage" class="secondary" disabled>Nur übertragen & prüfen</button>
@@ -59,7 +60,7 @@ progress{width:86%;height:18px}
 </section>
 <script>
 const $=id=>document.getElementById(id);
-let csrf=null,remoteCsrf=null,releases=[],running=false,nodeTargets=[],targetConfigError=null;
+let csrf=null,remoteCsrf=null,releases=[],running=false,nodeTargets=[],targetConfigError=null,gatewayList=[];
 async function load(){
  try{
   const [lib,config]=await Promise.all([
@@ -93,12 +94,13 @@ async function load(){
   else if(releases.length===1)$('release').value=releases[0].id;
   const gwPrevious=$('gateway').value;
   $('gateway').replaceChildren();
-  for(const gw of config.gateways){
+  gatewayList=config.gateways||[];
+  for(const gw of gatewayList){
    o=document.createElement('option');o.value=gw.port;o.textContent=gw.name+' · '+gw.port;
    $('gateway').append(o);
   }
   if(config.gateways.some(g=>g.port===gwPrevious))$('gateway').value=gwPrevious;
-  else if(config.gateways.some(g=>g.port==='COM14'))$('gateway').value='COM14';
+  else if(config.gateways.some(g=>g.port===config.default_gateway))$('gateway').value=config.default_gateway;
   renderSelection();
  }catch(e){$('release-info').textContent='Fehler beim Laden der Releases: '+e.message}
 }
@@ -111,8 +113,7 @@ function renderSelection(){
  const blocked=!!x&&isNew&&(!!targetConfigError||!nodeTargets.includes(x.target)||x.features===null);
  const targetMessage=blocked?('\nOTA gesperrt: '+(targetConfigError||(!nodeTargets.includes(x.target)?'Zielknoten nicht in node_targets.json freigegeben':'signierte Features fehlen'))):'';
 
- const forbidden=(gateway==='COM14'&&x?.target==='000058FE7D6E27AC')||
-                 (gateway==='COM12'&&x?.target==='000094457F6E27AC');
+ const forbidden=!!x&&gatewayList.some(g=>g.port===gateway&&g.node===x.target);
  $('release-info').textContent=x?('Ziel: '+nodeName(x.target)+' · '+x.target+
    '\nFirmware: v'+x.version+' · '+x.bytes.toLocaleString('de-DE')+' Bytes'+
    '\nFeatures: '+(x.features===null?'unbekannt (älteres Release)':(x.features.length?x.features.join(', '):'CORE'))+
@@ -123,6 +124,18 @@ function renderSelection(){
  for(const id of ['stage','activate-staged','deploy'])$(id).disabled=!x||!gateway||forbidden||blocked||running;
 }
 $('release').addEventListener('change',renderSelection);
+$('save-default-gateway').addEventListener('click',async()=>{
+ const gateway=$('gateway').value;
+ if(!gateway||!remoteCsrf)return;
+ try{
+  const response=await fetch('/api/remote/default-gateway',{method:'POST',
+   headers:{'X-Remote-CSRF':remoteCsrf,'Content-Type':'application/json'},
+   body:JSON.stringify({gateway})});
+  const result=await response.json();
+  if(!response.ok)throw Error(result.error||'HTTP '+response.status);
+  $('gateway-saved').textContent='Standard gespeichert: '+result.default_gateway;
+ }catch(e){$('gateway-saved').textContent='Fehler: '+e.message}
+});
 $('gateway').addEventListener('change',renderSelection);
 $('bundle-upload').addEventListener('submit',async e=>{
  e.preventDefault();

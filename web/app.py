@@ -28,6 +28,8 @@ from release_library import bp as releases_blueprint
 app.register_blueprint(releases_blueprint)
 from remote import bp as remote_blueprint
 app.register_blueprint(remote_blueprint)
+from node_registry import bp as node_registry_blueprint
+app.register_blueprint(node_registry_blueprint)
 lock = threading.RLock()
 db_path = ROOT / "web" / "data" / "mesh.db"
 log_dirs = [ROOT / "log", ROOT / "logs", ROOT / "scripts" / "log"]
@@ -311,6 +313,9 @@ def main():
     args = parser.parse_args()
     if args.log_dir:
         log_dirs.extend(args.log_dir)
+    from logger_control import autostart
+    logger_state = autostart()
+    print("Logger:", logger_state["note"], flush=True)
     print("Monitoring:", ", ".join(map(str, log_dirs)), flush=True)
     print("Dashboard: http://%s:%s" % (args.host, args.port), flush=True)
     app.run(host=args.host, port=args.port, debug=False, use_reloader=False)

@@ -1,8 +1,9 @@
 {
   "logger_gateway": "COM16",
   "gateways": {
-    "COM16": {"name": "Gateway", "node": "00000CEC7E6E27AC"},
-    "COM14": {"name": "Garage", "node": "000058FE7D6E27AC"},
-    "COM12": {"name": "Kueche", "node": "000094457F6E27AC"}
+    "COM16": {
+      "name": "Gateway",
+      "node": "00000CEC7E6E27AC"
+    }
   }
 }

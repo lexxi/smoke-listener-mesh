@@ -30,6 +30,7 @@ tr.pick{cursor:pointer}tr.pick:hover{background:#20324b}tr.selected{background:#
 <h2>2 · Ausgewählten Knoten verwalten</h2>
 <div class="row"><label style="flex:1;min-width:200px">USB-Gateway<select id="gateway"></select></label>
 <label style="flex:2;min-width:240px">Zielknoten<select id="target"></select></label></div>
+<div class="row" style="margin-top:16px"><button id="gateway-default" type="button">Als Standard-Gateway speichern</button><small id="gateway-default-info" class="muted"></small></div>
 <p id="selected-info" class="muted"></p>
 <div class="row" style="margin:12px 0"><button id="status">Funkstatus</button><button id="get">NAME GET</button></div>
 <div class="row"><label style="flex:2;min-width:230px">Neuer Name (1–19 Zeichen, A–Z, a–z, 0–9, - oder _)
@@ -38,11 +39,38 @@ tr.pick{cursor:pointer}tr.pick:hover{background:#20324b}tr.selected{background:#
 <button id="restart" class="danger">Neustart</button></div>
 <small>Neustart ist ein eigener Befehl, unabhängig von OTA-Aktivierung. Nicht während eines Firmwareupdates ausführen.</small>
 </section>
-<section class="card"><div class="row"><h2>3 · Ergebnis</h2><strong id="state">Bereit</strong></div>
+<section class="card">
+<h2>3 · Knoten registrieren</h2>
+<p class="muted">Aus Discover auswählen, Stammdaten speichern und optional für signierte OTA-Updates freigeben. Ein neuer Knoten wird nicht allein durch Funkempfang automatisch freigegeben.</p>
+<div class="row">
+<label style="flex:1;min-width:220px">Name im Inventar<input id="registry-name" maxlength="19" placeholder="z. B. TestC3"></label>
+<label style="flex:2;min-width:220px">Standort<input id="registry-location" maxlength="80" placeholder="z. B. Werkbank"></label>
+</div>
+<div class="row" style="margin-top:12px">
+<label><input type="checkbox" id="registry-ota" style="width:auto"> Für signierte OTA-Updates freigeben</label>
+<button id="registry-save">Knoten speichern</button>
+</div>
+<p id="registry-info" class="muted"></p>
+<small>Inventarname und Firmware-Name sind getrennt. Mit NAME SET wird der Name zusätzlich im Gerät gespeichert. Bereits signierte ZIP-Pakete enthalten kein Manifest für neu registrierte Geräte und müssen bei Bedarf neu signiert werden.</small>
+</section>
+<section class="card"><h2>4 · USB-Gateways verwalten</h2>
+<p class="muted">Der dedizierte COM16-Logger ist geschützt. Weitere USB-Gateways lassen sich hinzufügen oder entfernen. Änderungen werden nach Webapp-Neustart aktiv; Mesh-Knoten und OTA-Ziele bleiben bestehen.</p>
+<div id="gateway-list"></div>
+<div class="row" style="margin-top:16px">
+<label style="flex:1;min-width:120px">Port<input id="new-gw-port" placeholder="COM20"></label>
+<label style="flex:1;min-width:160px">Name<input id="new-gw-name" placeholder="Reserve"></label>
+<label style="flex:2;min-width:220px">Node-ID<input id="new-gw-node" maxlength="16" placeholder="0000XXXXXXXXXXXX"></label>
+</div>
+<div class="row" style="margin-top:16px">
+<button id="add-gateway" type="button">Gateway hinzufügen</button>
+<button id="save-gateways" type="button">Gateway-Liste speichern</button>
+</div><p id="gateway-admin-status" class="muted"></p></section>
+<section class="card"><div class="row"><h2>5 · Ergebnis</h2><strong id="state">Bereit</strong></div>
 <p id="message" class="muted"></p><pre id="log">Noch keine Ausgabe.</pre></section>
 <script>
 const $=id=>document.getElementById(id);
-let nodes=[],gateways=[],csrf='',running=false,lastId=null;
+let managedGateways=[],loggerGatewayPort='COM16';
+let nodes=[],gateways=[],csrf='',running=false,lastId=null,registryCsrf='',registryEntries=[],otaTargets=[],gatewayNodes=[],maxOta=5,selectedRegistryId=null;
 function nodeId(mac){
  const parts=(mac||'').toUpperCase().split(':');
  return parts.length===6&&parts.every(x=>/^[0-9A-F]{2}$/.test(x))?
@@ -85,14 +113,25 @@ function selection(){
  (!versionAtLeast(n.firmware)?' · Remote-Namensverwaltung erst ab v0.6.13':'')):'Kein Ziel gewählt.';
  for(const id of ['status','get','set','reset','restart'])
    $(id).disabled=running||!n||!g||forbidden||(id!=='status'&&!versionAtLeast(n.firmware));
+ if(selectedRegistryId!==t){
+   selectedRegistryId=t;
+   const current=registryEntries.find(x=>nodeId(x.mac)===t);
+   $('registry-name').value=current?.name||(/^[A-Za-z0-9_-]{1,19}$/.test(n?.name||'')?n.name:'');
+   $('registry-location').value=current?.location||'';
+   $('registry-ota').checked=otaTargets.includes(t);
+ }
+ $('registry-ota').disabled=running||!n||gatewayNodes.includes(t);
+ $('registry-save').disabled=running||!n||!t;
+ $('registry-info').textContent=gatewayNodes.includes(t)?'USB-Gateway: keine OTA-Zielfreigabe':
+   'OTA-Ziele: '+otaTargets.length+'/'+maxOta+' · Aktueller Status: '+(otaTargets.includes(t)?'freigegeben':'nicht freigegeben');
  for(const tr of $('nodes').children)tr.classList.toggle('selected',tr.children[1]?.textContent===t);
 }
 async function load(){
  const r=await fetch('/api/remote/config',{cache:'no-store'});if(!r.ok)throw Error('Gateway-Konfiguration fehlt');
  const j=await r.json();csrf=j.csrf;gateways=j.gateways;
  for(const gw of gateways){const o=document.createElement('option');o.value=gw.port;o.textContent=gw.name+' · '+gw.port;$('gateway').append(o)}
- if(gateways.some(x=>x.port==='COM14'))$('gateway').value='COM14';
- await discover();await jobRefresh();
+ if(gateways.some(x=>x.port===j.default_gateway))$('gateway').value=j.default_gateway;
+ await loadRegistry();await discover();await jobRefresh();
 }
 async function action(a){
  const t=$('target').value,g=$('gateway').value,n=$('name').value.trim();
@@ -127,6 +166,83 @@ async function jobRefresh(){
   selection();
  }catch(e){$('message').textContent=e.message}
 }
+async function loadGatewaySettings(){
+ const r=await fetch('/api/remote/gateway-settings',{cache:'no-store'});if(!r.ok)throw Error('Gateway-Einstellungen nicht verfügbar');
+ const j=await r.json();loggerGatewayPort=j.logger_gateway;
+ managedGateways=(j.pending||[]).filter(g=>g.port!==loggerGatewayPort);
+ renderGatewaySettings();
+ $('gateway-admin-status').textContent=j.restart_required?'Neustart der Webapp erforderlich.':'Gateway-Liste aktuell.';
+}
+function renderGatewaySettings(){
+ const e=$('gateway-list');e.replaceChildren();
+ const p=document.createElement('p');p.textContent='Geschützt: '+loggerGatewayPort+' · USB-Logger';e.append(p);
+ for(const g of managedGateways){
+  const row=document.createElement('div');row.className='row';row.style.marginTop='10px';
+  const text=document.createElement('span');text.textContent=g.name+' · '+g.port+' · '+g.node;
+  const btn=document.createElement('button');btn.type='button';btn.className='danger';btn.textContent='Entfernen';
+  btn.onclick=()=>{managedGateways=managedGateways.filter(x=>x!==g);renderGatewaySettings()};
+  row.append(text,btn);e.append(row);
+ }
+}
+$('add-gateway').onclick=()=>{
+ const port=$('new-gw-port').value.trim().toUpperCase(),name=$('new-gw-name').value.trim(),
+       node=$('new-gw-node').value.trim().toUpperCase();
+ if(!/^COM[1-9][0-9]*$/.test(port)||!name||name.length>40||!/^[0-9A-F]{16}$/.test(node)){
+  $('gateway-admin-status').textContent='COM-Port, Name und 16-stellige Node-ID prüfen.';return;
+ }
+ if(port===loggerGatewayPort||managedGateways.some(x=>x.port===port||x.node===node)){
+  $('gateway-admin-status').textContent='Port oder Node-ID bereits vergeben.';return;
+ }
+ managedGateways.push({port,name,node});renderGatewaySettings();
+ for(const id of ['new-gw-port','new-gw-name','new-gw-node'])$(id).value='';
+};
+$('save-gateways').onclick=async()=>{
+ if(!confirm('Gateway-Liste speichern? Die Webapp muss danach neu gestartet werden.'))return;
+ try{
+  const r=await fetch('/api/remote/gateway-settings',{method:'POST',
+   headers:{'Content-Type':'application/json','X-Remote-CSRF':csrf},
+   body:JSON.stringify({gateways:managedGateways})});
+  const j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);
+  $('gateway-admin-status').textContent=j.note;
+ }catch(e){$('gateway-admin-status').textContent='Fehler: '+e.message}
+};
+
+async function loadRegistry(){
+ const r=await fetch('/api/nodes/registry',{cache:'no-store'});
+ if(!r.ok)throw Error('Knotenregistrierung: HTTP '+r.status);
+ const j=await r.json();registryCsrf=j.csrf;registryEntries=j.entries||[];
+ otaTargets=j.ota_targets||[];gatewayNodes=j.gateway_nodes||[];maxOta=j.max_ota_targets||5;
+}
+async function saveRegistry(){
+ const t=$('target').value;
+ if(!t)return;
+ const body={node_id:t,name:$('registry-name').value.trim(),
+   location:$('registry-location').value.trim(),ota:$('registry-ota').checked};
+ if(body.ota&&!otaTargets.includes(t)&&!confirm('Knoten '+t+' für signierte OTA-Updates freigeben?'))return;
+ $('registry-save').disabled=true;
+ try{
+  const r=await fetch('/api/nodes/registry',{method:'POST',
+   headers:{'Content-Type':'application/json','X-Registry-CSRF':registryCsrf},
+   body:JSON.stringify(body)});
+  const j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);
+  await loadRegistry();
+  $('registry-info').textContent='Gespeichert. '+j.note;
+ }catch(e){$('registry-info').textContent='Fehler: '+e.message}
+ finally{$('registry-save').disabled=false}
+}
+$('registry-save').onclick=saveRegistry;
+async function saveGatewayDefault(){
+ const g=$('gateway').value;
+ if(!g)return;
+ try{
+  const r=await fetch('/api/remote/default-gateway',{method:'POST',
+   headers:{'Content-Type':'application/json','X-Remote-CSRF':csrf},
+   body:JSON.stringify({gateway:g})});
+  const j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);
+  $('gateway-default-info').textContent='Standard gespeichert: '+j.default_gateway;
+ }catch(e){$('gateway-default-info').textContent='Fehler: '+e.message}
+}
+$('gateway-default').onclick=saveGatewayDefault;
 $('discover').onclick=discover;$('gateway').onchange=selection;$('target').onchange=selection;
 for(const [id,a] of [['status','STATUS'],['get','NAME_GET'],['set','NAME_SET'],['reset','NAME_RESET'],['restart','RESTART']])
  $(id).onclick=()=>action(a);

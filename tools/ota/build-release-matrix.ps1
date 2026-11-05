@@ -49,7 +49,7 @@ if (-not $BuildOnly) {
     if ($targets -contains $target) { throw "Doppelte Ziel-ID: $target" }
     $targets += $target
   }
-  if ($targets.Count -eq 0 -or $targets.Count -gt 4) { throw "Erwartet 1 bis 4 freigegebene Zielknoten" }
+  if ($targets.Count -eq 0 -or $targets.Count -gt 5) { throw "Erwartet 1 bis 5 freigegebene Zielknoten" }
 }
 $profiles = @(
   @{Name="core";Gateway=0;Audio=0;Ap=0},

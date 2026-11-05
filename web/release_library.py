@@ -13,6 +13,7 @@ import shutil
 import threading
 from pathlib import Path
 from flask import Blueprint, abort, jsonify, request
+from node_role_policy import load_targets
 
 ROOT = Path(__file__).resolve().parents[1]
 OTA_TOOLS = ROOT / "tools" / "ota"
@@ -87,7 +88,7 @@ def list_releases() -> list[dict]:
 
 @bp.post("/api/releases/upload-bundle")
 def upload_bundle():
-    """Upload ONE ZIP with firmware.bin and 1-4 node-specific signed manifests."""
+    """Upload ONE ZIP with firmware.bin and 1-5 node-specific signed manifests."""
     _local()
     if request.headers.get("X-Release-CSRF") != CSRF:
         return jsonify({"error": "CSRF-Prüfung fehlgeschlagen."}), 403
@@ -99,10 +100,10 @@ def upload_bundle():
     if not PUBLIC_KEY.is_file():
         return jsonify({"error": "Öffentlicher Prüfschlüssel fehlt."}), 400
 
-    permitted_targets = {
-        "000010637C6E27AC", "000058FE7D6E27AC",
-        "000094457F6E27AC", "0000A0E37E6E27AC",
-    }
+    try:
+        permitted_targets = load_targets()
+    except (ValueError, OSError, TypeError) as exc:
+        return jsonify({"error": "OTA-Zielkonfiguration: " + str(exc)}), 400
     tmp_root = ROOT / "web" / "data" / "uploads_tmp"
     tmp_root.mkdir(parents=True, exist_ok=True)
     with GUARD, tempfile.TemporaryDirectory(dir=tmp_root) as temporary:
@@ -118,8 +119,8 @@ def upload_bundle():
             with zipfile.ZipFile(archive) as zipped:
                 members = zipped.infolist()
                 names = [item.filename for item in members]
-                if len(names) < 2 or len(names) > 5 or len(names) != len(set(names)):
-                    raise ValueError("Erwartet: genau eine BIN und 1–4 Manifeste ohne Duplikate")
+                if len(names) < 2 or len(names) > 6 or len(names) != len(set(names)):
+                    raise ValueError("Erwartet: genau eine BIN und 1–5 Manifeste ohne Duplikate")
                 if "firmware.bin" not in names or any(
                     name != "firmware.bin" and
                     not re.fullmatch(r"manifest_[0-9A-F]{16}\.json", name)
