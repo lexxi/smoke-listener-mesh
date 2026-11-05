@@ -40,7 +40,7 @@ def status_data():
     if not is_running and process is not None:
         current_note = f"Logger beendet (Exit-Code {process.returncode}). COM-Port/Diagnoselog prüfen."
     return {"port": PORT, "name": LOGGER_NAME, "running": is_running,
-            "pid": process.pid if running() else None,
+            "pid": process.pid if is_running and process is not None else None,
             "session": str(session.relative_to(ROOT)) if session else None,
             "note": current_note, "token": token, "ota_reserved": ota_reserved}
 
