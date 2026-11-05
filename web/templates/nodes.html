@@ -56,7 +56,7 @@ tr.pick{cursor:pointer}tr.pick:hover{background:#20324b}tr.selected{background:#
 <p id="message" class="muted"></p><pre id="log">Noch keine Ausgabe.</pre></section>
 <script>
 const $=id=>document.getElementById(id);
-let nodes=[],gateways=[],csrf='',running=false,lastId=null,registryCsrf='',registryEntries=[],otaTargets=[],gatewayNodes=[],maxOta=5;
+let nodes=[],gateways=[],csrf='',running=false,lastId=null,registryCsrf='',registryEntries=[],otaTargets=[],gatewayNodes=[],maxOta=5,selectedRegistryId=null;
 function nodeId(mac){
  const parts=(mac||'').toUpperCase().split(':');
  return parts.length===6&&parts.every(x=>/^[0-9A-F]{2}$/.test(x))?
@@ -99,10 +99,13 @@ function selection(){
  (!versionAtLeast(n.firmware)?' · Remote-Namensverwaltung erst ab v0.6.13':'')):'Kein Ziel gewählt.';
  for(const id of ['status','get','set','reset','restart'])
    $(id).disabled=running||!n||!g||forbidden||(id!=='status'&&!versionAtLeast(n.firmware));
- const current=registryEntries.find(x=>nodeId(x.mac)===t);
- $('registry-name').value=current?.name||n?.name||'';
- $('registry-location').value=current?.location||'';
- $('registry-ota').checked=otaTargets.includes(t);
+ if(selectedRegistryId!==t){
+   selectedRegistryId=t;
+   const current=registryEntries.find(x=>nodeId(x.mac)===t);
+   $('registry-name').value=current?.name||n?.name||'';
+   $('registry-location').value=current?.location||'';
+   $('registry-ota').checked=otaTargets.includes(t);
+ }
  $('registry-ota').disabled=running||!n||gatewayNodes.includes(t);
  $('registry-save').disabled=running||!n||!t;
  $('registry-info').textContent=gatewayNodes.includes(t)?'USB-Gateway: keine OTA-Zielfreigabe':
