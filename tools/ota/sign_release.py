@@ -20,7 +20,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 BOARD = "esp32c3"
 SCHEMA = "smoke-mesh-ota-v1"
 MAX_IMAGE_BYTES = 1310720
-FEATURE_NAMES = {"gateway", "audio", "config_ap"}
+FEATURE_NAMES = {"gateway", "audio", "config_ap", "buzzer"}
 FEATURE_SCHEMA = "smoke-mesh-features-v1"
 
 def feature_claim(features, digest, target, version, label=None):
@@ -28,13 +28,21 @@ def feature_claim(features, digest, target, version, label=None):
         raise ValueError("Unknown or duplicate feature")
     import re
     suffix = re.fullmatch(r"\d+\.\d+\.\d+\.([a-h])", version)
+    if "buzzer" in features:
+        # New orthogonal feature, but only for releases that have never used
+        # the old three-feature-only variant identity.
+        match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)\.[a-h]", version)
+        if not match or tuple(map(int, match.groups())) < (0, 6, 18):
+            raise ValueError("Signed buzzer feature requires firmware >=0.6.18 with .a-h variant")
     if suffix:
         expected = (
             [], ["audio"], ["gateway"], ["audio", "gateway"],
             ["config_ap"], ["audio", "config_ap"],
             ["config_ap", "gateway"], ["audio", "config_ap", "gateway"],
         )[ord(suffix.group(1)) - ord("a")]
-        if sorted(features) != expected:
+        # The variant suffix describes gateway/audio/config_ap only;
+        # buzzer is carried explicitly in publisher-signed feature metadata.
+        if sorted(name for name in features if name != "buzzer") != expected:
             raise ValueError("Signed variant letter does not match selected firmware features")
         if label is not None and label != version:
             raise ValueError("Signed label must match four-part version")

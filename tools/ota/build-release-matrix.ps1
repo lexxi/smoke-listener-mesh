@@ -12,12 +12,20 @@ param(
   [string]$PublicKey = "C:\mesh-ota-keys\signing-public.pem",
   [string]$TargetsFile = "",
   [string]$OutputRoot = "",
-  [switch]$BuildOnly
+  [switch]$BuildOnly,
+  [switch]$Buzzer
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version muss numerisch sein, z.B. 0.6.17" }
+# A buzzer-enabled build must never reuse legacy version/variant identities.
+if ($Buzzer) {
+  $v = [version]$Version
+  if ($v -lt [version]"0.6.18") {
+    throw "-Buzzer benötigt Firmware >= 0.6.18; die Identität von 0.6.17.a-h darf nicht wiederverwendet werden"
+  }
+}
 $sketchDir = Join-Path $repo ("firmware\mesh-v" + $Version)
 $sketch = Join-Path $sketchDir ("mesh-v" + $Version + ".ino")
 if (-not (Test-Path -LiteralPath $sketch)) { throw "Sketch fehlt: $sketch" }
@@ -83,7 +91,8 @@ foreach ($idx in 0..7) {
   $variantSketch = Join-Path $source ("mesh-v"+$Version+".ino")
   $variantSource = $original.Replace($versionLine,('#define SMOKE_FIRMWARE_VERSION "'+$release+'"'))
   [System.IO.File]::WriteAllText($variantSketch,$variantSource,[System.Text.UTF8Encoding]::new($false))
-  $flags = "-DFEATURE_GATEWAY=$($profile.Gateway) -DFEATURE_AUDIO=$($profile.Audio) -DFEATURE_CONFIG_AP=$($profile.Ap) -DFEATURE_BATTERY=0 -DFEATURE_BUZZER=0"
+  $buzzerFlag = if ($Buzzer) { "-DFEATURE_BUZZER=1" } else { "-DFEATURE_BUZZER=0" }
+  $flags = "-DFEATURE_GATEWAY=$($profile.Gateway) -DFEATURE_AUDIO=$($profile.Audio) -DFEATURE_CONFIG_AP=$($profile.Ap) -DFEATURE_BATTERY=0 $buzzerFlag"
   Write-Host "[BUILD] $release $($profile.Name)" -ForegroundColor Cyan
   & $cli.Source compile --fqbn $Fqbn --build-path $work --output-dir $export --build-property ("compiler.cpp.extra_flags="+$flags) $source
   if ($LASTEXITCODE -ne 0) { throw "Compile fehlgeschlagen: $release" }
@@ -93,6 +102,7 @@ foreach ($idx in 0..7) {
   if ($profile.Gateway) { $features += "gateway" }
   if ($profile.Audio) { $features += "audio" }
   if ($profile.Ap) { $features += "config_ap" }
+  if ($Buzzer) { $features += "buzzer" }
   $digest = (Get-FileHash -Algorithm SHA256 -LiteralPath $bin).Hash.ToLowerInvariant()
   $zip = $null
   if (-not $BuildOnly) {
@@ -113,7 +123,7 @@ foreach ($idx in 0..7) {
     [System.IO.Compression.ZipFile]::CreateFromDirectory($package,$zip)
   }
   $report += [pscustomobject]@{
-    Version=$release; Profile=$profile.Name; Features=$features
+    Version=$release; Profile=$profile.Name; Features=$features; Buzzer=[bool]$Buzzer
     Bytes=(Get-Item -LiteralPath $bin).Length; Sha256=$digest
     Bin=$bin; Targets=$targets; Zip=$zip; Fqbn=$Fqbn; Flags=$flags
   }
