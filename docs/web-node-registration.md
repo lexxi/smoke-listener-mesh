@@ -70,8 +70,12 @@ empfangen werden.
 | Gerätename | NVS im ESP32-C3 | Separat per **NAME SET** setzen; über authentifizierte Meldungen übertragener Name |
 
 Die **Inventarbezeichnung ist nicht automatisch der Firmware-Gerätename**.
-Nach der Registrierung deshalb derzeit noch separat **NAME SET** ausführen,
-falls auch der Name im ESP32 geändert werden soll. **NAME GET**, **NAME
+Im neuen Feature-Branch wird bei einer Registrierung mit gesetzter NAME-SET-
+Option zusätzlich der Gerätename übertragen. Bei existierenden Einträgen
+bleibt die Option standardmäßig aus, damit eine Standortkorrektur keinen
+Fernbefehl auslöst. **Scheitert NAME SET, bleiben die gespeicherten
+Inventardaten unverändert.** In `main` ist NAME SET bis zum Merge des
+Feature-Branches noch separat auszuführen. **NAME GET**, **NAME
 RESET**, **Funkstatus** und **Neustart** sind eigene Remote-Befehle.
 Eine automatische Namensübernahme bei Registrierung ist noch offen.
 
@@ -176,8 +180,8 @@ Sie ersetzen keinen End-to-End-Test der Rauchalarm-Erkennung.
 
 ## Noch offen
 
-- Inventarname und `NAME SET` zu einer kontrollierten Registrierung
-  zusammenführen; Erfolg des Fernbefehls separat bestätigen.
+- Kombinierte Registrierung / `NAME SET` auf Hardware testen und den
+  Feature-Branch danach mergen.
 - Gateway-Identität über den geöffneten seriellen COM-Port zusätzlich
   bestätigen; bislang werden Verbindungsereignisse ausgewertet.
 - Optional später: Laufzeit-Inventar aus der Git-verfolgten
