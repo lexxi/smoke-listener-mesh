@@ -25,7 +25,7 @@ class FirmwareV0617Tests(unittest.TestCase):
 
     def test_buzzer_is_opt_in(self):
         config = (V17 / "feature_config.h").read_text(encoding="utf-8")
-        self.assertRegex(config, r"#define FEATURE_BUZZER [01]\\b")
+        self.assertRegex(config, r"#define FEATURE_BUZZER [01]\b")
         self.assertIn("#ifndef FEATURE_BUZZER", config)
         sketch = (V17 / "mesh-v0.6.17.ino").read_text(encoding="utf-8")
         self.assertIn('command.equalsIgnoreCase("BUZZER 2X2")', sketch)
