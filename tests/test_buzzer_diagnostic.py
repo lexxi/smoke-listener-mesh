@@ -20,13 +20,20 @@ class BuzzerDiagnosticTests(unittest.TestCase):
         self.assertIn("constexpr uint32_t TEST_DURATION_MS = 500;", header)
         self.assertIn("ledcAttach(PIN, FREQ_HZ, DUTY_RESOLUTION)", header)
         self.assertIn("ledcWriteTone(PIN, 0)", header)
-        self.assertIn("millis() - startedAt", header)
+        self.assertIn("millis() - phaseStarted", header)
+        self.assertIn("constexpr uint32_t SHORT_GAP_MS = 250;", header)
+        self.assertIn("constexpr uint32_t GROUP_GAP_MS = 1000;", header)
+        self.assertIn("constexpr uint8_t PATTERN_BEEPS = 4;", header)
+        self.assertIn("inline void test2x2()", header)
+        self.assertIn("beepIndex == 2 ? GROUP_GAP_MS : SHORT_GAP_MS", header)
 
     def test_only_local_serial_commands_can_trigger_tone(self):
         sketch = (ROOT / "mesh-v0.6.16.ino").read_text(encoding="utf-8")
         self.assertIn('#include "buzzer_diagnostic.h"', sketch)
         self.assertIn('command.equalsIgnoreCase("BUZZER TEST")', sketch)
         self.assertIn('command.equalsIgnoreCase("BUZZER STOP")', sketch)
+        self.assertIn('command.equalsIgnoreCase("BUZZER 2X2")', sketch)
+        self.assertEqual(sketch.count("SmokeBuzzer::test2x2();"), 1)
         self.assertEqual(sketch.count("SmokeBuzzer::test();"), 1)
         self.assertIn("SmokeBuzzer::poll();", sketch)
 
