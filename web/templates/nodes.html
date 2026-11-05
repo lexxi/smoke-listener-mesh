@@ -71,7 +71,8 @@ tr.pick{cursor:pointer}tr.pick:hover{background:#20324b}tr.selected{background:#
 <script>
 const $=id=>document.getElementById(id);
 let managedGateways=[],loggerGatewayPort='COM16';
-let pendingNameSync=null,registrationBusy=false;
+let pendingNameSync=null,registrationBusy=false,registrationMessage='';
+function registrationStatus(message){registrationMessage=message;$('registry-info').textContent=message}
 let nodes=[],gateways=[],csrf='',running=false,lastId=null,registryCsrf='',registryEntries=[],otaTargets=[],gatewayNodes=[],maxOta=5,selectedRegistryId=null;
 function nodeId(mac){
  const parts=(mac||'').toUpperCase().split(':');
@@ -117,6 +118,7 @@ function selection(){
    $(id).disabled=running||!n||!g||forbidden||(id!=='status'&&!versionAtLeast(n.firmware));
  if(selectedRegistryId!==t){
    selectedRegistryId=t;
+   registrationMessage='';
    const current=registryEntries.find(x=>nodeId(x.mac)===t);
    $('registry-name').value=current?.name||(/^[A-Za-z0-9_-]{1,19}$/.test(n?.name||'')?n.name:'');
    $('registry-location').value=current?.location||'';
@@ -126,8 +128,8 @@ function selection(){
  $('registry-ota').disabled=running||registrationBusy||!n||gatewayNodes.includes(t);
  $('registry-sync-name').disabled=running||registrationBusy||!n||!versionAtLeast(n?.firmware)||forbidden;
  $('registry-save').disabled=running||registrationBusy||!!pendingNameSync||!n||!t;
- $('registry-info').textContent=gatewayNodes.includes(t)?'USB-Gateway: keine OTA-Zielfreigabe':
-   'OTA-Ziele: '+otaTargets.length+'/'+maxOta+' · Aktueller Status: '+(otaTargets.includes(t)?'freigegeben':'nicht freigegeben');
+ $('registry-info').textContent=registrationMessage||(gatewayNodes.includes(t)?'USB-Gateway: keine OTA-Zielfreigabe':
+   'OTA-Ziele: '+otaTargets.length+'/'+maxOta+' · Aktueller Status: '+(otaTargets.includes(t)?'freigegeben':'nicht freigegeben'));
  for(const tr of $('nodes').children)tr.classList.toggle('selected',tr.children[1]?.textContent===t);
 }
 async function load(){
@@ -161,12 +163,10 @@ async function jobRefresh(){
    const expected=pendingNameSync.name;
    const confirmed=j.state==='passed' && j.mode==='node_NAME_SET' &&
      j.target===pendingNameSync.target &&
-     (j.lines||[]).some(line=>line.includes('[MGMT] REPLY') &&
-       line.includes('name='+expected) &&
-       !line.includes('name='+expected+'_'));
-   $('registry-info').textContent=confirmed?
+     (j.lines||[]).some(line=>line.trim()==='[REMOTE] NAME VERIFIED target='+pendingNameSync.target+' name='+expected);
+   registrationStatus(confirmed?
      'Inventar gespeichert; Gerätename '+expected+' per NAME SET bestätigt.':
-     'Inventar gespeichert, aber NAME SET nicht bestätigt. Gerätebezeichnung möglicherweise unverändert! Ergebnisprotokoll prüfen.';
+     'Inventar gespeichert, aber NAME SET nicht bestätigt. Gerätebezeichnung möglicherweise unverändert! Ergebnisprotokoll prüfen.');
    pendingNameSync=null;
   }
   if(lastId && j.id===lastId && j.state!=='running'){
@@ -238,7 +238,7 @@ async function saveRegistry(){
  const node=nodes.find(n=>nodeId(n.mac)===t);
  if(sync&&(!/^[A-Za-z0-9_-]{1,19}$/.test(body.name)||!g||
     gateways.find(x=>x.port===g)?.node===t||!versionAtLeast(node?.firmware))){
-  $('registry-info').textContent='NAME SET nicht möglich: Gerätename, Gateway oder Firmware prüfen.';return;
+  registrationStatus('NAME SET nicht möglich: Gerätename, Gateway oder Firmware prüfen.');return;
  }
  if(body.ota&&!otaTargets.includes(t)&&!confirm('Knoten '+t+' für signierte OTA-Updates freigeben?'))return;
  if(sync&&!confirm('Inventar speichern und anschließend NAME SET '+body.name+' an '+t+' über '+g+' senden?'))return;
@@ -250,23 +250,23 @@ async function saveRegistry(){
   const j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);
   await loadRegistry();
   if(!sync){
-   $('registry-info').textContent='Inventar gespeichert. Kein NAME SET gesendet.';
+   registrationStatus('Inventar gespeichert. Kein NAME SET gesendet.');
   }else{
-   $('registry-info').textContent='Inventar gespeichert. Sende NAME SET an '+t+' …';
+   registrationStatus('Inventar gespeichert. Sende NAME SET an '+t+' …');
    const reply=await fetch('/api/remote/node-action',{method:'POST',
     headers:{'Content-Type':'application/json','X-Remote-CSRF':csrf},
     body:JSON.stringify({target:t,gateway:g,action:'NAME_SET',name:body.name})});
    const result=await reply.json();
    if(!reply.ok){
-    $('registry-info').textContent='Inventar gespeichert, aber NAME SET konnte nicht gestartet werden: '+
-      (result.error||'HTTP '+reply.status);
+    registrationStatus('Inventar gespeichert, aber NAME SET konnte nicht gestartet werden: '+
+      (result.error||'HTTP '+reply.status));
    }else{
     pendingNameSync={id:result.job_id,target:t,name:body.name};
     lastId=result.job_id;
     await jobRefresh();
    }
   }
- }catch(e){$('registry-info').textContent='Speichern oder Kommunikation fehlgeschlagen: '+e.message}
+ }catch(e){registrationStatus('Speichern oder Kommunikation fehlgeschlagen: '+e.message)}
  finally{registrationBusy=false;selection()}
 }
 $('registry-save').onclick=saveRegistry;
