@@ -287,7 +287,7 @@ $('copy-log').addEventListener('click',async()=>{
     if(!document.execCommand('copy'))throw Error('Zwischenablage nicht verfügbar');
    }finally{area.remove();}
   }
-  $('copy-log-status').textContent='Protokoll kopiert ('+content.split('\\n').length+' Zeilen).';
+  $('copy-log-status').textContent='Protokoll kopiert ('+content.split('\n').length+' Zeilen).';
  }catch(e){
   $('copy-log-status').textContent='Kopieren fehlgeschlagen: '+e.message;
  }
