@@ -935,6 +935,9 @@ void handleCommand(String command) {
   if(command.equalsIgnoreCase("BUZZER TEST")) {
     SmokeBuzzer::test();
     return;
+  } else if(command.equalsIgnoreCase("BUZZER 2X2")) {
+    SmokeBuzzer::test2x2();
+    return;
   } else if(command.equalsIgnoreCase("BUZZER STOP")) {
     SmokeBuzzer::stop();
     return;
