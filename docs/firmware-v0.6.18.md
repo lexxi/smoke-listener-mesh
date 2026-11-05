@@ -97,3 +97,21 @@ Diagnosefunktion, keine Rauchalarm-Sicherheit. Es liegt noch **kein**
 positiver Bericht für signiertes OTA-Staging, Boot-Aktivierung oder
 Rollback vor. Ebenso ist ein kompletter Python-Testlauf für diesen
 PR noch separat zu bestätigen.
+
+## Release-Gate: Tests bestätigt
+
+Der lokale vollständige Python-Unittest-Lauf wurde vom Anwender als **OK** bestätigt.
+Alle acht BuildOnly-Profile mit `-Version 0.6.18 -Buzzer` wurden erfolgreich gebaut:
+
+| Variante | Profil | BIN-Bytes |
+| --- | --- | ---: |
+| `.a` | core | 992864 |
+| `.b` | audio | 1019904 |
+| `.c` | gateway | 1002608 |
+| `.d` | hybrid | 1029648 |
+| `.e` | core_ap | 1044016 |
+| `.f` | audio_ap | 1071056 |
+| `.g` | gateway_ap | 1053376 |
+| `.h` | hybrid_ap | 1080416 |
+
+Diese Bestätigung betrifft Build und USB-Diagnose; ein signiertes Paket und Remote-OTA sind **noch nicht getestet**.
