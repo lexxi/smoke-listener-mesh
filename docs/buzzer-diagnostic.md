@@ -66,7 +66,7 @@ Seriell gemeldet: `version=0.6.16`, `gateway=0 audio=1 config_ap=0 battery=0 buz
 
 Ausgabe zweimal `[AUDIO] GROUP beeps=2 diagnostic_only=1`.
 ESP-NOW Heartbeat-Empfang und Relay-Meldungen liefen während des Tests weiter.
-**Manuelles `BUZZER STOP` wurde in diesem Test nicht separat geprüft.**
+**Manuelles `BUZZER STOP` wurde anschließend separat getestet und bestätigt.**
 
 **Wichtig:** Obwohl die PWM-Ansteuerung 2000 Hz vorgibt, erkennt das
 Mikrofon ~4 kHz. Eine Oberwelle bzw. die akustische Charakteristik des
@@ -74,6 +74,16 @@ Buzzers ist eine plausible Ursache, aber noch nicht messtechnisch
 bewiesen. Eigenbeschallung des Mikrofons muss vor künftiger
 Alarmkopplung berücksichtigt werden; dieser Test bestätigt ausdrücklich
 **keine** Rauchmelder-Alarmerkennung.
+
+### Separater STOP-Test über COM11
+
+Über `pyserial` wurde `BUZZER 2X2` gestartet und nach
+**1,5 Sekunden** `BUZZER STOP` gesendet. Im Log standen zwei gültige
+Audioerkennungen (513 ms bei 3150 Hz und 512 ms bei 3269 Hz), gefolgt von
+`[BUZZER] STOP`. Danach waren keine weiteren Pieptöne im übermittelten
+Testlog zu sehen. Das bestätigt das vorzeitige Abschalten im getesteten
+Ablauf. Die STOP-Meldung unmittelbar *vor* `PATTERN 2X2` entsteht durch
+das Zurücksetzen eines gegebenenfalls laufenden Musters beim Neustart.
 
 ### Sicherheitsgrenzen
 
@@ -96,4 +106,4 @@ python -m unittest discover -s tests -p "test_*.py"
 ```
 
 Zusätzlich auf dem Windows-PC mit eingebautem Arduino CLI kompilieren.
-Der einzelne Buzzer-Test wurde am XIAO bereits erfolgreich ausgeführt; das 2×2-Muster wurde hardwareseitig bestätigt. Der manuelle STOP-Befehl und die Integration in ein neues signiertes Release sind noch offen.
+Der einzelne Buzzer-Test wurde am XIAO bereits erfolgreich ausgeführt; das 2×2-Muster wurde hardwareseitig bestätigt. Die Integration in ein neues signiertes Release ist noch offen.
