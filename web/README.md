@@ -5,6 +5,10 @@ Knoten- und Gateway-Verwaltung, USB-Logger und signierter Remote-OTA-
 Releaseverwaltung. **Experimentelles Projekt; kein Ersatz für eine
 zertifizierte Rauchwarn- oder Brandmeldeanlage.**
 
+Die Versionsnummer wird zentral in `web/dashboard_version.py` über
+`DASHBOARD_VERSION` gepflegt. Der Dashboard-Badge liest diesen Wert aus
+Flask; die Firmwareversion wird unabhängig davon verwaltet.
+
 ## Schnellstart
 
 Im Repository-Stammverzeichnis mit der bestehenden Python-Umgebung:
