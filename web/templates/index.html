@@ -48,6 +48,7 @@ th{color:#b6c5d9;font-weight:600}
 <button id="logger-stop" type="button" disabled>Logger stoppen</button>
 <small id="logger-note" class="muted">Der Web-Logger belegt den konfigurierten COM-Port exklusiv; andere serielle Programme vorher beenden.</small>
 </section>
+<div id="logger-warning" class="warn" role="status" style="display:none"></div>
 <section class="panel sessionbar" aria-label="Testlauf auswählen">
 <label for="session">Testlauf</label>
 <select id="session" aria-label="Testlauf"><option value="">Neuester Log (automatisch)</option></select>
@@ -154,8 +155,14 @@ async function refreshLogger(){
   const j=await r.json();loggerCsrf=j.token;
   loggerName=j.name;loggerPort=j.port;
   $('logger-gateway').textContent=loggerName+' · '+loggerPort;
-  $('logger-state').textContent=j.ota_reserved?'Für OTA reserviert':(j.running?'Läuft · PID '+j.pid:'Nicht von Webapp gestartet');
+  $('logger-state').textContent=j.ota_reserved?'Für OTA reserviert':(j.running?'Läuft · PID '+j.pid:'Gestoppt');
   $('logger-note').textContent=j.note+(j.session?' · '+j.session:'');
+  const warning=$('logger-warning');
+  warning.style.display=j.running||j.ota_reserved?'none':'block';
+  warning.textContent=j.running?'':(j.ota_reserved?
+    'Gateway für OTA reserviert. Knotenstatus vorübergehend nicht aktuell.':
+    'Gateway-Logger gestoppt: Knotenstatus derzeit nicht aktuell. '+j.note);
+
   $('logger-start').disabled=j.running||j.ota_reserved;
   $('logger-stop').disabled=!j.running||j.ota_reserved;
   $('logger-start').title=j.running?'Logger läuft bereits – zuerst stoppen':loggerName+'-Logger starten';
