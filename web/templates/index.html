@@ -155,13 +155,21 @@ async function refreshLogger(){
   const j=await r.json();loggerCsrf=j.token;
   loggerName=j.name;loggerPort=j.port;
   $('logger-gateway').textContent=loggerName+' · '+loggerPort;
-  $('logger-state').textContent=j.ota_reserved?'Für OTA reserviert':(j.running?'Läuft · PID '+j.pid:'Gestoppt');
+  const serial=j.connection_state||(j.running?'connecting':'stopped');
+  $('logger-state').textContent=j.ota_reserved?'Für OTA reserviert':
+   (serial==='connected'?'Verbunden · PID '+j.pid:
+    serial==='disconnected'?'Nicht verbunden · PID '+j.pid:
+    serial==='connecting'?'Verbindung wird aufgebaut · PID '+j.pid:'Gestoppt');
   $('logger-note').textContent=j.note+(j.session?' · '+j.session:'');
   const warning=$('logger-warning');
-  warning.style.display=j.running||j.ota_reserved?'none':'block';
-  warning.textContent=j.running?'':(j.ota_reserved?
+  warning.style.display=serial==='connected'?'none':'block';
+  warning.textContent=j.ota_reserved?
     'Gateway für OTA reserviert. Knotenstatus vorübergehend nicht aktuell.':
-    'Gateway-Logger gestoppt: Knotenstatus derzeit nicht aktuell. '+j.note);
+    serial==='disconnected'?
+    'USB-Gateway auf '+j.port+' nicht verbunden. Logger-Prozess läuft, aber Knotenstatus derzeit nicht aktuell. '+j.note:
+    serial==='connecting'?
+    'USB-Gateway verbindet sich mit '+j.port+'. Knotenstatus derzeit nicht aktuell.':
+    'Gateway-Logger gestoppt: Knotenstatus derzeit nicht aktuell. '+j.note;
 
   $('logger-start').disabled=j.running||j.ota_reserved;
   $('logger-stop').disabled=!j.running||j.ota_reserved;
