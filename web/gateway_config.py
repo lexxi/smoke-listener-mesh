@@ -5,7 +5,9 @@ Edit web/gateways.json, then restart the Flask server to apply changes.
 from __future__ import annotations
 
 import json
+import os
 import re
+import tempfile
 from pathlib import Path
 
 CONFIG_FILE = Path(__file__).with_name("gateways.json")
@@ -40,3 +42,38 @@ def load_gateway_config(path: Path = CONFIG_FILE):
 
 LOGGER_PORT, TRUSTED_GATEWAYS = load_gateway_config()
 LOGGER_NAME = TRUSTED_GATEWAYS[LOGGER_PORT][0]
+
+def default_remote_gateway(path: Path = CONFIG_FILE) -> str:
+    """Read preferred remote gateway live; no Flask restart is needed."""
+    logger_port, gateways = load_gateway_config(path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    preferred = payload.get("default_remote_gateway", logger_port)
+    if preferred not in gateways:
+        raise ValueError("Unbekannter Standard-Gateway")
+    return preferred
+
+
+def set_default_remote_gateway(port: str, path: Path = CONFIG_FILE) -> str:
+    """Persist a validated remote-only gateway preference atomically."""
+    if not isinstance(port, str):
+        raise ValueError("Gateway-Port fehlt")
+    port = port.upper()
+    _, gateways = load_gateway_config(path)
+    if port not in gateways:
+        raise ValueError("Gateway ist nicht konfiguriert")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["default_remote_gateway"] = port
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         delete=False) as handle:
+            temporary = Path(handle.name)
+            json.dump(payload, handle, indent=2, ensure_ascii=False)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
+    return port
