@@ -34,13 +34,43 @@ def running():
     return process is not None and process.poll() is None
 
 
+
+def connection_state():
+    """Read the logger's latest serial connect/disconnect event.
+
+    A live Python PID is not proof of an open serial connection.
+    """
+    if not running() or session is None:
+        return "stopped"
+    try:
+        with session.open("rb") as stream:
+            stream.seek(0, 2)
+            length = stream.tell()
+            stream.seek(max(0, length - 65536))
+            lines = stream.read().decode("utf-8", errors="replace").splitlines()
+        for line in reversed(lines):
+            if "[LOGGER] Disconnected:" in line:
+                return "disconnected"
+            if "[LOGGER] Connected to " in line:
+                return "connected"
+    except OSError:
+        pass
+    return "connecting"
+
+
 def status_data():
     is_running = running()
+    serial_state = connection_state() if is_running else "stopped"
     current_note = note
+    if serial_state == "connecting":
+        current_note = f"{PORT}: Logger gestartet, wartet auf serielle Verbindung."
+    elif serial_state == "disconnected":
+        current_note = f"{PORT}: keine serielle Verbindung; Logger versucht erneut zu verbinden."
     if not is_running and process is not None:
         current_note = f"Logger beendet (Exit-Code {process.returncode}). COM-Port/Diagnoselog prüfen."
     return {"port": PORT, "name": LOGGER_NAME, "running": is_running,
             "pid": process.pid if is_running and process is not None else None,
+            "connected": serial_state == "connected", "connection_state": serial_state,
             "session": str(session.relative_to(ROOT)) if session else None,
             "note": current_note, "token": token, "ota_reserved": ota_reserved}
 
@@ -67,7 +97,7 @@ def _start_owned_locked():
     global process, output_handle, session, note
     output = ROOT / "log"
     output.mkdir(parents=True, exist_ok=True)
-    session = output / ("mesh_" + dt.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log")
+    session = output / ("mesh_" + dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f") + ".log")
     diagnostics = output / ("logger_control_" + dt.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log")
     output_handle = diagnostics.open("a", encoding="utf-8", buffering=1)
     try:
