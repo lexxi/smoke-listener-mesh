@@ -19,6 +19,9 @@
 #if SMOKE_FEATURE_AUDIO
 #include "audio_monitor.h"
 #endif
+#if SMOKE_FEATURE_BUZZER
+#include "buzzer_diagnostic.h"
+#endif
 #if SMOKE_FEATURE_AP
 #include <WebServer.h>
 #endif
@@ -928,6 +931,15 @@ void mgmtPendingWatchdog(){
 
 void handleCommand(String command) {
   command.trim();
+#if SMOKE_FEATURE_BUZZER
+  if(command.equalsIgnoreCase("BUZZER TEST")) {
+    SmokeBuzzer::test();
+    return;
+  } else if(command.equalsIgnoreCase("BUZZER STOP")) {
+    SmokeBuzzer::stop();
+    return;
+  } else
+#endif
   if(command.equalsIgnoreCase("BOOT STATUS")) {
     printBootDiagnostics();
   } else if(command.equalsIgnoreCase("BOOT VERIFY")) {
@@ -1515,6 +1527,9 @@ void setup() {
   Serial.printf("[FW] features gateway=%u audio=%u config_ap=%u battery=%u buzzer=%u\n",
     (unsigned)FEATURE_GATEWAY,(unsigned)FEATURE_AUDIO,(unsigned)FEATURE_CONFIG_AP,
     (unsigned)FEATURE_BATTERY,(unsigned)FEATURE_BUZZER);
+#if SMOKE_FEATURE_BUZZER
+  SmokeBuzzer::begin();
+#endif
   if(prefs.begin("smoke-mesh",true)) {
     nodeName=prefs.getString("name","");
     prefs.end();
@@ -1563,6 +1578,9 @@ void setup() {
 }
 void loop() {
   pollSerial();
+#if SMOKE_FEATURE_BUZZER
+  SmokeBuzzer::poll();
+#endif
 #if SMOKE_FEATURE_AP
   checkButton();
 #endif
