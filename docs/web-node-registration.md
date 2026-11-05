@@ -30,9 +30,17 @@ wird diese Auswahl vorausgewählt. Die Präferenz liegt in
 
 **Unterscheidung:** Das ändert nur den vorausgewählten Sender für
 Remote-Management und OTA. Der **physische USB-Logger** bleibt auf dem
-`logger_gateway` aus `web/gateways.json`. Neue USB-Ports/Gateway-Geräte
-anzulegen ist noch nicht im Webinterface implementiert. Kein
-Web-Konfigurationsschritt schreibt neue Vertrauensschlüssel in ESP32-Firmware.
+`logger_gateway` aus `web/gateways.json`.
+
+Im Abschnitt **USB-Gateways verwalten** können weitere USB-Gateways per
+COM-Port, Name und Node-ID hinzugefügt und entfernt werden. Neue
+Einstellungen werden in `web/data/managed_gateways.json` gespeichert und
+**erst nach einem vollständigen Neustart der Webapp aktiv**. COM16 als
+dedizierter Logger ist vor dem Löschen geschützt. COM12 (Küche) und
+COM14 (Garage) sind standardmäßig nicht mehr als USB-Gateways eingetragen,
+bleiben aber Mesh-Knoten und OTA-Empfänger. Die Firmware-Vertrauensanker
+werden dadurch **nicht** geändert: Ein neuer USB-Gateway muss von den
+Ziel-Firmwares bereits für Management-Befehle zugelassen sein.
 
 ## Logger-Start
 
