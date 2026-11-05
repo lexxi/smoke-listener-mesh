@@ -54,16 +54,21 @@ beendet.
 2. Knoten anhand der Node-ID markieren.
 3. **Name im Inventar**, **Standort** und bei Bedarf **OTA-Freigabe**
    setzen und **Knoten speichern** wählen.
-4. Falls auch der Gerätename geändert werden soll, separat **NAME SET**
-   ausführen und die Rückmeldung prüfen.
+4. Bei **neuen Knoten** kann **Namen auch im ESP32 speichern (NAME SET)**
+   aktiviert werden. Die Webapp speichert erst das Inventar und prüft
+   anschließend die bestätigte Fernumbenennung. Bei bestehenden Knoten
+   bleibt die Option standardmäßig aus. Diese Ergänzung ist noch im
+   Feature-Branch und muss vor dem Merge auf Hardware getestet werden.
 
 **Discover zeigt zuvor empfangene authentifizierte Mesh-Knoten, keine
 aktive Netzwerksuche.** Inventarname und Standort stehen in
 `config/nodes.csv`. OTA-Freigaben stehen in
 `web/data/node_targets.json`. Maximal fünf OTA-Empfänger sind zulässig.
 Ein neuer Knoten benötigt ein neu signiertes Firmware-Bundle mit seinem
-eigenen Manifest. Der Geräte-NVS-Name wird noch **nicht automatisch**
-beim Speichern des Inventars gesetzt.
+eigenen Manifest. Der Geräte-NVS-Name wird nur bei ausdrücklich gesetzter NAME-SET-Option
+mitgeschrieben; falls die Fernbestätigung scheitert, bleibt das Inventar
+bestehen und die Webapp zeigt den Fehler. In `main` ist die Funktion bis
+zum Merge des neuen Feature-Branches noch nicht verfügbar.
 
 **Standort ändern:** Das funktioniert ohne Firmware-Update, auch bei
 Küche und Garage; beide sind Mesh-Knoten und OTA-Empfänger.

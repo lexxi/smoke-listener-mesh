@@ -41,6 +41,26 @@ class RegistryTests(unittest.TestCase):
         registry.TARGETS_FILE = self.old_registry_targets
         registry.load_targets = self.old_loader
 
+    def test_management_log_copy_button_is_wired(self):
+        template = (ROOT / "web" / "templates" / "nodes.html").read_text(encoding="utf-8")
+        self.assertIn('id="copy-log"', template)
+        self.assertIn('id="copy-log-status"', template)
+        self.assertIn("navigator.clipboard?.writeText", template)
+        self.assertIn("document.execCommand('copy')", template)
+        self.assertIn("Protokoll kopiert", template)
+
+    def test_registration_name_sync_ui_is_opt_in_for_existing_nodes(self):
+        """Only new enrollment defaults to syncing; changing a location must not."""
+        template = (ROOT / "web" / "templates" / "nodes.html").read_text(encoding="utf-8")
+        self.assertIn('id="registry-sync-name"', template)
+        self.assertIn("!current && !!$('registry-name').value", template)
+        self.assertIn("if(!sync){", template)
+        self.assertIn("action:'NAME_SET'", template)
+        self.assertIn("NAME VERIFIED target=", template)
+        self.assertIn("pendingNameSync", template)
+        self.assertIn("registrationStatus(confirmed?", template)
+        self.assertIn("Inventar gespeichert, aber NAME SET nicht bestätigt", template)
+
     def test_auth_and_save(self):
         node = "0000123456789ABC"
         data = {"node_id": node, "name": "TestC3", "location": "Werkbank", "ota": True}
