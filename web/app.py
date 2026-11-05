@@ -28,6 +28,8 @@ from release_library import bp as releases_blueprint
 app.register_blueprint(releases_blueprint)
 from remote import bp as remote_blueprint
 app.register_blueprint(remote_blueprint)
+from node_registry import bp as node_registry_blueprint
+app.register_blueprint(node_registry_blueprint)
 lock = threading.RLock()
 db_path = ROOT / "web" / "data" / "mesh.db"
 log_dirs = [ROOT / "log", ROOT / "logs", ROOT / "scripts" / "log"]
