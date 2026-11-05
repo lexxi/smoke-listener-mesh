@@ -18,7 +18,7 @@ from flask import Blueprint, abort, jsonify, request, send_file, Response
 
 from release_library import STORE, PUBLIC_KEY, GUARD, _identity, _verify
 from logger_control import pause_for_remote_ota, resume_after_remote_ota
-from gateway_config import LOGGER_PORT, LOGGER_NAME, TRUSTED_GATEWAYS
+from gateway_config import LOGGER_PORT, LOGGER_NAME, TRUSTED_GATEWAYS, default_remote_gateway, set_default_remote_gateway
 from node_role_policy import load_targets, check_release_target
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -195,11 +195,29 @@ def config():
     return jsonify({
         "node_targets": targets,
         "target_config_error": target_error,
+        "default_gateway": default_remote_gateway(),
+        "logger_gateway": LOGGER_PORT,
         "gateways": [{"port": port, "name": info[0], "node": info[1]}
                      for port, info in TRUSTED_GATEWAYS.items()],
         "csrf": csrf,
         "notice": "v0.6.11+ auf Gateway und Ziel erforderlich. Fern-OTA ist bis zum Hardwaretest experimentell.",
     })
+
+
+@bp.post("/api/remote/default-gateway")
+def set_default_gateway():
+    _local()
+    if request.headers.get("X-Remote-CSRF") != csrf:
+        return jsonify({"error": "CSRF-Prüfung fehlgeschlagen"}), 403
+    data = request.get_json(silent=True) or {}
+    with lock:
+        if job["state"] == "running":
+            return jsonify({"error": "Gateway während einer Remote-Aktion nicht ändern"}), 409
+        try:
+            port = set_default_remote_gateway(data.get("gateway"))
+        except (OSError, ValueError, TypeError) as exc:
+            return jsonify({"error": str(exc)}), 400
+    return jsonify({"default_gateway": port, "saved": True})
 
 
 @bp.get("/api/remote/job")
