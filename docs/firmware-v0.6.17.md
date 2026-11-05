@@ -70,6 +70,35 @@ Variantenzuordnung, Signierung, Verifikation und Web-Releaseanzeige
 auf Konsistenz geprüft und getestet werden. Bestehende signierte
 `0.6.16`-Artefakte niemals überschreiben oder als `0.6.17` ausgeben.
 
+## Testergebnisse – 05.11.2026
+
+Auf dem Testknoten `000020D37E6E27AC` wurde die neue Firmware
+`0.6.17` (USB-Testbuild mit `FEATURE_BUZZER=1`) geprüft:
+
+- Python-Regressionssuite: vom Anwender erfolgreich bestätigt.
+- Arduino-CLI BuildOnly-Matrix: **8 von 8 Profilen** erfolgreich,
+  Größen zwischen **981.840 und 1.069.168 Bytes**.
+- Arduino-IDE-Testbuild: **1.019.739 Bytes Flash (77 %)**,
+  **47.620 Bytes RAM (14 %)**.
+- `BUZZER 2X2`: vier gültige Audioereignisse mit
+  **512 / 512 / 512 / 544 ms** und ungefähr 3.444–3.688 Hz erkannt.
+  Die Firmware meldete zweimal
+  `[AUDIO] GROUP beeps=2 diagnostic_only=1`.
+- `[BUZZER] STOP` wurde automatisch nach der vollständigen Sequenz
+  gemeldet. Ein manueller zeitgesteuerter STOP war bereits auf der
+  vorigen Firmware erfolgreich getestet worden.
+- ESP-NOW `TX`, `RX`, `RELAY` und `AUTH=OK` liefen während
+  der Sequenz; Knoten mit Firmware `0.6.16.h` waren weiterhin erreichbar.
+- Nach dem Test trat einmal `[AUDIO] BEEP_TIMEOUT` mit einer
+  ungültigen Erkennung (1440 ms, 0 Hz) auf; dies ist kein Alarmnachweis.
+
+**Grenze des Tests:** Das Mikrofon reagiert auf den eigenen Buzzer;
+die gemessene Audiofrequenz entspricht nicht zwingend der PWM-Frequenz
+des Buzzers. Die Firmware arbeitet weiterhin mit
+`diagnostic_only=1`; eine echte Rauchmelder-Alarmweiterleitung ist
+nicht implementiert. Es wurden keine signierten Pakete erzeugt oder
+per OTA verteilt.
+
 ## Mindestprüfungen vor dem Merge
 
 ```powershell
