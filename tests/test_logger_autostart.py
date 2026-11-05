@@ -15,7 +15,7 @@ class LoggerStartupTests(unittest.TestCase):
         self.assertIn("ota_reserved", state)
         self.assertIn("running", state)
         with patch.object(logger_control, "_start_owned_locked") as launch, \
-             patch.object(logger_control, "running", side_effect=[False, True]):
+             patch.object(logger_control, "running", side_effect=[False, True, True, True]):
             first = logger_control.autostart()
             second = logger_control.autostart()
             self.assertEqual(launch.call_count, 1)
