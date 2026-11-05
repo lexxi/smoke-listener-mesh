@@ -1,6 +1,6 @@
 # HW-508 Buzzer: lokaler Diagnosetest (Feature-Branch)
 
-**Status:** Code vorbereitet; Hardwaretyp und konkrete Pinbelegung des
+**Status:** Einfacher 500-ms-Buzzertest am XIAO wurde vom Anwender erfolgreich geprüft; 2×2-Piepsmuster neu implementiert, aber noch nicht auf Hardware getestet. Die konkrete Pinbelegung des
 **HW-508 v0.2.0** noch nicht anhand des Moduls verifiziert. Vor dem
 Anschließen die Modulbeschriftung prüfen. **Nicht blind den mittleren
 Pin an 3V3 oder 5V anschließen.**
@@ -37,7 +37,8 @@ Serieller Monitor: **115200 Baud**, Zeilenende `Newline` oder `Both NL & CR`.
 
 | Befehl | Wirkung |
 | --- | --- |
-| `BUZZER TEST` | 2000-Hz-PWM-Testton auf GPIO5, **max. 500 ms** |
+| `BUZZER TEST` | Ein 2000-Hz-PWM-Testton auf GPIO5 für **500 ms** |
+| `BUZZER 2X2` | Vier Töne zu je 500 ms: Ton – 250 ms Pause – Ton – 1000 ms Pause – Ton – 250 ms Pause – Ton |
 | `BUZZER STOP` | Ton sofort beenden |
 
 Die Firmware meldet `[BUZZER] READY pin=GPIO5 mode=serial_diagnostic_only`
@@ -55,7 +56,9 @@ hohem Betriebsstrom einen separaten Treiber einsetzen.
 - Kein Ton beim Booten.
 - Keine automatische Buzzer-Auslösung durch Audio, Heartbeat, Mesh oder OTA.
 - Keine Fernsteuerung der Buzzer-Funktion über das Funknetz.
-- Maximal 500 ms Tondauer je bewusstem lokalem Testbefehl.
+- Maximal 500 ms Tondauer pro Einzelton; das Muster besteht aus genau vier Tönen.
+- `BUZZER STOP` unterbricht auch ein laufendes 2×2-Muster sofort.
+- Der gesamte Ablauf ist ohne blockierende `delay()`-Aufrufe umgesetzt; die Mesh-Verarbeitung bleibt aktiv.
 - Kein zertifizierter Alarmgeber.
 - Die Entwicklung verändert bislang den `v0.6.16`-Quellbaum
   **nur im Feature-Branch**. Vor einem offiziellen Release
@@ -69,4 +72,4 @@ python -m unittest discover -s tests -p "test_*.py"
 ```
 
 Zusätzlich auf dem Windows-PC mit eingebautem Arduino CLI kompilieren.
-Die Hardwarefunktion bleibt bis zum tatsächlichen Test unbestätigt.
+Der einzelne Buzzer-Test wurde am XIAO bereits erfolgreich ausgeführt; das neue 2×2-Muster benötigt noch einen separaten Hardwaretest.
