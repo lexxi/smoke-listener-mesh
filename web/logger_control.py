@@ -71,7 +71,7 @@ def status_data():
     return {"port": PORT, "name": LOGGER_NAME, "running": is_running,
             "pid": process.pid if is_running and process is not None else None,
             "connected": serial_state == "connected", "connection_state": serial_state,
-            "session": str(session.relative_to(ROOT)) if session else None,
+            "session": str(session.relative_to(ROOT)) if session and session.is_relative_to(ROOT) else (str(session) if session else None),
             "note": current_note, "token": token, "ota_reserved": ota_reserved}
 
 
