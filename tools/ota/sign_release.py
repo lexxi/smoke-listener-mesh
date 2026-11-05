@@ -31,7 +31,7 @@ def feature_claim(features, digest, target, version, label=None):
     if "buzzer" in features:
         # New orthogonal feature, but only for releases that have never used
         # the old three-feature-only variant identity.
-        match = re.fullmatch(r"(\\d+)\\.(\\d+)\\.(\\d+)\\.[a-h]", version)
+        match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)\.[a-h]", version)
         if not match or tuple(map(int, match.groups())) < (0, 6, 18):
             raise ValueError("Signed buzzer feature requires firmware >=0.6.18 with .a-h variant")
     if suffix:
