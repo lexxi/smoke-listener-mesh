@@ -1,5 +1,14 @@
 # Remote-OTA über die Webapp – einmalige USB-Migration
 
+> **Archivhinweis (05.11.2026):** Dieses Dokument beschreibt den historischen
+> Migrationsplan für v0.6.11/v0.6.12 und enthält inzwischen überholte
+> Gateway-Ports, Hardwaretest-Aussagen und Vier-Knoten-Beispiele. Der
+> aktuelle, unter Windows geprüfte Stand ist **v0.6.16**, mit dediziertem
+> **COM16-Gateway** und bis zu **fünf** OTA-Empfängern. Die aktuelle
+> Bedienungsanleitung steht in [Webapp-Knoten-/Gateway-Verwaltung](web-node-registration.md)
+> und [Web-README](../web/README.md). **Die folgenden Schritte nicht
+> unbesehen als aktuelle Installationsanleitung verwenden.**
+
 **Status 04.11.2026: Quellcode implementiert, noch NICHT auf ESP32-C3 kompiliert oder in Hardware getestet.** Die vorhandene v0.6.9-Rollbackprobe beweist NICHT die neue Fernaktivierung. Die Migration deshalb in Etappen durchführen.
 
 ## Ziel
