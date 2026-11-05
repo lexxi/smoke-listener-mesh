@@ -23,7 +23,7 @@ Mesh-Weiterleitung, einen dedizierten USB-Gateway und eine lokale
 | Akustik | INMP441-basierte Ton-/Piepsdiagnostik erprobt; komplette Alarmkette noch nicht validiert |
 | Remote-Verwaltung | STATUS, NAME GET/SET/RESET, RESTART und Remote-OTA über einen autorisierten Gateway |
 | Dedizierter Gateway | **COM16**, Node-ID `00000CEC7E6E27AC`, vom Webserver verwalteter USB-Logger |
-| Webapp | Flask-Dashboard: Discover, Inventar/Standort, OTA-Freigabe, Gateway-Einstellungen, Loggerstatus, Firmware-Releases |
+| Webapp | **Dashboard v0.4.0** (Flask): Discover, Inventar/Standort, OTA-Freigabe, Gateway-Einstellungen, Loggerstatus, Firmware-Releases |
 | OTA | Zielgebundene, signierte Firmwaremanifeste; maximal **fünf** freigegebene Empfänger neben dem USB-Gateway |
 | Nachgewiesen | Knotenregistrierung, Standortänderung, COM16-Verwaltung, Logger-Reconnect und die Webapp-Funktionen aus PR #4 in der Windows-Testinstallation |
 | Noch offen | Automatische Übernahme des Inventarnamens per NAME SET, vollständige Alarm-/Mikrofonvalidierung, Batterie- und Buzzer-Integration |
