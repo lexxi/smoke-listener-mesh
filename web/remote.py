@@ -18,7 +18,7 @@ from flask import Blueprint, abort, jsonify, request, send_file, Response
 
 from release_library import STORE, PUBLIC_KEY, GUARD, _identity, _verify
 from logger_control import pause_for_remote_ota, resume_after_remote_ota
-from gateway_config import LOGGER_PORT, LOGGER_NAME, TRUSTED_GATEWAYS, default_remote_gateway, set_default_remote_gateway
+from gateway_config import LOGGER_PORT, LOGGER_NAME, TRUSTED_GATEWAYS, default_remote_gateway, set_default_remote_gateway, current_gateway_payload, save_optional_gateways
 from node_role_policy import load_targets, check_release_target
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -202,6 +202,44 @@ def config():
         "csrf": csrf,
         "notice": "v0.6.11+ auf Gateway und Ziel erforderlich. Fern-OTA ist bis zum Hardwaretest experimentell.",
     })
+
+
+@bp.get("/api/remote/gateway-settings")
+def gateway_settings():
+    _local()
+    payload = current_gateway_payload()
+    active = [{"port": port, "name": info[0], "node": info[1]}
+              for port, info in TRUSTED_GATEWAYS.items()]
+    return jsonify({
+        "logger_gateway": LOGGER_PORT,
+        "pending": [{"port": port, **value} for port, value in payload["gateways"].items()],
+        "active": active,
+        "restart_required": payload["gateways"] != {
+            port: {"name": info[0], "node": info[1]} for port, info in TRUSTED_GATEWAYS.items()
+        },
+    })
+
+
+@bp.post("/api/remote/gateway-settings")
+def update_gateway_settings():
+    _local()
+    if request.headers.get("X-Remote-CSRF") != csrf:
+        return jsonify({"error": "CSRF-Prüfung fehlgeschlagen"}), 403
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "JSON-Objekt erwartet"}), 400
+    with lock:
+        if job["state"] == "running":
+            return jsonify({"error": "Keine Gateway-Konfiguration während Remote-Aktion"}), 409
+        from logger_control import ota_reserved
+        if ota_reserved:
+            return jsonify({"error": "Gateway-Logger für Remote-Aktion reserviert"}), 409
+        try:
+            save_optional_gateways(data.get("gateways"))
+        except (OSError, ValueError, TypeError) as exc:
+            return jsonify({"error": str(exc)}), 400
+    return jsonify({"ok": True, "restart_required": True,
+                    "note": "Gateway-Konfiguration gespeichert. Webapp vollständig neu starten."})
 
 
 @bp.post("/api/remote/default-gateway")
