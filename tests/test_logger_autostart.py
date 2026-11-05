@@ -1,5 +1,6 @@
 """Guard Web gateway logger autostart and stopped-status disclosure."""
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -41,10 +42,40 @@ class LoggerStartupTests(unittest.TestCase):
         finally:
             logger_control.ota_reserved = previous
 
+    def test_running_pid_does_not_imply_serial_connection(self):
+        class FakeProcess:
+            pid = 613
+            def poll(self):
+                return None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            logfile = Path(tmp) / "serial.log"
+            logfile.write_text("2026-11-05 [LOGGER] Disconnected: COM16 unavailable; retry in 5s\\n", encoding="utf-8")
+            # FakeProcess provides a live PID, but disconnected log takes priority.
+            with patch.object(logger_control, "process", FakeProcess()), \\
+                 patch.object(logger_control, "session", logfile):
+                data = logger_control.status_data()
+                self.assertTrue(data["running"])
+                self.assertFalse(data["connected"])
+                self.assertEqual(data["connection_state"], "disconnected")
+                logfile.write_text(
+                    "2026-11-05 [LOGGER] Disconnected: COM16 unavailable; retry in 5s\\n"
+                    "2026-11-05 [LOGGER] Connected to COM16\\n", encoding="utf-8"
+                )
+                data = logger_control.status_data()
+                self.assertTrue(data["connected"])
+                self.assertEqual(data["connection_state"], "connected")
+                logfile.write_text(
+                    "2026-11-05 [LOGGER] Connected to COM16\\n"
+                    "2026-11-05 [LOGGER] Disconnected: unplugged; retry in 5s\\n", encoding="utf-8"
+                )
+                self.assertFalse(logger_control.status_data()["connected"])
+
     def test_ui_warns_when_stopped(self):
         dashboard = (ROOT / "web/templates/index.html").read_text(encoding="utf-8")
         self.assertIn('id="logger-warning"', dashboard)
         self.assertIn("Knotenstatus derzeit nicht aktuell", dashboard)
+        self.assertIn("Nicht verbunden · PID", dashboard)
         app = (ROOT / "web/app.py").read_text(encoding="utf-8")
         self.assertIn("logger_state = autostart()", app)
 
