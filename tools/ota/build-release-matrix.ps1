@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-Build and optionally sign all eight v0.6.17.a .. v0.6.17.h profiles.
+Build and optionally sign all eight v0.6.18.a .. v0.6.18.h profiles.
 USB flashing and remote OTA are deliberately not performed here.
 #>
 [CmdletBinding()]
 param(
-  [string]$Version = "0.6.17",
+  [string]$Version = "0.6.18",
   [string]$Fqbn = "esp32:esp32:XIAO_ESP32C3:UploadSpeed=921600,CDCOnBoot=default,CPUFreq=160,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=default,DebugLevel=none,EraseFlash=none",
   [string]$ArduinoCli = "arduino-cli",
   [string]$PrivateKey = "C:\mesh-ota-keys\signing-private.pem",
@@ -18,7 +18,12 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version muss numerisch sein, z.B. 0.6.17" }
+if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version muss numerisch sein, z.B. 0.6.18" }
+# Avoid ambiguous identities: all signed v0.6.18.a-h images contain buzzer.
+# Non-buzzer revisions require a different firmware version.
+if ($Version -eq "0.6.18" -and -not $Buzzer) {
+  throw "v0.6.18.a-h sind fuer -Buzzer reserviert. Bitte -Buzzer angeben oder eine andere Version verwenden."
+}
 # A buzzer-enabled build must never reuse legacy version/variant identities.
 if ($Buzzer) {
   $v = [version]$Version

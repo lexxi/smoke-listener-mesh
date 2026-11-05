@@ -33,7 +33,7 @@ class FirmwareV0617Tests(unittest.TestCase):
 
     def test_release_matrix_preserves_eight_profile_contract(self):
         matrix = (REPO / "tools" / "ota" / "build-release-matrix.ps1").read_text(encoding="utf-8")
-        self.assertIn('[string]$Version = "0.6.17"', matrix)
+        self.assertIn('[string]$Version = "0.6.18"', matrix)
         self.assertIn("-DFEATURE_BUZZER=0", matrix)
         self.assertEqual(matrix.count("@{Name="), 8)
 

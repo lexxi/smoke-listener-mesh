@@ -28,6 +28,11 @@ def feature_claim(features, digest, target, version, label=None):
         raise ValueError("Unknown or duplicate feature")
     import re
     suffix = re.fullmatch(r"\d+\.\d+\.\d+\.([a-h])", version)
+    # Release 0.6.18 reserves all eight variant identities for buzzer-enabled
+    # images. A signed 0.6.18.b without buzzer would be indistinguishable
+    # from 0.6.18.b with buzzer to the existing OTA version comparator.
+    if re.fullmatch(r"0\.6\.18\.[a-h]", version) and "buzzer" not in features:
+        raise ValueError("0.6.18.a-h releases require the signed buzzer feature")
     if "buzzer" in features:
         # New orthogonal feature, but only for releases that have never used
         # the old three-feature-only variant identity.
