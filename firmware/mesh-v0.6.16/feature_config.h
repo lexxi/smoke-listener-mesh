@@ -15,7 +15,7 @@
 #ifndef FEATURE_CONFIG_AP
 #define FEATURE_CONFIG_AP 0
 #endif
-// Future features: intentionally rejected until hardware and code exist.
+// Battery is still a placeholder; buzzer enables local serial diagnostics only.
 #ifndef FEATURE_BATTERY
 #define FEATURE_BATTERY 0
 #endif
@@ -30,10 +30,12 @@
     (FEATURE_BUZZER != 0 && FEATURE_BUZZER != 1)
 #error "Feature flags must be 0 or 1"
 #endif
-#if FEATURE_BATTERY || FEATURE_BUZZER
-#error "Battery and buzzer are not implemented; keep them disabled"
+#if FEATURE_BATTERY
+#error "Battery is not implemented; keep it disabled"
 #endif
 
 #define SMOKE_FEATURE_AUDIO FEATURE_AUDIO
 #define SMOKE_FEATURE_AP FEATURE_CONFIG_AP
 #define SMOKE_FEATURE_GATEWAY FEATURE_GATEWAY
+
+#define SMOKE_FEATURE_BUZZER FEATURE_BUZZER
