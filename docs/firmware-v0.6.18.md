@@ -72,3 +72,28 @@ Keine anderen Knoten anfassen, bevor der Test erfolgreich war.
 **Hinweis:** Wegen des Versionsvergleichs darf dieselbe Kennung
 `0.6.18.b` nicht für einen zweiten, abweichenden Build wiederverwendet
 werden. Ein weiterer Funktionsstand benötigt eine neue Version.
+
+## Hardwaretestergebnis – Testknoten (USB)
+
+Der lokale USB-Test auf `000020D37E6E27AC` war erfolgreich:
+
+- Boot meldet `version=0.6.18`, `gateway=0 audio=1 config_ap=0 battery=0 buzzer=1`.
+- `BUZZER 2X2` lief auf GPIO5 mit 2000 Hz, nominell viermal 500 ms.
+- Vier gültige `[AUDIO] BEEP`-Ereignisse: 512 ms/3562 Hz,
+  512 ms/3750 Hz, 544 ms/3647 Hz, 512 ms/3750 Hz;
+  `match_pct=100 valid=1`.
+- Zwei `[AUDIO] GROUP beeps=2 diagnostic_only=1`,
+  automatischer `[BUZZER] STOP`.
+- Empfang und Relay von `1OG`, `Garage`, `FZRaum` und
+  dem USB-Gateway; jeweils `AUTH=OK` in den empfangenen Paketen
+  und ältere Versionen `0.6.16.h`/`0.6.16.c` kompatibel.
+- Ein anfängliches ungültiges BEEP-Ereignis (448 ms, 0 Hz,
+  `valid=0`) wurde erkannt und korrekt nicht als gültiger Beep gezählt.
+
+**Einschränkung:** Der 2000-Hz-PWM-Buzzer wird akustisch im
+Bereich 3562–3750 Hz erkannt. Die Frequenzdiskrepanz wurde nicht
+vermessen oder aufgeklärt; dieser Test bestätigt nur die
+Diagnosefunktion, keine Rauchalarm-Sicherheit. Es liegt noch **kein**
+positiver Bericht für signiertes OTA-Staging, Boot-Aktivierung oder
+Rollback vor. Ebenso ist ein kompletter Python-Testlauf für diesen
+PR noch separat zu bestätigen.
