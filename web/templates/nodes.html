@@ -53,10 +53,23 @@ tr.pick{cursor:pointer}tr.pick:hover{background:#20324b}tr.selected{background:#
 <p id="registry-info" class="muted"></p>
 <small>Inventarname und Firmware-Name sind getrennt. Mit NAME SET wird der Name zusätzlich im Gerät gespeichert. Bereits signierte ZIP-Pakete enthalten kein Manifest für neu registrierte Geräte und müssen bei Bedarf neu signiert werden.</small>
 </section>
-<section class="card"><div class="row"><h2>4 · Ergebnis</h2><strong id="state">Bereit</strong></div>
+<section class="card"><h2>4 · USB-Gateways verwalten</h2>
+<p class="muted">Der dedizierte COM16-Logger ist geschützt. Weitere USB-Gateways lassen sich hinzufügen oder entfernen. Änderungen werden nach Webapp-Neustart aktiv; Mesh-Knoten und OTA-Ziele bleiben bestehen.</p>
+<div id="gateway-list"></div>
+<div class="row" style="margin-top:16px">
+<label style="flex:1;min-width:120px">Port<input id="new-gw-port" placeholder="COM20"></label>
+<label style="flex:1;min-width:160px">Name<input id="new-gw-name" placeholder="Reserve"></label>
+<label style="flex:2;min-width:220px">Node-ID<input id="new-gw-node" maxlength="16" placeholder="0000XXXXXXXXXXXX"></label>
+</div>
+<div class="row" style="margin-top:16px">
+<button id="add-gateway" type="button">Gateway hinzufügen</button>
+<button id="save-gateways" type="button">Gateway-Liste speichern</button>
+</div><p id="gateway-admin-status" class="muted"></p></section>
+<section class="card"><div class="row"><h2>5 · Ergebnis</h2><strong id="state">Bereit</strong></div>
 <p id="message" class="muted"></p><pre id="log">Noch keine Ausgabe.</pre></section>
 <script>
 const $=id=>document.getElementById(id);
+let managedGateways=[],loggerGatewayPort='COM16';
 let nodes=[],gateways=[],csrf='',running=false,lastId=null,registryCsrf='',registryEntries=[],otaTargets=[],gatewayNodes=[],maxOta=5,selectedRegistryId=null;
 function nodeId(mac){
  const parts=(mac||'').toUpperCase().split(':');
@@ -153,6 +166,47 @@ async function jobRefresh(){
   selection();
  }catch(e){$('message').textContent=e.message}
 }
+async function loadGatewaySettings(){
+ const r=await fetch('/api/remote/gateway-settings',{cache:'no-store'});if(!r.ok)throw Error('Gateway-Einstellungen nicht verfügbar');
+ const j=await r.json();loggerGatewayPort=j.logger_gateway;
+ managedGateways=(j.pending||[]).filter(g=>g.port!==loggerGatewayPort);
+ renderGatewaySettings();
+ $('gateway-admin-status').textContent=j.restart_required?'Neustart der Webapp erforderlich.':'Gateway-Liste aktuell.';
+}
+function renderGatewaySettings(){
+ const e=$('gateway-list');e.replaceChildren();
+ const p=document.createElement('p');p.textContent='Geschützt: '+loggerGatewayPort+' · USB-Logger';e.append(p);
+ for(const g of managedGateways){
+  const row=document.createElement('div');row.className='row';row.style.marginTop='10px';
+  const text=document.createElement('span');text.textContent=g.name+' · '+g.port+' · '+g.node;
+  const btn=document.createElement('button');btn.type='button';btn.className='danger';btn.textContent='Entfernen';
+  btn.onclick=()=>{managedGateways=managedGateways.filter(x=>x!==g);renderGatewaySettings()};
+  row.append(text,btn);e.append(row);
+ }
+}
+$('add-gateway').onclick=()=>{
+ const port=$('new-gw-port').value.trim().toUpperCase(),name=$('new-gw-name').value.trim(),
+       node=$('new-gw-node').value.trim().toUpperCase();
+ if(!/^COM[1-9][0-9]*$/.test(port)||!name||name.length>40||!/^[0-9A-F]{16}$/.test(node)){
+  $('gateway-admin-status').textContent='COM-Port, Name und 16-stellige Node-ID prüfen.';return;
+ }
+ if(port===loggerGatewayPort||managedGateways.some(x=>x.port===port||x.node===node)){
+  $('gateway-admin-status').textContent='Port oder Node-ID bereits vergeben.';return;
+ }
+ managedGateways.push({port,name,node});renderGatewaySettings();
+ for(const id of ['new-gw-port','new-gw-name','new-gw-node'])$(id).value='';
+};
+$('save-gateways').onclick=async()=>{
+ if(!confirm('Gateway-Liste speichern? Die Webapp muss danach neu gestartet werden.'))return;
+ try{
+  const r=await fetch('/api/remote/gateway-settings',{method:'POST',
+   headers:{'Content-Type':'application/json','X-Remote-CSRF':csrf},
+   body:JSON.stringify({gateways:managedGateways})});
+  const j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);
+  $('gateway-admin-status').textContent=j.note;
+ }catch(e){$('gateway-admin-status').textContent='Fehler: '+e.message}
+};
+
 async function loadRegistry(){
  const r=await fetch('/api/nodes/registry',{cache:'no-store'});
  if(!r.ok)throw Error('Knotenregistrierung: HTTP '+r.status);
