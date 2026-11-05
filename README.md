@@ -94,11 +94,13 @@ Inventarname und Standort in `config/nodes.csv`, die Freigaben in
 `web/data/node_targets.json`.
 
 **Gerätename und Inventarname sind unterschiedliche Werte:**
-Der echte ESP32-Gerätename wird derzeit noch separat mit **NAME SET**
-im NVS geändert. NAME GET, NAME RESET, Funkstatus und Neustart sind
-ebenfalls über die Knotenverwaltung verfügbar. Automatisches NAME SET
-beim Registrieren ist als nächste Funktion vorgesehen, aber **noch
-nicht implementiert**.
+Bei einer **neuen Registrierung** kann der Inventarname optional gleich per **NAME SET**
+im NVS gespeichert werden. Die Webapp prüft die NAME-GET-Bestätigung; bei
+bestehenden Knoten bleibt die Option standardmäßig aus, damit eine reine
+Standortänderung keinen Gerätebefehl auslöst. NAME GET, NAME RESET, Funkstatus und Neustart sind
+ebenfalls über die Knotenverwaltung verfügbar. Die kombinierte Registrierung mit NAME SET ist im Feature-Branch
+`feature/web-registration-name-set` implementiert, aber noch **nicht
+auf Hardware getestet oder nach main gemergt**.
 
 Der Standort kann jederzeit ohne Flashen geändert werden – auch bei
 **Küche** und **Garage**. Beide bleiben als reguläre Mesh-Knoten und
@@ -232,7 +234,7 @@ LAN oder Internet stellen. Für Schreibaktionen bestehen zusätzliche
 lokale Zugriffs- und CSRF-Prüfungen, aber das ersetzt keine
 Benutzerauthentisierung.
 
-**Offen:** automatische Namensübernahme beim Registrieren;
+**Offen:** Hardwaretest und Merge der Namensübernahme;
 Identitätsprüfung des angesteckten USB-Gateways; vollständige
 End-to-End-Validierung der akustischen Erkennung und Alarmweiterleitung;
 Stromversorgung/Batterielaufzeit, Buzzer und Gehäuse.
