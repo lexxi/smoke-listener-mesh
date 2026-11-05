@@ -43,36 +43,44 @@ def load_gateway_config(path: Path = CONFIG_FILE):
 LOGGER_PORT, TRUSTED_GATEWAYS = load_gateway_config()
 LOGGER_NAME = TRUSTED_GATEWAYS[LOGGER_PORT][0]
 
+def _preference_file(config_path: Path) -> Path:
+    return config_path.parent / "data" / "gateway_preferences.json"
+
+
 def default_remote_gateway(path: Path = CONFIG_FILE) -> str:
-    """Read preferred remote gateway live; no Flask restart is needed."""
+    """Read user preference live from ignored web/data, falling back to logger."""
     logger_port, gateways = load_gateway_config(path)
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    preferred = payload.get("default_remote_gateway", logger_port)
+    preference_file = _preference_file(path)
+    if not preference_file.exists():
+        return logger_port
+    payload = json.loads(preference_file.read_text(encoding="utf-8"))
+    preferred = payload.get("default_remote_gateway")
     if preferred not in gateways:
-        raise ValueError("Unbekannter Standard-Gateway")
+        return logger_port
     return preferred
 
 
 def set_default_remote_gateway(port: str, path: Path = CONFIG_FILE) -> str:
-    """Persist a validated remote-only gateway preference atomically."""
+    """Persist a validated remote preference without modifying tracked gateways.json."""
     if not isinstance(port, str):
         raise ValueError("Gateway-Port fehlt")
     port = port.upper()
     _, gateways = load_gateway_config(path)
     if port not in gateways:
         raise ValueError("Gateway ist nicht konfiguriert")
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    payload["default_remote_gateway"] = port
+    preference_file = _preference_file(path)
+    preference_file.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"default_remote_gateway": port}
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=preference_file.parent,
                                          delete=False) as handle:
             temporary = Path(handle.name)
             json.dump(payload, handle, indent=2, ensure_ascii=False)
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        os.replace(temporary, preference_file)
     finally:
         if temporary is not None and temporary.exists():
             temporary.unlink()
