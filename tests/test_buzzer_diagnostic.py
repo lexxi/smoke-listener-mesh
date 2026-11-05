@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1] / "firmware" / "mesh-v0.6.16"
 class BuzzerDiagnosticTests(unittest.TestCase):
     def test_off_by_default_and_battery_still_disallowed(self):
         config = (ROOT / "feature_config.h").read_text(encoding="utf-8")
-        self.assertRegex(config, r"#define FEATURE_BUZZER [01]\\b")
+        self.assertRegex(config, r"#define FEATURE_BUZZER [01]\b")
         self.assertIn("#ifndef FEATURE_BUZZER", config)
         # The local header may be set to 1 for hardware diagnostics;
         # the signed release matrix still forces FEATURE_BUZZER=0.
