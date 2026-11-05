@@ -7,7 +7,7 @@ from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[1] / "web"
 sys.path.insert(0, str(WEB))
-from gateway_config import load_gateway_config, LOGGER_PORT, LOGGER_NAME, TRUSTED_GATEWAYS
+from gateway_config import load_gateway_config, LOGGER_PORT, LOGGER_NAME, TRUSTED_GATEWAYS, default_remote_gateway, set_default_remote_gateway
 import logger_control
 import remote
 
@@ -45,6 +45,24 @@ class GatewayConfigTests(unittest.TestCase):
                 path.write_text(json.dumps(invalid), encoding="utf-8")
                 with self.assertRaises(ValueError):
                     load_gateway_config(path)
+
+    def test_persist_default_remote_gateway_without_affecting_logger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "gateways.json"
+            original = {
+                "logger_gateway": "COM16",
+                "gateways": {
+                    "COM16": {"name": "Gateway", "node": "00000CEC7E6E27AC"},
+                    "COM14": {"name": "Garage", "node": "000058FE7D6E27AC"}
+                }
+            }
+            path.write_text(json.dumps(original), encoding="utf-8")
+            self.assertEqual(default_remote_gateway(path), "COM16")
+            self.assertEqual(set_default_remote_gateway("com14", path), "COM14")
+            self.assertEqual(default_remote_gateway(path), "COM14")
+            self.assertEqual(load_gateway_config(path)[0], "COM16")
+            with self.assertRaisesRegex(ValueError, "nicht konfiguriert"):
+                set_default_remote_gateway("COM99", path)
 
     def test_embedded_receiver_trusts_dedicated_gateway(self):
         sketch = (WEB.parent / "firmware" / "mesh-v0.6.15" / "mesh-v0.6.15.ino").read_text(encoding="utf-8")
