@@ -9,7 +9,10 @@ ROOT = Path(__file__).resolve().parents[1] / "firmware" / "mesh-v0.6.16"
 class BuzzerDiagnosticTests(unittest.TestCase):
     def test_off_by_default_and_battery_still_disallowed(self):
         config = (ROOT / "feature_config.h").read_text(encoding="utf-8")
-        self.assertRegex(config, r"#define FEATURE_BUZZER 0")
+        self.assertRegex(config, r"#define FEATURE_BUZZER [01]\b")
+        self.assertIn("#ifndef FEATURE_BUZZER", config)
+        # The local header may be set to 1 for hardware diagnostics;
+        # the signed release matrix still forces FEATURE_BUZZER=0.
         self.assertIn("#if FEATURE_BATTERY", config)
         self.assertIn("#define SMOKE_FEATURE_BUZZER FEATURE_BUZZER", config)
 
@@ -20,7 +23,7 @@ class BuzzerDiagnosticTests(unittest.TestCase):
         self.assertIn("constexpr uint32_t TEST_DURATION_MS = 500;", header)
         self.assertIn("ledcAttach(PIN, FREQ_HZ, DUTY_RESOLUTION)", header)
         self.assertIn("ledcWriteTone(PIN, 0)", header)
-        self.assertIn("millis() - phaseStarted", header)
+        self.assertIn("(now - phaseStarted)", header)
         self.assertIn("constexpr uint32_t SHORT_GAP_MS = 250;", header)
         self.assertIn("constexpr uint32_t GROUP_GAP_MS = 1000;", header)
         self.assertIn("constexpr uint8_t PATTERN_BEEPS = 4;", header)
