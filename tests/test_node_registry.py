@@ -18,9 +18,11 @@ class RegistryTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.old_nodes = registry.NODES_FILE
         self.old_targets = roles.TARGETS_FILE
+        self.old_registry_targets = registry.TARGETS_FILE
         self.base = Path(self.tmp.name)
         registry.NODES_FILE = self.base / "nodes.csv"
         roles.TARGETS_FILE = self.base / "node_targets.json"
+        registry.TARGETS_FILE = roles.TARGETS_FILE
         # load_targets defaults are bound at function definition, so registry
         # endpoint instead uses a patched function for test isolation.
         self.old_loader = registry.load_targets
@@ -36,6 +38,7 @@ class RegistryTests(unittest.TestCase):
     def restore(self):
         registry.NODES_FILE = self.old_nodes
         roles.TARGETS_FILE = self.old_targets
+        registry.TARGETS_FILE = self.old_registry_targets
         registry.load_targets = self.old_loader
 
     def test_auth_and_save(self):
