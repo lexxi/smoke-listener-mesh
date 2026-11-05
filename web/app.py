@@ -12,6 +12,7 @@ from contextlib import closing
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
+from dashboard_version import DASHBOARD_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 RX = re.compile(r"\[RX\]\s+(.*)")
@@ -295,7 +296,7 @@ def node_admin():
 
 @app.get("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", dashboard_version=DASHBOARD_VERSION)
 
 @app.get("/api/status")
 def status():
