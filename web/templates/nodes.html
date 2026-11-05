@@ -38,11 +38,25 @@ tr.pick{cursor:pointer}tr.pick:hover{background:#20324b}tr.selected{background:#
 <button id="restart" class="danger">Neustart</button></div>
 <small>Neustart ist ein eigener Befehl, unabhängig von OTA-Aktivierung. Nicht während eines Firmwareupdates ausführen.</small>
 </section>
-<section class="card"><div class="row"><h2>3 · Ergebnis</h2><strong id="state">Bereit</strong></div>
+<section class="card">
+<h2>3 · Knoten registrieren</h2>
+<p class="muted">Aus Discover auswählen, Stammdaten speichern und optional für signierte OTA-Updates freigeben. Ein neuer Knoten wird nicht allein durch Funkempfang automatisch freigegeben.</p>
+<div class="row">
+<label style="flex:1;min-width:220px">Name im Inventar<input id="registry-name" maxlength="19" placeholder="z. B. TestC3"></label>
+<label style="flex:2;min-width:220px">Standort<input id="registry-location" maxlength="80" placeholder="z. B. Werkbank"></label>
+</div>
+<div class="row" style="margin-top:12px">
+<label><input type="checkbox" id="registry-ota" style="width:auto"> Für signierte OTA-Updates freigeben</label>
+<button id="registry-save">Knoten speichern</button>
+</div>
+<p id="registry-info" class="muted"></p>
+<small>Inventarname und Firmware-Name sind getrennt. Mit NAME SET wird der Name zusätzlich im Gerät gespeichert. Bereits signierte ZIP-Pakete enthalten kein Manifest für neu registrierte Geräte und müssen bei Bedarf neu signiert werden.</small>
+</section>
+<section class="card"><div class="row"><h2>4 · Ergebnis</h2><strong id="state">Bereit</strong></div>
 <p id="message" class="muted"></p><pre id="log">Noch keine Ausgabe.</pre></section>
 <script>
 const $=id=>document.getElementById(id);
-let nodes=[],gateways=[],csrf='',running=false,lastId=null;
+let nodes=[],gateways=[],csrf='',running=false,lastId=null,registryCsrf='',registryEntries=[],otaTargets=[],gatewayNodes=[],maxOta=5;
 function nodeId(mac){
  const parts=(mac||'').toUpperCase().split(':');
  return parts.length===6&&parts.every(x=>/^[0-9A-F]{2}$/.test(x))?
@@ -85,6 +99,14 @@ function selection(){
  (!versionAtLeast(n.firmware)?' · Remote-Namensverwaltung erst ab v0.6.13':'')):'Kein Ziel gewählt.';
  for(const id of ['status','get','set','reset','restart'])
    $(id).disabled=running||!n||!g||forbidden||(id!=='status'&&!versionAtLeast(n.firmware));
+ const current=registryEntries.find(x=>nodeId(x.mac)===t);
+ $('registry-name').value=current?.name||n?.name||'';
+ $('registry-location').value=current?.location||'';
+ $('registry-ota').checked=otaTargets.includes(t);
+ $('registry-ota').disabled=running||!n||gatewayNodes.includes(t);
+ $('registry-save').disabled=running||!n||!t;
+ $('registry-info').textContent=gatewayNodes.includes(t)?'USB-Gateway: keine OTA-Zielfreigabe':
+   'OTA-Ziele: '+otaTargets.length+'/'+maxOta+' · Aktueller Status: '+(otaTargets.includes(t)?'freigegeben':'nicht freigegeben');
  for(const tr of $('nodes').children)tr.classList.toggle('selected',tr.children[1]?.textContent===t);
 }
 async function load(){
@@ -92,7 +114,7 @@ async function load(){
  const j=await r.json();csrf=j.csrf;gateways=j.gateways;
  for(const gw of gateways){const o=document.createElement('option');o.value=gw.port;o.textContent=gw.name+' · '+gw.port;$('gateway').append(o)}
  if(gateways.some(x=>x.port==='COM14'))$('gateway').value='COM14';
- await discover();await jobRefresh();
+ await loadRegistry();await discover();await jobRefresh();
 }
 async function action(a){
  const t=$('target').value,g=$('gateway').value,n=$('name').value.trim();
@@ -127,6 +149,30 @@ async function jobRefresh(){
   selection();
  }catch(e){$('message').textContent=e.message}
 }
+async function loadRegistry(){
+ const r=await fetch('/api/nodes/registry',{cache:'no-store'});
+ if(!r.ok)throw Error('Knotenregistrierung: HTTP '+r.status);
+ const j=await r.json();registryCsrf=j.csrf;registryEntries=j.entries||[];
+ otaTargets=j.ota_targets||[];gatewayNodes=j.gateway_nodes||[];maxOta=j.max_ota_targets||5;
+}
+async function saveRegistry(){
+ const t=$('target').value;
+ if(!t)return;
+ const body={node_id:t,name:$('registry-name').value.trim(),
+   location:$('registry-location').value.trim(),ota:$('registry-ota').checked};
+ if(body.ota&&!otaTargets.includes(t)&&!confirm('Knoten '+t+' für signierte OTA-Updates freigeben?'))return;
+ $('registry-save').disabled=true;
+ try{
+  const r=await fetch('/api/nodes/registry',{method:'POST',
+   headers:{'Content-Type':'application/json','X-Registry-CSRF':registryCsrf},
+   body:JSON.stringify(body)});
+  const j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);
+  await loadRegistry();
+  $('registry-info').textContent='Gespeichert. '+j.note;
+ }catch(e){$('registry-info').textContent='Fehler: '+e.message}
+ finally{$('registry-save').disabled=false}
+}
+$('registry-save').onclick=saveRegistry;
 $('discover').onclick=discover;$('gateway').onchange=selection;$('target').onchange=selection;
 for(const [id,a] of [['status','STATUS'],['get','NAME_GET'],['set','NAME_SET'],['reset','NAME_RESET'],['restart','RESTART']])
  $(id).onclick=()=>action(a);
