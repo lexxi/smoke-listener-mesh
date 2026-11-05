@@ -48,10 +48,11 @@ tr.pick{cursor:pointer}tr.pick:hover{background:#20324b}tr.selected{background:#
 </div>
 <div class="row" style="margin-top:12px">
 <label><input type="checkbox" id="registry-ota" style="width:auto"> Für signierte OTA-Updates freigeben</label>
+<label><input type="checkbox" id="registry-sync-name" style="width:auto"> Namen auch im ESP32 speichern (NAME SET)</label>
 <button id="registry-save">Knoten speichern</button>
 </div>
 <p id="registry-info" class="muted"></p>
-<small>Inventarname und Firmware-Name sind getrennt. Mit NAME SET wird der Name zusätzlich im Gerät gespeichert. Bereits signierte ZIP-Pakete enthalten kein Manifest für neu registrierte Geräte und müssen bei Bedarf neu signiert werden.</small>
+<small>Bei neuen Knoten ist NAME SET vorausgewählt, bei bestehenden Knoten nicht (damit Standortänderungen keine Fernumbenennung auslösen). Erst werden die Stammdaten gespeichert, anschließend wird NAME SET ausgeführt. Ein Fehler beim Funkbefehl wird getrennt angezeigt. Bereits signierte ZIP-Pakete enthalten kein Manifest für neu registrierte Geräte.</small>
 </section>
 <section class="card"><h2>4 · USB-Gateways verwalten</h2>
 <p class="muted">Der dedizierte COM16-Logger ist geschützt. Weitere USB-Gateways lassen sich hinzufügen oder entfernen. Änderungen werden nach Webapp-Neustart aktiv; Mesh-Knoten und OTA-Ziele bleiben bestehen.</p>
@@ -70,6 +71,7 @@ tr.pick{cursor:pointer}tr.pick:hover{background:#20324b}tr.selected{background:#
 <script>
 const $=id=>document.getElementById(id);
 let managedGateways=[],loggerGatewayPort='COM16';
+let pendingNameSync=null,registrationBusy=false;
 let nodes=[],gateways=[],csrf='',running=false,lastId=null,registryCsrf='',registryEntries=[],otaTargets=[],gatewayNodes=[],maxOta=5,selectedRegistryId=null;
 function nodeId(mac){
  const parts=(mac||'').toUpperCase().split(':');
@@ -119,9 +121,11 @@ function selection(){
    $('registry-name').value=current?.name||(/^[A-Za-z0-9_-]{1,19}$/.test(n?.name||'')?n.name:'');
    $('registry-location').value=current?.location||'';
    $('registry-ota').checked=otaTargets.includes(t);
+   $('registry-sync-name').checked=!current && !!$('registry-name').value && versionAtLeast(n?.firmware);
  }
- $('registry-ota').disabled=running||!n||gatewayNodes.includes(t);
- $('registry-save').disabled=running||!n||!t;
+ $('registry-ota').disabled=running||registrationBusy||!n||gatewayNodes.includes(t);
+ $('registry-sync-name').disabled=running||registrationBusy||!n||!versionAtLeast(n?.firmware)||forbidden;
+ $('registry-save').disabled=running||registrationBusy||!!pendingNameSync||!n||!t;
  $('registry-info').textContent=gatewayNodes.includes(t)?'USB-Gateway: keine OTA-Zielfreigabe':
    'OTA-Ziele: '+otaTargets.length+'/'+maxOta+' · Aktueller Status: '+(otaTargets.includes(t)?'freigegeben':'nicht freigegeben');
  for(const tr of $('nodes').children)tr.classList.toggle('selected',tr.children[1]?.textContent===t);
@@ -153,6 +157,18 @@ async function jobRefresh(){
   running=j.state==='running';
   $('state').textContent=j.state;$('message').textContent=j.message||'';
   $('log').textContent=j.lines?.length?j.lines.join('\n'):'Noch kein Protokoll.';
+  if(pendingNameSync && j.id===pendingNameSync.id && j.state!=='running'){
+   const expected=pendingNameSync.name;
+   const confirmed=j.state==='passed' && j.mode==='node_NAME_SET' &&
+     j.target===pendingNameSync.target &&
+     (j.lines||[]).some(line=>line.includes('[MGMT] REPLY') &&
+       line.includes('name='+expected) &&
+       !line.includes('name='+expected+'_'));
+   $('registry-info').textContent=confirmed?
+     'Inventar gespeichert; Gerätename '+expected+' per NAME SET bestätigt.':
+     'Inventar gespeichert, aber NAME SET nicht bestätigt. Gerätebezeichnung möglicherweise unverändert! Ergebnisprotokoll prüfen.';
+   pendingNameSync=null;
+  }
   if(lastId && j.id===lastId && j.state!=='running'){
    if(j.state==='passed' && j.mode?.startsWith('node_NAME_')){
     const match=(j.lines||[]).join('\n').match(/\[MGMT\] REPLY[^\n]* name=([A-Za-z0-9_-]{1,19}|\(unset\))/g);
@@ -214,21 +230,44 @@ async function loadRegistry(){
  otaTargets=j.ota_targets||[];gatewayNodes=j.gateway_nodes||[];maxOta=j.max_ota_targets||5;
 }
 async function saveRegistry(){
- const t=$('target').value;
- if(!t)return;
+ const t=$('target').value,g=$('gateway').value;
+ if(!t||running||registrationBusy||pendingNameSync)return;
  const body={node_id:t,name:$('registry-name').value.trim(),
    location:$('registry-location').value.trim(),ota:$('registry-ota').checked};
+ const sync=$('registry-sync-name').checked;
+ const node=nodes.find(n=>nodeId(n.mac)===t);
+ if(sync&&(!/^[A-Za-z0-9_-]{1,19}$/.test(body.name)||!g||
+    gateways.find(x=>x.port===g)?.node===t||!versionAtLeast(node?.firmware))){
+  $('registry-info').textContent='NAME SET nicht möglich: Gerätename, Gateway oder Firmware prüfen.';return;
+ }
  if(body.ota&&!otaTargets.includes(t)&&!confirm('Knoten '+t+' für signierte OTA-Updates freigeben?'))return;
- $('registry-save').disabled=true;
+ if(sync&&!confirm('Inventar speichern und anschließend NAME SET '+body.name+' an '+t+' über '+g+' senden?'))return;
+ registrationBusy=true;selection();
  try{
   const r=await fetch('/api/nodes/registry',{method:'POST',
    headers:{'Content-Type':'application/json','X-Registry-CSRF':registryCsrf},
    body:JSON.stringify(body)});
   const j=await r.json();if(!r.ok)throw Error(j.error||'HTTP '+r.status);
   await loadRegistry();
-  $('registry-info').textContent='Gespeichert. '+j.note;
- }catch(e){$('registry-info').textContent='Fehler: '+e.message}
- finally{$('registry-save').disabled=false}
+  if(!sync){
+   $('registry-info').textContent='Inventar gespeichert. Kein NAME SET gesendet.';
+  }else{
+   $('registry-info').textContent='Inventar gespeichert. Sende NAME SET an '+t+' …';
+   const reply=await fetch('/api/remote/node-action',{method:'POST',
+    headers:{'Content-Type':'application/json','X-Remote-CSRF':csrf},
+    body:JSON.stringify({target:t,gateway:g,action:'NAME_SET',name:body.name})});
+   const result=await reply.json();
+   if(!reply.ok){
+    $('registry-info').textContent='Inventar gespeichert, aber NAME SET konnte nicht gestartet werden: '+
+      (result.error||'HTTP '+reply.status);
+   }else{
+    pendingNameSync={id:result.job_id,target:t,name:body.name};
+    lastId=result.job_id;
+    await jobRefresh();
+   }
+  }
+ }catch(e){$('registry-info').textContent='Speichern oder Kommunikation fehlgeschlagen: '+e.message}
+ finally{registrationBusy=false;selection()}
 }
 $('registry-save').onclick=saveRegistry;
 async function saveGatewayDefault(){
