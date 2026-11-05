@@ -1,6 +1,6 @@
 """Control the configured USB gateway logger from the local dashboard.
 
-Does not open the port until explicitly started. Never kills unrelated processes.
+Starts the configured logger when the Web server starts. Never kills unrelated processes.
 """
 from __future__ import annotations
 import atexit
@@ -22,7 +22,7 @@ token = secrets.token_urlsafe(32)
 process = None
 output_handle = None
 session = None
-note = "Logger nicht über die Webapp gestartet."
+note = "Logger noch nicht gestartet."
 
 
 def local():
@@ -78,6 +78,24 @@ def _start_owned_locked():
         process = None
         raise
     note = f"{LOGGER_NAME}-Logger läuft auf {PORT}."
+
+
+def autostart():
+    """Start our own logger once, only from the actual Web server entrypoint.
+
+    A COM port owned by another process is never seized. In that case our
+    logger process exits, and the status endpoint reports the failure.
+    """
+    global note
+    with guard:
+        if ota_reserved or running():
+            return status_data()
+        try:
+            _start_owned_locked()
+            note = f"{LOGGER_NAME}-Logger automatisch auf {PORT} gestartet."
+        except (OSError, ValueError) as exc:
+            note = f"Logger-Autostart fehlgeschlagen: {exc}"
+        return status_data()
 
 
 def pause_for_remote_ota():
