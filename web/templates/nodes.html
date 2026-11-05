@@ -102,7 +102,7 @@ function selection(){
  if(selectedRegistryId!==t){
    selectedRegistryId=t;
    const current=registryEntries.find(x=>nodeId(x.mac)===t);
-   $('registry-name').value=current?.name||n?.name||'';
+   $('registry-name').value=current?.name||(/^[A-Za-z0-9_-]{1,19}$/.test(n?.name||'')?n.name:'');
    $('registry-location').value=current?.location||'';
    $('registry-ota').checked=otaTargets.includes(t);
  }
