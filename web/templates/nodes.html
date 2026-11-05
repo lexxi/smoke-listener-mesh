@@ -67,7 +67,9 @@ tr.pick{cursor:pointer}tr.pick:hover{background:#20324b}tr.selected{background:#
 <button id="save-gateways" type="button">Gateway-Liste speichern</button>
 </div><p id="gateway-admin-status" class="muted"></p></section>
 <section class="card"><div class="row"><h2>5 · Ergebnis</h2><strong id="state">Bereit</strong></div>
-<p id="message" class="muted"></p><pre id="log">Noch keine Ausgabe.</pre></section>
+<p id="message" class="muted"></p>
+<div class="row" style="justify-content:flex-start;margin:12px 0"><button id="copy-log" type="button">Log kopieren</button><small id="copy-log-status" class="muted" role="status" aria-live="polite"></small></div>
+<pre id="log">Noch keine Ausgabe.</pre></section>
 <script>
 const $=id=>document.getElementById(id);
 let managedGateways=[],loggerGatewayPort='COM16';
@@ -269,6 +271,27 @@ async function saveRegistry(){
  }catch(e){registrationStatus('Speichern oder Kommunikation fehlgeschlagen: '+e.message)}
  finally{registrationBusy=false;selection()}
 }
+$('copy-log').addEventListener('click',async()=>{
+ const content=$('log').textContent||'';
+ if(!content.trim()||content==='Noch keine Ausgabe.'){
+  $('copy-log-status').textContent='Kein Protokoll zum Kopieren vorhanden.';return;
+ }
+ try{
+  if(navigator.clipboard?.writeText){
+   await navigator.clipboard.writeText(content);
+  }else{
+   const area=document.createElement('textarea');
+   area.value=content;area.style.position='fixed';area.style.opacity='0';
+   document.body.append(area);area.focus();area.select();
+   try{
+    if(!document.execCommand('copy'))throw Error('Zwischenablage nicht verfügbar');
+   }finally{area.remove();}
+  }
+  $('copy-log-status').textContent='Protokoll kopiert ('+content.split('\\n').length+' Zeilen).';
+ }catch(e){
+  $('copy-log-status').textContent='Kopieren fehlgeschlagen: '+e.message;
+ }
+});
 $('registry-save').onclick=saveRegistry;
 async function saveGatewayDefault(){
  const g=$('gateway').value;
