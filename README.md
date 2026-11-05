@@ -1,82 +1,185 @@
 # Smoke Listener Mesh
 
-Experimenteller ESP32-C3-basierter Mesh-Zusatz für die **akustische Erkennung unveränderter Rauchwarnmelder**. Derzeit sind Mikrofon-Prototypen, ESP-NOW-Heartbeats, authentifizierte Funkweiterleitung, ein serieller Dauerlogger und ein lokales Web-Dashboard vorhanden. **Die Audio-Alarmdetektion ist noch nicht mit der aktuellen Mesh-Firmware zu einem validierten Gesamtsystem integriert.**
+Experimentelles Mesh-System auf **ESP32-C3 SuperMini** zur zusätzlichen
+akustischen Erkennung der Pieptöne unveränderter Rauchwarnmelder. Das Projekt
+kombiniert Mikrofon-Prototypen, authentifizierte ESP-NOW-Telemetrie,
+Mesh-Weiterleitung, einen dedizierten USB-Gateway und eine lokale
+**Windows-Webapp für Knotenverwaltung und signierte Remote-Firmwareupdates**.
 
-> **Sicherheit:** Keine Brandmeldeanlage, kein zertifizierter Rauchwarnmelder und kein Ersatz für normgerechte Rauchwarnmelder. Ein `HEARTBEAT` sagt nur etwas über den beobachteten Funkkontakt aus, nicht über die Funktion des Mikrofons oder die Erkennung eines Brandalarms. Niemals als alleinigen Alarmweg verwenden. Rauchwarnmelder nicht öffnen oder verändern.
+> **Sicherheit:** Keine zertifizierte Brandmeldeanlage, kein Rauchwarnmelder
+> und kein Ersatz für normgerechte Rauchwarnmelder. HEARTBEAT, OTA-Erfolg
+> und ein „Online“-Status bestätigen weder die korrekte akustische
+> Alarmerkennung noch einen Brandalarm. Rauchwarnmelder nicht verändern.
+> Die Mikrofon-Alarmdetektion ist noch nicht als vollständiges
+> sicherheitsrelevantes Gesamtsystem validiert.
 
-## Aktueller Stand (03.11.2026)
+## Aktueller Projektstand (05.11.2026)
 
-| Komponente | Version | Stand |
+| Bereich | Aktueller Stand |
+| --- | --- |
+| Geräte | ESP32-C3 SuperMini; ein dedizierter USB-Gateway sowie mehrere Mesh-Empfänger |
+| Firmware | **v0.6.16**, Build-Profile `a`–`h`; Kombinationen aus Core, Audio, Gateway und Config-AP |
+| Mesh | ESP-NOW, HMAC-geschützte Pakete, Heartbeats, Relay/TTL und Duplikatunterdrückung |
+| Akustik | INMP441-basierte Ton-/Piepsdiagnostik erprobt; komplette Alarmkette noch nicht validiert |
+| Remote-Verwaltung | STATUS, NAME GET/SET/RESET, RESTART und Remote-OTA über einen autorisierten Gateway |
+| Dedizierter Gateway | **COM16**, Node-ID `00000CEC7E6E27AC`, vom Webserver verwalteter USB-Logger |
+| Webapp | Flask-Dashboard: Discover, Inventar/Standort, OTA-Freigabe, Gateway-Einstellungen, Loggerstatus, Firmware-Releases |
+| OTA | Zielgebundene, signierte Firmwaremanifeste; maximal **fünf** freigegebene Empfänger neben dem USB-Gateway |
+| Nachgewiesen | Knotenregistrierung, Standortänderung, COM16-Verwaltung, Logger-Reconnect und die Webapp-Funktionen aus PR #4 in der Windows-Testinstallation |
+| Noch offen | Automatische Übernahme des Inventarnamens per NAME SET, vollständige Alarm-/Mikrofonvalidierung, Batterie- und Buzzer-Integration |
+
+**Die aktuellen Bedienanleitungen sind:**
+
+- [Webapp / Windows – Schnellstart, Knoten und Gateway](web/README.md)
+- [Knotenregistrierung, USB-Logger, Gateway-Verwaltung und Tests](docs/web-node-registration.md)
+- [Hardware und INMP441-Verdrahtung](docs/hardware.md)
+- [Signierte Releases und Sicherheitsgrundlagen](docs/ota-signing.md)
+
+Ältere Dokumente und Firmwarestände bleiben als **Entwicklungsarchiv**
+im Repository. Frühere Texte zu v0.5.5 sowie zu den ersten Remote-OTA-
+Tests v0.6.11/v0.6.12 sind keine aktuellen Rollout-Anweisungen.
+
+## Schnellstart: Webapp unter Windows
+
+Im bestehenden Repository mit aktiver Python-Umgebung:
+
+```powershell
+cd C:\pyprojects\smoke-listener-mesh
+git switch main
+git pull --ff-only
+python -m pip install -r .\web\requirements.txt
+python .\web\app.py
+```
+
+Die Webapp läuft standardmäßig unter **http://127.0.0.1:8088**.
+
+| Seite | Funktion |
+| --- | --- |
+| [Monitor](http://127.0.0.1:8088/) | Zustand des USB-Loggers, Mesh-Knoten, Logs und Relay-Statistik |
+| [Knotenverwaltung](http://127.0.0.1:8088/nodes) | Discover, Name, Standort, OTA-Freigabe und Gateway-Einstellungen |
+| [Firmware / OTA](http://127.0.0.1:8088/ota) | Signierte Releases hochladen, prüfen und verwalten |
+
+**Neu seit PR #4:** Der Webserver startet den **COM16-Logger automatisch**.
+Bitte **keinen zweiten Logger oder Arduino Serial Monitor parallel**
+an COM16 öffnen. Während einer Remote-Aktion über COM16 pausiert die
+Webapp ihren Logger kontrolliert und startet ihn anschließend wieder,
+sofern er zuvor lief.
+
+Die Anzeige unterscheidet:
+
+- **Verbunden:** serieller COM-Port erfolgreich geöffnet.
+- **Verbindung wird aufgebaut:** Prozess läuft, aber COM-Verbindung
+  noch nicht bestätigt.
+- **Nicht verbunden:** COM-Port fehlt/ist unterbrochen; der Logger
+  versucht die Wiederverbindung automatisch.
+- **Gestoppt:** kein laufender von der Webapp verwalteter Logger.
+
+**PID bedeutet nicht automatisch USB-Verbindung.** Wenn der C3
+ausgesteckt ist, bleibt der Python-Prozess im Reconnect-Modus aktiv.
+Die Webapp warnt in diesem Fall, dass Knotenstatusdaten nicht aktuell
+sind. Eine erfolgreiche COM-Verbindung bestätigt noch nicht
+kryptografisch die Identität des angesteckten ESP32.
+
+## Knoten registrieren und Standort pflegen
+
+1. `/nodes` öffnen und **Discover / Aktualisieren** wählen.
+2. Den Knoten anhand seiner **Node-ID** auswählen.
+3. **Name im Inventar** und **Standort** eintragen; optional
+   **Für signierte OTA-Updates freigeben**.
+4. **Knoten speichern**. Nach Neuladen der Seite die Werte prüfen.
+
+**Discover zeigt bereits empfangene authentifizierte Mesh-Knoten**
+und ist keine aktive Suche im Funknetz. Die Webapp speichert
+Inventarname und Standort in `config/nodes.csv`, die Freigaben in
+`web/data/node_targets.json`.
+
+**Gerätename und Inventarname sind unterschiedliche Werte:**
+Der echte ESP32-Gerätename wird derzeit noch separat mit **NAME SET**
+im NVS geändert. NAME GET, NAME RESET, Funkstatus und Neustart sind
+ebenfalls über die Knotenverwaltung verfügbar. Automatisches NAME SET
+beim Registrieren ist als nächste Funktion vorgesehen, aber **noch
+nicht implementiert**.
+
+Der Standort kann jederzeit ohne Flashen geändert werden – auch bei
+**Küche** und **Garage**. Beide bleiben als reguläre Mesh-Knoten und
+OTA-Empfänger erhalten.
+
+## Gateway-Verwaltung
+
+| Voreingestellter Gateway | Port | Node-ID |
 | --- | --- | --- |
-| Mikrofon-/Ton-Diagnose | v0.3.1 | Pieptöne im Tisch- und Entfernungstest erkannt; keine vollständige produktive Alarmerkennung |
-| ESP-NOW und Weiterleitung | v0.4.0–v0.5.x | Broadcasts, TTL, Duplikatunterdrückung, Heartbeats |
-| Mesh-Firmware | **v0.5.5** | Protokoll 3, HMAC-SHA256, signierter Knotenname; zwei Knoten getestet und 03.11. im Gebäudelog beobachtet |
-| Serieller Logger | `scripts/logging.py` | Fortlaufendes Mitschreiben ohne Zeitlimit, Reconnect |
-| Web-Dashboard | **v0.3.0** | Knotenstatus, USB-Logger-Erkennung, Relay-Wege und getrennte Testläufe; auf Windows gestartet |
-| Hardwaregehäuse | geplant | C3, INMP441, Buzzer, 18650-Akku, Antenne; mechanische Maße noch offen |
+| Dedizierter USB-Logger und Management-Gateway | **COM16** | `00000CEC7E6E27AC` |
 
-Frühere Implementierungen und Dokumente bleiben zur Nachvollziehbarkeit im Repository. Der **aktuelle Einstiegspunkt** ist `firmware/mesh-v0.5.5/mesh-v0.5.5.ino`, nicht v0.5.1.
+Die früheren USB-Gateway-Einträge **Küche/COM12** und
+**Garage/COM14** wurden aus der Standardliste entfernt.
+Das hat **keinen Einfluss auf deren Mesh- oder OTA-Rolle**.
 
-## Firmwareversionen im Mesh (Entwicklung v0.6.10)
+Unter `/nodes` → **USB-Gateways verwalten** kannst du zusätzliche
+USB-Gateways mit COM-Port, Name und Node-ID hinterlegen oder entfernen.
+Die Konfiguration wird lokal in
+`web/data/managed_gateways.json` gespeichert. **Zum Aktivieren dieser
+Änderungen die Webapp vollständig neu starten.** Der dedizierte
+COM16-Gateway ist gegen versehentliches Löschen geschützt.
 
-Die vorhandene Windows-Webapp zeigt unter **Knotenübersicht** nun pro Knoten eine Firmwareversion, sofern diese als authentifizierte Telemetrie gemeldet wurde. Alte Firmware meldet noch keine Version und erscheint korrekt als **Unbekannt**.
+Unter `/nodes` oder `/ota` lässt sich der **Standard-Gateway für
+Remote-Verwaltung** mit **Als Standard-Gateway speichern** festlegen.
+Die Präferenz wird in `web/data/gateway_preferences.json`
+abgelegt und ist nach dem nächsten Seitenaufruf wirksam.
+**Sie verändert nicht den Logger-Port COM16.**
 
-Die neue Firmware `firmware/mesh-v0.6.10/mesh-v0.6.10.ino` behält Protokoll 3 und das bestehende 92-Byte-Paket bei. Sie verwendet vier bisher ungenutzte, HMAC-geschützte Bytes im Namensfeld für Major/Minor/Patch. Ein v0.6.10-USB-Logger kann daher Versionen anderer aktualisierter Knoten ausgeben und seine eigene Version über `[TX]` anzeigen.
+Eine Gateway-Zuordnung in der Webapp stellt **keine**
+Firmware-Vertrauensstellung her: Ziel-C3 müssen den jeweiligen
+Management-Sender bereits akzeptieren. Daher kann ein älterer C3
+(z. B. v0.6.15.h) auf Anfragen des neuen dedizierten Gateways mit
+`TIMEOUT no_reply` reagieren; dies wurde durch Aktualisierung
+auf `0.6.16.h` beim neuen Knoten behoben.
 
-**Status:** v0.6.10 wurde in GitHub vorbereitet, **noch nicht kompiliert oder auf Hardware getestet**. 1OG bleibt auf der erfolgreich bestätigten v0.6.9; für den ersten Test eignet sich Garage (COM14).
+## Firmware, Feature-Matrix und Remote-OTA
 
-Anleitung: [Firmware-Telemetrie v0.6.10](docs/mesh-firmware-version-telemetry-v0610.md).
+Die **v0.6.16**-Buildmatrix enthält acht Profile:
 
-## Fern-OTA per Webapp (experimentell: v0.6.11/v0.6.12)
+| Suffix | Profil |
+| --- | --- |
+| `.a` | core |
+| `.b` | audio |
+| `.c` | gateway |
+| `.d` | hybrid |
+| `.e` | core + Config-AP |
+| `.f` | audio + Config-AP |
+| `.g` | gateway + Config-AP |
+| `.h` | hybrid + Config-AP |
 
-**Ziel:** einmalig v0.6.11 über USB auf die C3 installieren, danach Firmwareversionen durch ein signiertes Release-Paket und die Weboberfläche verwalten. Ein C3 bleibt am Webserver als USB-zu-ESP-NOW-Gateway angeschlossen. Ein eigener USB-Anschluss an jedem Zielknoten ist dann für reguläre Updates nicht mehr nötig.
+Build-/Signierwerkzeug (Windows/PowerShell):
 
-**Implementiert (noch nicht auf Hardware getestet):**
-- `firmware/mesh-v0.6.11/`: HMAC-authentifizierte, auf Garage/Kueche als Gateway begrenzte ESP-NOW-Steuerung für Status, Flash-Freigabe, Readback, Bootaktivierung, Neustart und Bestätigung; wechselnde Boot-Challenge gegen Wiederholungen.
-- `firmware/mesh-v0.6.12/`: erster Test-Build für ein nachfolgendes Upgrade ohne USB am Ziel; Fernsteuerung bleibt enthalten.
-- `tools/ota/remote_ota.py` und `web/remote.py`: gatewaybasierte Jobs für Funkstatus, nur Flashstaging oder vollständigen Updateversuch inklusive Rollback-Kontrolle.
-- `web/logger_control.py`: Web-Garage-Logger auf COM14 wird bei OTA via Garage automatisch pausiert und wieder gestartet.
-- `tools/ota/prepare-web-bundle.ps1`: ein ZIP-Paket mit EINER BIN und vier knotenspezifisch signierten Manifesten erstellen. Die Webapp verifiziert sämtliche Manifeste und bietet die einzelnen Ziel-Releases an.
+```powershell
+.\tools\ota\build-release-matrix.ps1 -Version 0.6.16
+```
 
-**ACHTUNG:** Die frühere OTA-Hardwarevalidierung gilt nur für den lokalen Mechanismus, **nicht** für die hier neue Remote-Steuerung. **v0.6.11 noch nicht auf alle Geräte aufspielen**. Erst Garage und 1OG kompilieren, USB-testen, danach das echte Web-OTA auf v0.6.12 prüfen. Insbesondere muss die PENDING_VERIFY-/Rollback-Kette auf der Hardware validiert werden. Ein fehlgeschlagenes Image kann trotz Watchdog eine USB-Rettung nötig machen.
+Das Skript setzt Arduino CLI, die erforderlichen **lokalen privaten
+Firmware-Header** und für signierte Releases einen privaten
+Signierschlüssel voraus. **Es flasht die Geräte nicht automatisch.**
+Die Runtime-Liste der Empfänger steht in
+`web/data/node_targets.json` (maximal fünf).
+Ein zusätzlich freigegebener Knoten benötigt ein **neu signiertes**
+Release-Bundle mit einem Manifest für seine Node-ID; die
+Registrierung verändert ältere ZIP-Dateien nicht rückwirkend.
 
-[Schrittweise Anleitung und Sicherheitsgrenzen](docs/remote-ota-one-time-usb-migration.md).
+Die Webapp kann signierte Pakete prüfen, lokal ablegen sowie
+Remote-STATUS, Staging, Aktivierung und OTA-Workflows durchführen.
+Ein signiertes Update ersetzt **keinen** Test der Alarmdetektion.
+Private Signierschlüssel, `mesh_secrets.h` und sonstige Geheimnisse
+niemals auf GitHub hochladen.
 
-## OTA per Weboberfläche für 1OG v0.6.10 (Staging)
-
-Die Seite **http://127.0.0.1:8088/ota** führt nun durch drei Schritte: **signiertes Release hochladen → Ziel/Version auswählen → Firmware übertragen und SHA-256 kontrollieren**. Für den ersten kontrollierten Hardwaretest ist nur **1OG: v0.6.9 (app0) → v0.6.10 (app1)** freigeschaltet.
-
-**Beide Geräte müssen dabei weiterhin per USB am Windows-PC hängen:** Kueche als Gateway an COM12 und 1OG zur lokalen Autorisierung an COM15. Die Webapp startet **keinen Bootwechsel, Neustart oder BOOT CONFIRM**. Ein Web-OTA-Staging-Erfolg bedeutet nicht, dass die neue Firmware bereits läuft.
-
-Zum Erstellen des signierten 1OG-Releases dient `tools/ota/prepare-web-release.ps1 -Node 1OG -Version 0.6.10`; der private Signierschlüssel bleibt lokal.
-
-Die Funktion ist **implementiert, aber noch nicht auf der Hardware validiert**. [Windows-Testanleitung](docs/web-ota-stage-1og-v0610.md).
-
-## Release-Verwaltung im Webinterface (Stand 04.11.2026)
-
-Die bereits laufende Flask-Weboberfläche unter **http://127.0.0.1:8088/ota** kann nun eine kompilierte Firmware-BIN und das zugehörige signierte JSON-Manifest über den Browser entgegennehmen. Erst nach ECDSA-P256-Signaturprüfung, ESP32-C3-Imageprüfung und SHA-256-Abgleich wird das Release lokal unter `web/data/releases/` gespeichert (nicht auf GitHub). Der private Signierschlüssel bleibt auf dem Build-PC.
-
-Die frühere fest verdrahtete Übertragung v0.6.9 für 1OG ist **deaktiviert**. Die Release-Verwaltung ist derzeit **nur Upload, Prüfung und Ablage**; OTA-Verteilung und Bootaktivierung folgen erst nach separatem Test.
-
-[Windows-Anleitung zur Release-Verwaltung](docs/ota-release-library-windows.md).
-
-## OTA-Entwicklung (Stand 03.11.2026)
-
-- **v0.5.6 auf Hardware getestet:** Direkter Test 1OG → Garage: 16/16 Blöcke. Relay-Pfad Keller_Abgang → Garage → 1OG: erfolgreich 16/16 ACKs mit `hops=1`; ohne Garage 0/16; nach Wiedereinschalten erst im zweiten Anlauf 16/16. Paketverluste treten auf. Das ist ein **RAM-Transporttest, kein Firmware-Update**.
-- **v0.5.7 im Repository, Build/Hardwaretest offen:** längere RAM-only-Tests mit 1–4096 Blöcken, mehr Diagnose und Wiederholungen. Anleitung: [v0.5.7](docs/mesh-v0.5.7.md).
-- **v0.5.8 (Quellcode, Build noch offen):** [OTA-Partitionsprüfung](docs/mesh-v0.5.8.md) mit `OTA PREFLIGHT`; noch kein Flash-Schreibzugriff und kein drahtloses Firmwareupdate.
-- **Vorbereitung echter OTA-Updates:** [Firmware-Signaturwerkzeug](docs/ota-signing.md) für zielgebundene, mit ECDSA-P-256 signierte Firmwaremanifeste hinzugefügt. Der Empfänger und der eigentliche Flash-Workflow fehlen noch.
-- **Echte Image-Datei (Offline-Vorbereitung):** [signierte Firmware in 96-Byte-Transferblöcke aufbereiten](docs/ota-real-image-preparation.md), inklusive Signatur- und SHA-256-Prüfung am PC und manipulationsbezogener Unittests. **Noch keine Übertragung der Datei über Funk und kein OTA-Flashen.**
-- **v0.5.9 (Quellcode, Build/Hardwaretest noch offen):** [Echte Firmwaredateien über USB und ESP-NOW streamen](docs/mesh-v0.5.9.md), inklusive SHA-256-Prüfung auf dem Empfänger. **Keine Flash-Schreibzugriffe, Signaturprüfung noch nicht auf dem ESP32.**
-- **v0.6.0 (auf Kueche und 1OG getestet):** [Signaturprüfung direkt am Zielgerät](docs/mesh-v0.6.0.md): ein gültiges ECDSA-P-256-Manifest wurde akzeptiert, eine absichtlich manipulierte Signatur abgelehnt. **Kein Flash-Schreiben.**
-- **v0.6.1 (neu, noch NICHT kompiliert oder hardwaregetestet):** [Downgrade-Prüfung und ausdrücklich freizugebendes Schreiben in den inaktiven OTA-App-Slot](docs/mesh-v0.6.1.md). **Keine Bootumschaltung und kein automatischer Rollback.** Nicht ohne die dokumentierten Tests produktiv verwenden.
-- **v0.6.2 (Upgrade-Kandidat, noch nicht kompiliert):** [Signiertes Image für den positiven v0.6.1→v0.6.2-Test](docs/mesh-v0.6.2.md). Kueche und 1OG bleiben zunächst auf v0.6.1. Erst Signatur und RAM-only-Transfer prüfen; Flash-Staging noch nicht starten.
-- **v0.6.3 (Rollback-Diagnostik, noch nicht kompiliert):** [Boot-/Rollback-Fähigkeiten prüfen](docs/mesh-v0.6.3.md), ohne die Bootpartition zu wechseln. Zunächst nur kompilieren; auf 1OG liegt derzeit die getestete v0.6.2 in der inaktiven Partition.
-- **Vollständige automatische OTA-Installation ist noch nicht fertig.** Es fehlen kontrollierte Bootaktivierung, Bootbestätigung, Recovery und Rollback. Details: [OTA-Roadmap](docs/mesh-ota.md).
+Für technische Details und ältere Protokoll-/Migrationstests siehe
+[OTA-Roadmap](docs/mesh-ota.md) und die
+[historische Remote-OTA-Migration v0.6.11](docs/remote-ota-one-time-usb-migration.md).
+Diese älteren Anleitungen können inzwischen überholte Port-,
+Firmware- und Teststatusangaben enthalten.
 
 ## Hardware
 
-Aktueller Testaufbau: ESP32-C3 SuperMini mit INMP441 (I²S), USB-Stromversorgung. Für den späteren Knoten vorgesehen: **Buzzer, 18650-Li-Ion-Akku, Lade-/Schutzelektronik, geregelte 3,3-V-Versorgung und geeignete 2,4-GHz-Antenne**. Antennenanschluss und Buzzer-Treiber sind abhängig von der konkreten Hardware noch zu prüfen.
+Aktuelle Prototypen nutzen ESP32-C3 SuperMini und
+**INMP441 (I²S)**. In der bestehenden Verdrahtung:
 
 | INMP441 | ESP32-C3 |
 | --- | --- |
@@ -87,110 +190,53 @@ Aktueller Testaufbau: ESP32-C3 SuperMini mit INMP441 (I²S), USB-Stromversorgung
 | VDD | 3V3 |
 | GND | GND |
 
-**Akku nicht ungeprüft an den 3V3-Pin anschließen.** Ein TP4056-artiges Lademodul allein stellt keine geregelten 3,3 V bereit. Der vorhandene HW-187 MINI360 eignet sich nicht als 3,3-V-Regler für den gesamten Spannungsbereich einer einzelnen 18650. Details unter [Hardware und Verdrahtung](docs/hardware.md).
+Buzzer, 18650-Versorgung, geeigneter Spannungsregler,
+Batteriemessung und Gehäuse sind weitere Hardwarearbeiten.
+**Eine 18650-Zelle darf nicht direkt an den 3V3-Pin angeschlossen
+werden.** Details: [Hardware-Dokumentation](docs/hardware.md).
 
-## Firmware v0.5.5 flashen
+## Logs, Status und Tests
 
-1. In `firmware/mesh-v0.5.5/` die private Datei `mesh_secrets.h` aus der vorhandenen v0.5.4-Konfiguration übernehmen. [Beispiel](firmware/mesh-v0.5.5/mesh_secrets.h.example). Geheimschlüssel und AP-Passwort **nicht committen**.
-2. `firmware/mesh-v0.5.5/mesh-v0.5.5.ino` mit der Arduino IDE öffnen. Board: **ESP32C3 Dev Module**, USB CDC On Boot einschalten.
-3. Alle miteinander kommunizierenden Mesh-Geräte auf v0.5.5 aktualisieren. **Protokoll 3 ist nicht kompatibel mit v0.5.4 (Protokoll 2)**.
-4. Serielle Ausgabe prüfen: `[RX] name=... origin=... via=... hops=... AUTH=OK`, `[TX]`, `[RELAY]`, `[STATS]`.
+Der automatisch verwaltete Logger schreibt in `log/mesh_*.log`;
+die Webapp liest außerdem ältere Logs aus `logs/` und
+`scripts/log/`. Die Datenbank befindet sich unter
+`web/data/mesh.db`. `web/data/` ist von Git ausgeschlossen.
 
-**Namen einstellen:** Bei laufendem Knoten BOOT ungefähr 5 Sekunden halten, mit dem Konfigurations-WLAN `SmokeListener-XXXXXX` verbinden, dann `http://192.168.4.1` öffnen. Namen mit 1–24 ASCII-Zeichen (Buchstaben, Ziffern, `-`, `_`) speichern. Das WLAN-AP-Passwort muss privat gesetzt sein und mindestens 12 Zeichen haben. Der AP unterbricht ESP-NOW vorübergehend; nach ungefähr fünf Minuten ohne Webzugriff erfolgt ein Neustart. Namen bleiben bei normalem Flashen üblicherweise in NVS, **nicht** bei vollständigem Flash-Erase. Der übertragene Knotenname ist **authentifiziert, aber nicht verschlüsselt**.
+- **Online:** authentifiziertes Paket innerhalb von 45 Sekunden.
+- **Überfällig:** letztes Paket vor 46–120 Sekunden.
+- **Offline:** letztes Paket älter als 120 Sekunden.
+- **RSSI:** der *letzten Funkstrecke*, nicht garantiert des Quellknotens.
+- **Relay:** der letzte beobachtete Sender, kein vollständiger
+  Ende-zu-Ende-Pfad.
+- **Testlauf:** Statistiken beziehen sich auf die ausgewählte Logdatei.
 
-## Knoten und Standorte
+Bei gestopptem oder getrenntem Logger dürfen diese Zeiten nicht als
+zuverlässiger aktueller Knotenstatus interpretiert werden.
 
-Die bekannte Zuordnung steht in [`config/nodes.csv`](config/nodes.csv):
-
-| MAC-Endung | Standort in CSV | Zuletzt im Log beobachteter Name / Funktion |
-| --- | --- | --- |
-| `7E:E3:A0` | FZRaum | `Keller_Abgang` |
-| `7F:45:94` | Kueche | `Kueche` |
-| `7C:63:10` | 1OG | **aktuell USB-Logger** |
-| `7D:FE:58` | Garage | `Garage` |
-| `7E:D3:20` | PC-Logger | früherer Logger, aktuell nicht im Mesh aktiv |
-
-Ein Standort aus `nodes.csv` und ein vom Gerät gesendeter Name sind **unterschiedliche Daten**. Der Webservice zeigt beides an. Die Rolle des USB-Loggers wird dynamisch aus dessen `[TX]`-Zeilen ermittelt.
-
-## Seriellen Dauerlogger starten (Windows)
-
-Im **Repository-Stammverzeichnis**:
+Regressionstests:
 
 ```powershell
-py -m pip install pyserial
-py .\scripts\logging.py --port COM15
+python -m unittest discover -s tests -p "test_*.py"
 ```
 
-COM-Port entsprechend dem eigenen System anpassen. Ausgabe standardmäßig nach `log/mesh_YYYYMMDD_HHMMSS.log`. Ohne `--hours` läuft der Logger unbegrenzt und wird mit `Strg+C` beendet. Mit `--hours 6` ist ein begrenzter Test möglich, mit `--out PFAD` ein frei gewählter Dateiname. Bei USB-Unterbrechung wird die Verbindung standardmäßig alle fünf Sekunden erneut versucht. Für einen **neuen Testlauf** einen **neuen Logdateinamen** verwenden. Der Arduino Serial Monitor darf den Port nicht parallel öffnen.
+Die neuen Webapp- und COM16-Funktionen wurden am **05.11.2026**
+mit der Windows-Testinstallation geprüft und in
+[PR #4](https://github.com/lexxi/smoke-listener-mesh/pull/4)
+nach `main` übernommen.
 
-Wenn der Logger aus `scripts/` heraus gestartet wird, kann die Datei in `scripts/log/` liegen. Der Webservice erkennt beide Orte.
+## Sicherheitsgrenzen und offene Arbeiten
 
-## Smoke Mesh Monitor v0.3.0
+Die Webapp bindet standardmäßig nur an `127.0.0.1`.
+**Keine Benutzeranmeldung vorhanden:** nicht ungeschützt ins
+LAN oder Internet stellen. Für Schreibaktionen bestehen zusätzliche
+lokale Zugriffs- und CSRF-Prüfungen, aber das ersetzt keine
+Benutzerauthentisierung.
 
-Ein zweites PowerShell-Fenster öffnen; den seriellen Logger **weiterlaufen lassen**:
+**Offen:** automatische Namensübernahme beim Registrieren;
+Identitätsprüfung des angesteckten USB-Gateways; vollständige
+End-to-End-Validierung der akustischen Erkennung und Alarmweiterleitung;
+Stromversorgung/Batterielaufzeit, Buzzer und Gehäuse.
 
-```powershell
-cd C:\pyprojects\smoke-listener-mesh
-git pull origin main
-py -m pip install -r .\web\requirements.txt
-py .\web\app.py
-```
-
-Im Browser: **http://127.0.0.1:8088**
-
-Der Webservice öffnet den COM-Port **nicht** selbst. Er liest die vorhandenen `mesh_*.log`-Dateien aus `log/`, `logs/` oder `scripts/log/` und speichert ausgewertete Einträge lokal in `web/data/mesh.db` (in `.gitignore` ausgeschlossen).
-
-Funktionen:
-- Automatisch erkannte Logger-Rolle aus `[TX]`; externe Knoten aus authentifizierten `[RX]`-Einträgen.
-- Erreichbarkeit: **Online** bis 45 Sekunden, **überfällig** bis 120 Sekunden, danach **Offline**. Bei historischen Tests ist das kein historischer Erreichbarkeitsstatus.
-- Angezeigter Name, MAC, Standort, letzter Empfang, Hops, RSSI der **letzten Funkstrecke**, direkte und über Relay empfangene Pakete.
-- Schematische Bereichsübersicht, Relay-Tabelle, letzte Meldungen.
-- **Testlauf-Auswahl:** standardmäßig zuletzt geänderte Logdatei; ältere Dateien separat auswählbar. Statistiken werden pro ausgewählter Datei berechnet, nicht aus allen historischen Logs gemischt.
-
-Die Webanwendung läuft standardmäßig nur auf `127.0.0.1` und **hat keine Anmeldung**. `--host 0.0.0.0` nur in einem geschützten lokalen Netz verwenden. Für den Prototyp ist kein öffentlicher Internetzugang vorgesehen.
-
-Ausführliche Anleitung und Grenzen: [`web/README.md`](web/README.md).
-
-### Log auswerten ohne Weboberfläche
-
-```powershell
-py .\scripts\analyze_mesh_log.py .\log\mesh_YYYYMMDD_HHMMSS.log --nodes .\config\nodes.csv
-```
-
-Die Auswertung kann empfangene Pakete, direkt/Relay, beobachtete Sequenzlücken und RSSI bei **Direktempfang** zusammenfassen. Aus den Paketen allein lässt sich keine Ende-zu-Ende-Zustellgarantie ableiten.
-
-## Firmware drahtlos aktualisieren: ESP-NOW-OTA (in Entwicklung)
-
-Ziel: Firmware vom PC über den angeschlossenen Logger-C3 an ausgewählte
-Mesh-Knoten schicken, **ohne an den Zielknoten den BOOT-Taster zu drücken**.
-Dabei sollen auch Relay-Verbindungen funktionieren.
-
-**Stand 03.11.2026: OTA-Transport-Prototyp v0.5.6 eingecheckt, noch nicht kompiliert oder auf Hardware getestet.** v0.5.5 enthält keinen
-OTA-Empfänger. Für die spätere OTA-fähige Firmware ist mindestens **ein**
-USB-Flash pro Gerät erforderlich. Die Flash-Partitionierung, eine
-authentifizierte und verlusttolerante Übertragung mit Ziel-Bestätigung,
-Firmware-Signaturprüfung und Rückfallverhalten sind vor dem ersten
-drahtlosen Firmware-Flash zu implementieren und mit einem Testgerät zu prüfen.
-
-Die technische Checkliste und die Meilensteine stehen in
-[docs/mesh-ota.md](docs/mesh-ota.md). Der erste **RAM-only-Transporttest**
-steht in [Firmware v0.5.6](firmware/mesh-v0.5.6/mesh-v0.5.6.ino)
-mit [Testanleitung](docs/mesh-v0.5.6.md) und
-[Windows-Testskript](scripts/ota_test.py). Er überträgt nur 16 synthetische
-Datenblöcke, nicht eine echte Firmware; **kein Flash-Schreibzugriff**.
-Ein **rein lokales Prüftool**, das keine Firmware schreibt, steht unter
-[tools/ota/check_image.py](tools/ota/check_image.py). Beispiel (OTA-Slotgröße
-**nur als Beispiel**, den tatsächlich eingestellten Wert einsetzen):
-
-```powershell
-py .\tools\ota\check_image.py .\firmware.bin --ota-slot-bytes 0x140000
-```
-
-## Testergebnisse und offene Aufgaben
-
-- **03.11.2026:** Zwei-Knoten-Test mit Abstand rund 1 m: Knotenname `Kueche`, `AUTH=OK`, `hops=0` und erfolgreiche `[RELAY]`-Ausgaben sichtbar.
-- **03.11.2026:** Mehrknoten-Log: `Keller_Abgang`, `Garage` und `Kueche` wurden von `1OG` als Logger empfangen; sowohl direkte (`hops=0`) als auch weitergeleitete (`hops=1` und `hops=2`) Pakete beobachtet.
-- **Noch nicht nachgewiesen:** Ein Quellknoten ist ausschließlich über Relay erreichbar. Dazu Relay aus-/einschalten und Direktpfad separat ausschließen.
-- **Noch offen:** Audio-Erkennung in die aktuelle Mesh-Firmware integrieren und mit unterschiedlichen Alarmmustern prüfen; Energieverbrauch und 18650-Laufzeit messen; Buzzer, Antenne, Ladeelektronik und 3D-Gehäuse fertig entwickeln; Langzeittest je Testlauf systematisch dokumentieren.
-
-Weitere historische Messergebnisse: [`docs/test-results.md`](docs/test-results.md). Ältere Unterlagen zu [v0.5.1](docs/mesh-v0.5.1.md) und zum [passiven Logger](docs/mesh-logger.md) beschreiben frühere Entwicklungsstände.
+Historische Versuche und Quellstände bleiben unter `docs/` und
+`firmware/` dokumentiert. Sie sind nützlich zur Fehlersuche, aber
+nicht automatisch eine sichere Anleitung für die aktuelle Version.
