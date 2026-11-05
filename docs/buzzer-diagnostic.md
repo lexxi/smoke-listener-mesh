@@ -1,6 +1,6 @@
 # HW-508 Buzzer: lokaler Diagnosetest (Feature-Branch)
 
-**Status:** Einfacher 500-ms-Buzzertest am XIAO wurde vom Anwender erfolgreich geprüft; 2×2-Piepsmuster neu implementiert, aber noch nicht auf Hardware getestet. Die konkrete Pinbelegung des
+**Status:** Einfacher 500-ms-Buzzertest am XIAO wurde vom Anwender erfolgreich geprüft; 2×2-Piepsmuster am 05.11.2026 auf dem Testknoten mit XIAO ESP32-C3 praktisch geprüft. Die konkrete Pinbelegung des
 **HW-508 v0.2.0** noch nicht anhand des Moduls verifiziert. Vor dem
 Anschließen die Modulbeschriftung prüfen. **Nicht blind den mittleren
 Pin an 3V3 oder 5V anschließen.**
@@ -51,6 +51,30 @@ mit passender Treiberstufe** gedacht. Einige HW-508-Varianten können
 abweichend beschaltet bzw. aktiv sein. Erst Modell prüfen; bei
 hohem Betriebsstrom einen separaten Treiber einsetzen.
 
+## Hardwaretest 05.11.2026 – Testknoten
+
+Seriell gemeldet: `version=0.6.16`, `gateway=0 audio=1 config_ap=0 battery=0 buzzer=1`.
+`BUZZER 2X2` startete die vier Töne, anschließend meldete die Firmware
+`[BUZZER] STOP`. Die Mikrofon-Diagnose erkannte vier gültige Tonereignisse:
+
+| Dauer | Frequenz | Ergebnis |
+| --- | --- | --- |
+| 512 ms | 4000 Hz | `valid=1` |
+| 543 ms | 3941 Hz | `valid=1` |
+| 545 ms | 3941 Hz | `valid=1` |
+| 512 ms | 3938 Hz | `valid=1` |
+
+Ausgabe zweimal `[AUDIO] GROUP beeps=2 diagnostic_only=1`.
+ESP-NOW Heartbeat-Empfang und Relay-Meldungen liefen während des Tests weiter.
+**Manuelles `BUZZER STOP` wurde in diesem Test nicht separat geprüft.**
+
+**Wichtig:** Obwohl die PWM-Ansteuerung 2000 Hz vorgibt, erkennt das
+Mikrofon ~4 kHz. Eine Oberwelle bzw. die akustische Charakteristik des
+Buzzers ist eine plausible Ursache, aber noch nicht messtechnisch
+bewiesen. Eigenbeschallung des Mikrofons muss vor künftiger
+Alarmkopplung berücksichtigt werden; dieser Test bestätigt ausdrücklich
+**keine** Rauchmelder-Alarmerkennung.
+
 ### Sicherheitsgrenzen
 
 - Kein Ton beim Booten.
@@ -72,4 +96,4 @@ python -m unittest discover -s tests -p "test_*.py"
 ```
 
 Zusätzlich auf dem Windows-PC mit eingebautem Arduino CLI kompilieren.
-Der einzelne Buzzer-Test wurde am XIAO bereits erfolgreich ausgeführt; das neue 2×2-Muster benötigt noch einen separaten Hardwaretest.
+Der einzelne Buzzer-Test wurde am XIAO bereits erfolgreich ausgeführt; das 2×2-Muster wurde hardwareseitig bestätigt. Der manuelle STOP-Befehl und die Integration in ein neues signiertes Release sind noch offen.
