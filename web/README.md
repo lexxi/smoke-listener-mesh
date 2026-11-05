@@ -1,4 +1,4 @@
-# Smoke Mesh Webapp (Windows, Stand 05.11.2026)
+# Smoke Mesh Webapp – Dashboard v0.4.0 (Windows, Stand 05.11.2026)
 
 Lokales Flask-Dashboard für das ESP32-C3 Smoke Listener Mesh mit
 Knoten- und Gateway-Verwaltung, USB-Logger und signierter Remote-OTA-
