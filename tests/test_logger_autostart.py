@@ -14,12 +14,22 @@ class LoggerStartupTests(unittest.TestCase):
         state = logger_control.status_data()
         self.assertIn("ota_reserved", state)
         self.assertIn("running", state)
-        with patch.object(logger_control, "_start_owned_locked") as launch, \
-             patch.object(logger_control, "running", side_effect=[False, True, True, True]):
+        class FakeProcess:
+            pid = 12345
+            def poll(self):
+                return None
+
+        def fake_start():
+            logger_control.process = FakeProcess()
+
+        with patch.object(logger_control, "process", None), \
+             patch.object(logger_control, "_start_owned_locked", side_effect=fake_start) as launch:
             first = logger_control.autostart()
             second = logger_control.autostart()
             self.assertEqual(launch.call_count, 1)
+            self.assertTrue(first["running"])
             self.assertTrue(second["running"])
+            self.assertEqual(second["pid"], 12345)
 
     def test_autostart_does_not_open_port_when_reserved(self):
         previous = logger_control.ota_reserved
