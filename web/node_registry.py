@@ -16,7 +16,7 @@ from pathlib import Path
 
 from flask import Blueprint, abort, jsonify, request
 from node_role_policy import TARGETS_FILE, load_targets
-from gateway_config import TRUSTED_GATEWAYS
+from gateway_config import LOGGER_PORT, TRUSTED_GATEWAYS
 
 ROOT = Path(__file__).resolve().parents[1]
 NODES_FILE = ROOT / "config" / "nodes.csv"
@@ -96,7 +96,7 @@ def registry():
         return jsonify({
             "entries": list(_inventory().values()),
             "ota_targets": sorted(targets),
-            "gateway_nodes": sorted({info[1] for info in TRUSTED_GATEWAYS.values()}),
+            "gateway_nodes": [TRUSTED_GATEWAYS[LOGGER_PORT][1]],
             "max_ota_targets": MAX_TARGETS,
             "csrf": csrf,
         })
@@ -120,8 +120,8 @@ def save_node():
         return jsonify({"error": "Standort: maximal 80 Zeichen, ohne Zeilenumbruch"}), 400
     if not isinstance(ota, bool):
         return jsonify({"error": "OTA-Freigabe muss true/false sein"}), 400
-    if ota and node_id in {info[1] for info in TRUSTED_GATEWAYS.values()}:
-        return jsonify({"error": "USB-Gateways werden nicht als OTA-Ziel freigegeben"}), 400
+    if ota and node_id == TRUSTED_GATEWAYS[LOGGER_PORT][1]:
+        return jsonify({"error": "Dedizierter USB-Logger-Gateway darf kein OTA-Ziel sein"}), 400
     with guard:
         try:
             entries = _inventory()
