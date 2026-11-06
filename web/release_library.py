@@ -12,6 +12,7 @@ import zipfile
 import shutil
 import threading
 from pathlib import Path
+from access_control import require_authorized, authorized
 from flask import Blueprint, abort, jsonify, request
 from node_role_policy import load_targets
 
@@ -27,8 +28,7 @@ bp = Blueprint("release_library", __name__)
 
 
 def _local():
-    if request.remote_addr not in ("127.0.0.1", "::1"):
-        abort(403)
+    require_authorized()
 
 
 def _manifest(path: Path) -> dict:
@@ -176,10 +176,9 @@ def upload_bundle():
 
 @bp.get("/api/releases")
 def releases():
-    _local()
     with GUARD:
         return jsonify({"releases": list_releases(), "public_key_present": PUBLIC_KEY.is_file(),
-                        "upload_csrf": CSRF,
+                        "upload_csrf": CSRF if authorized() else None,
                         "notice": "Signaturgeprüfte Ablage. OTA für hochgeladene Releases noch nicht freigeschaltet."})
 
 

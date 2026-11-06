@@ -14,6 +14,7 @@ import tempfile
 import threading
 from pathlib import Path
 
+from access_control import require_authorized, authorized
 from flask import Blueprint, abort, jsonify, request
 from node_role_policy import TARGETS_FILE, load_targets
 from gateway_config import LOGGER_PORT, TRUSTED_GATEWAYS
@@ -29,8 +30,7 @@ NAME_RE = re.compile(r"[A-Za-z0-9_-]{1,19}$")
 
 
 def _local():
-    if request.remote_addr not in ("127.0.0.1", "::1"):
-        abort(403)
+    require_authorized()
 
 
 def _authorize():
@@ -90,7 +90,6 @@ def _save_targets(targets: set[str]):
 
 @bp.get("/api/nodes/registry")
 def registry():
-    _local()
     with guard:
         targets = load_targets()
         return jsonify({
@@ -98,7 +97,7 @@ def registry():
             "ota_targets": sorted(targets),
             "gateway_nodes": [TRUSTED_GATEWAYS[LOGGER_PORT][1]],
             "max_ota_targets": MAX_TARGETS,
-            "csrf": csrf,
+            "csrf": csrf if authorized() else None,
         })
 
 

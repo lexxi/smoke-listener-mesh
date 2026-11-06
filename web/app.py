@@ -11,7 +11,8 @@ import threading
 from contextlib import closing
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, abort
+from access_control import lan_enabled, authorized, check_configuration
 from dashboard_version import DASHBOARD_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +22,25 @@ KV = re.compile(r"([A-Za-z_]+)=([^\s]+)")
 TIME = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\s+")
 LOCAL = dt.datetime.now().astimezone().tzinfo
 app = Flask(__name__)
+check_configuration()
+
+
+@app.before_request
+def authorize_request():
+    # Direct LAN exposure is limited to the monitor and its read-only status.
+    # Remote OTA, gateway controls, release uploads and inventory need loopback.
+    if not lan_enabled() or authorized():
+        return None
+    if request.method == "GET" and request.path in (
+        "/", "/nodes", "/ota", "/api/status", "/api/logger/status",
+        "/api/releases", "/api/remote/config", "/api/remote/job",
+        "/api/remote/gateway-settings", "/api/nodes/registry",
+    ):
+        return None
+    if request.method == "POST" and request.path == "/api/remote/node-action":
+        return None  # Endpoint separately enforces STATUS/NAME_GET and LAN-specific CSRF.
+    abort(403)
+
 from ota import bp as ota_blueprint
 app.register_blueprint(ota_blueprint)
 from logger_control import bp as logger_blueprint
@@ -309,17 +329,67 @@ def main():
     parser = argparse.ArgumentParser(description="Local Smoke Mesh web dashboard")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8088)
+    parser.add_argument("--server", choices=("flask", "waitress"), default="flask")
     parser.add_argument("--log-dir", action="append", type=Path,
                         help="Additional directory with mesh_*.log (repeatable)")
     args = parser.parse_args()
+    if args.host not in ("127.0.0.1", "::1", "localhost") and not lan_enabled():
+        parser.error("LAN binding requires SMOKE_WEB_LAN=1 (monitoring-only, privileged APIs localhost-only)")
     if args.log_dir:
         log_dirs.extend(args.log_dir)
     from logger_control import autostart
-    logger_state = autostart()
-    print("Logger:", logger_state["note"], flush=True)
+    if os.environ.get("SMOKE_LOGGER_AUTOSTART", "1") == "0":
+        print("Logger: Autostart disabled (SMOKE_LOGGER_AUTOSTART=0)", flush=True)
+    else:
+        logger_state = autostart()
+        print("Logger:", logger_state["note"], flush=True)
+    # Opt-in cleanup for piCore. The Windows default does no retention.
+    retention_days = int(os.environ.get("SMOKE_LOG_RETENTION_DAYS", "0"))
+    if retention_days:
+        from log_retention import cleanup_logs
+        retention_mb = int(os.environ.get("SMOKE_LOG_MAX_MB", "512"))
+        if not 1 <= retention_days <= 3650 or not 1 <= retention_mb <= 10240:
+            parser.error("Invalid SMOKE_LOG_RETENTION_DAYS or SMOKE_LOG_MAX_MB")
+        def cleanup_worker():
+            while True:
+                try:
+                    removed = cleanup_logs(ROOT / "log", days=retention_days,
+                                           max_mb=retention_mb, apply=True)
+                    if removed:
+                        print("Log retention: deleted", len(removed),
+                              "completed log files", flush=True)
+                except Exception as exc:
+                    print("Log retention error:", exc, flush=True)
+                import time
+                time.sleep(3600)
+        threading.Thread(target=cleanup_worker, name="log-retention", daemon=True).start()
+    # Optional daily consistent online SQLite snapshots; Windows remains unchanged.
+    backup_dir = os.environ.get("SMOKE_DB_BACKUP_DIR", "").strip()
+    if backup_dir:
+        from db_backup import backup_database
+        keep_backups = int(os.environ.get("SMOKE_DB_BACKUP_KEEP", "7"))
+        if not 1 <= keep_backups <= 365:
+            parser.error("SMOKE_DB_BACKUP_KEEP must be between 1 and 365")
+        def backup_worker():
+            import time
+            while True:
+                try:
+                    saved = backup_database(db_path, Path(backup_dir), keep=keep_backups)
+                    print("SQLite backup:", saved, flush=True)
+                except FileNotFoundError:
+                    # The dashboard creates mesh.db on its first status request.
+                    pass
+                except Exception as exc:
+                    print("SQLite backup error:", exc, flush=True)
+                time.sleep(3600)
+        threading.Thread(target=backup_worker, name="sqlite-backup", daemon=True).start()
     print("Monitoring:", ", ".join(map(str, log_dirs)), flush=True)
     print("Dashboard: http://%s:%s" % (args.host, args.port), flush=True)
-    app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
+    if args.server == "waitress":
+        from waitress import serve
+        serve(app, host=args.host, port=args.port, threads=4)
+    else:
+        app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
     main()

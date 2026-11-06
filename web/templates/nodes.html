@@ -75,6 +75,7 @@ const $=id=>document.getElementById(id);
 let managedGateways=[],loggerGatewayPort='COM16';
 let pendingNameSync=null,registrationBusy=false,registrationMessage='';
 function registrationStatus(message){registrationMessage=message;$('registry-info').textContent=message}
+let lanReadOnly=false,lanNodeAdmin=false;
 let nodes=[],gateways=[],csrf='',running=false,lastId=null,registryCsrf='',registryEntries=[],otaTargets=[],gatewayNodes=[],maxOta=5,selectedRegistryId=null;
 function nodeId(mac){
  const parts=(mac||'').toUpperCase().split(':');
@@ -117,7 +118,7 @@ function selection(){
  (forbidden?' · Gateway darf nicht Ziel sein':'')+
  (!versionAtLeast(n.firmware)?' · Remote-Namensverwaltung erst ab v0.6.13':'')):'Kein Ziel gewählt.';
  for(const id of ['status','get','set','reset','restart'])
-   $(id).disabled=running||!n||!g||forbidden||(id!=='status'&&!versionAtLeast(n.firmware));
+   $(id).disabled=running||!n||!g||forbidden||(lanReadOnly&&!lanNodeAdmin&&!['status','get'].includes(id))||(id!=='status'&&!versionAtLeast(n.firmware));
  if(selectedRegistryId!==t){
    selectedRegistryId=t;
    registrationMessage='';
@@ -127,16 +128,16 @@ function selection(){
    $('registry-ota').checked=otaTargets.includes(t);
    $('registry-sync-name').checked=!current && !!$('registry-name').value && versionAtLeast(n?.firmware);
  }
- $('registry-ota').disabled=running||registrationBusy||!n||gatewayNodes.includes(t);
- $('registry-sync-name').disabled=running||registrationBusy||!n||!versionAtLeast(n?.firmware)||forbidden;
- $('registry-save').disabled=running||registrationBusy||!!pendingNameSync||!n||!t;
+ $('registry-ota').disabled=lanReadOnly||running||registrationBusy||!n||gatewayNodes.includes(t);
+ $('registry-sync-name').disabled=lanReadOnly||running||registrationBusy||!n||!versionAtLeast(n?.firmware)||forbidden;
+ $('registry-save').disabled=lanReadOnly||running||registrationBusy||!!pendingNameSync||!n||!t;
  $('registry-info').textContent=registrationMessage||(gatewayNodes.includes(t)?'USB-Gateway: keine OTA-Zielfreigabe':
    'OTA-Ziele: '+otaTargets.length+'/'+maxOta+' · Aktueller Status: '+(otaTargets.includes(t)?'freigegeben':'nicht freigegeben'));
  for(const tr of $('nodes').children)tr.classList.toggle('selected',tr.children[1]?.textContent===t);
 }
 async function load(){
  const r=await fetch('/api/remote/config',{cache:'no-store'});if(!r.ok)throw Error('Gateway-Konfiguration fehlt');
- const j=await r.json();csrf=j.csrf;gateways=j.gateways;
+ const j=await r.json();csrf=j.csrf;lanReadOnly=!!j.lan_read_only;lanNodeAdmin=!!j.lan_node_admin;gateways=j.gateways;
  for(const gw of gateways){const o=document.createElement('option');o.value=gw.port;o.textContent=gw.name+' · '+gw.port;$('gateway').append(o)}
  if(gateways.some(x=>x.port===j.default_gateway))$('gateway').value=j.default_gateway;
  await loadRegistry();await discover();await jobRefresh();

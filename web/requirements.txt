@@ -1,3 +1,4 @@
 Flask>=3.0,<4.0
 pyserial>=3.5,<4.0
-cryptography>=43,<47
+cryptography>=43,<51
+waitress>=3.0,<4.0

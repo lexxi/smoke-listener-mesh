@@ -14,6 +14,7 @@ import threading
 import time
 from pathlib import Path
 
+from access_control import require_authorized, authorized, lan_node_write_allowed
 from flask import Blueprint, abort, jsonify, request, send_file, Response
 
 from release_library import STORE, PUBLIC_KEY, GUARD, _identity, _verify
@@ -25,6 +26,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "tools" / "ota" / "remote_ota.py"
 bp = Blueprint("remote_ota", __name__)
 csrf = secrets.token_urlsafe(32)
+lan_read_csrf = secrets.token_urlsafe(32)
+lan_last_read_action = 0.0
+LAN_READ_COOLDOWN_SECONDS = 10.0
 lock = threading.RLock()
 process = None
 job = {
@@ -36,8 +40,7 @@ MAX_LINES = 450
 
 
 def _local():
-    if request.remote_addr not in ("127.0.0.1", "::1"):
-        abort(403)
+    require_authorized()
 
 
 def _verify_release(release_id):
@@ -186,7 +189,6 @@ def download_log():
 
 @bp.get("/api/remote/config")
 def config():
-    _local()
     try:
         targets = sorted(load_targets())
         target_error = None
@@ -199,14 +201,15 @@ def config():
         "logger_gateway": LOGGER_PORT,
         "gateways": [{"port": port, "name": info[0], "node": info[1]}
                      for port, info in TRUSTED_GATEWAYS.items()],
-        "csrf": csrf,
+        "csrf": csrf if authorized() else lan_read_csrf,
+        "lan_read_only": not authorized(),
+        "lan_node_admin": bool(lan_node_write_allowed()),
         "notice": "v0.6.11+ auf Gateway und Ziel erforderlich. Fern-OTA ist bis zum Hardwaretest experimentell.",
     })
 
 
 @bp.get("/api/remote/gateway-settings")
 def gateway_settings():
-    _local()
     payload = current_gateway_payload()
     active = [{"port": port, "name": info[0], "node": info[1]}
               for port, info in TRUSTED_GATEWAYS.items()]
@@ -260,7 +263,6 @@ def set_default_gateway():
 
 @bp.get("/api/remote/job")
 def current_job():
-    _local()
     with lock:
         return jsonify(dict(job))
 
@@ -300,10 +302,18 @@ def start():
 
 @bp.post("/api/remote/node-action")
 def node_action():
-    _local()
-    if request.headers.get("X-Remote-CSRF") != csrf:
+    global lan_last_read_action
+    is_admin = authorized()
+    expected_csrf = csrf if is_admin else lan_read_csrf
+    if request.headers.get("X-Remote-CSRF") != expected_csrf:
         return jsonify({"error": "CSRF-Prüfung fehlgeschlagen"}), 403
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "JSON-Objekt erwartet"}), 400
+    action_allowed = data.get("action") in ("STATUS", "NAME_GET")
+    node_admin_allowed = lan_node_write_allowed()
+    if not is_admin and not action_allowed and not node_admin_allowed:
+        return jsonify({"error": "Knotenänderungen nur vom freigegebenen Admin-Rechner erlaubt"}), 403
     target, port, action, name = (data.get("target"), data.get("gateway"),
                                   data.get("action"), data.get("name", ""))
     if not isinstance(target, str) or not re.fullmatch(r"[0-9A-F]{16}", target):
@@ -320,6 +330,11 @@ def node_action():
     with lock:
         if job["state"] == "running":
             return jsonify({"error": "Ein OTA- oder Managementvorgang läuft bereits"}), 409
+        if not is_admin:
+            now = time.monotonic()
+            if now - lan_last_read_action < LAN_READ_COOLDOWN_SECONDS:
+                return jsonify({"error": "Funkverwaltung: mindestens 10 Sekunden Abstand"}), 429
+            lan_last_read_action = now
         job.update({
             "id": secrets.token_hex(8), "state": "running", "mode": "node_" + action,
             "started": __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds"),
