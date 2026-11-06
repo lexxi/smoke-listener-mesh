@@ -131,22 +131,31 @@ Anschließend `sudo filetool.sh -b` und nach einem Reboot Webserver,
 Logger, und Uhrzeit prüfen.
 
 
-### Schreibende Knotenbefehle für einen einzelnen LAN-Admin-PC
+### Schreibende Knotenbefehle: einzelne IPs und CIDR-Netze
 
-`NAME_SET`, `NAME_RESET` und `RESTART` sind im direkten LAN
-standardmäßig gesperrt. Eine explizite Rechnerfreigabe ist möglich:
+`NAME_SET`, `NAME_RESET` und `RESTART` bleiben standardmäßig
+gesperrt. Freigaben werden auf dem Pi lokal unter
+`/mnt/mmcblk0p3/smoke-mesh/data/web.env` mit der Einstellung
+`SMOKE_LAN_NODE_ADMIN_IPS` konfiguriert. Beispiele:
 
 ```sh
+# Nur ein Rechner
 SMOKE_LAN_NODE_ADMIN_IPS='192.168.98.50'
+
+# Ganzes Netzwerk
+SMOKE_LAN_NODE_ADMIN_IPS='192.168.98.0/24'
+
+# Gemischt, kommasepariert (IPv4 und optional IPv6)
+SMOKE_LAN_NODE_ADMIN_IPS='192.168.98.50,192.168.99.0/24,2001:db8:1::/64'
 ```
 
-**Beispiel-IP ersetzen** durch die tatsächliche LAN-IPv4-Adresse
-des Windows-Admin-PCs (z. B. `ipconfig`). In
-`/mnt/mmcblk0p3/smoke-mesh/data/web.env` eintragen, Webapp neu
-starten. Es sind nur exakte IP-Adressen erlaubt, kein CIDR/Wildcard,
-keine Auswertung von `X-Forwarded-For`. Mehrere exakte IPs
-lassen sich komma-separiert eintragen. Ohne Variable ist die Freigabe
-deaktiviert. `STATUS` und `NAME_GET` bleiben für das LAN möglich.
+CIDR-Adressen müssen kanonische Netzadressen sein (z. B.
+`192.168.98.0/24`, nicht `192.168.98.50/24`).
+Ungültige Einträge werden ignoriert, nicht freigegeben.
+Keine Wildcards, keine Auswertung von `X-Forwarded-For`.
+Ohne Variable ist keine schreibende LAN-Knotenverwaltung erlaubt.
+Nach Konfigurationsänderungen die Webapp neu starten.
+`STATUS` und `NAME_GET` sind auch ohne diese Freigabe erlaubt.
 
 Diese Ausnahme gilt **nur** für Funk-Knotenbefehle, nicht für
 OTA, Upload, Logger-Steuerung oder die Registrierung von OTA-Zielen.
