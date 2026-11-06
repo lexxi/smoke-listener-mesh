@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+from access_control import require_authorized
 from flask import Blueprint, abort, jsonify, request
 from gateway_config import LOGGER_PORT, LOGGER_NAME
 
@@ -26,8 +27,7 @@ note = "Logger noch nicht gestartet."
 
 
 def local():
-    if request.remote_addr not in ("127.0.0.1", "::1"):
-        abort(403)
+    require_authorized()
 
 
 def running():
