@@ -129,3 +129,34 @@ su tc -c '/bin/sh /mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh/deploy/picor
 
 Anschließend `sudo filetool.sh -b` und nach einem Reboot Webserver,
 Logger, und Uhrzeit prüfen.
+
+
+### Schreibende Knotenbefehle für einen einzelnen LAN-Admin-PC
+
+`NAME_SET`, `NAME_RESET` und `RESTART` sind im direkten LAN
+standardmäßig gesperrt. Eine explizite Rechnerfreigabe ist möglich:
+
+```sh
+SMOKE_LAN_NODE_ADMIN_IPS='192.168.98.50'
+```
+
+**Beispiel-IP ersetzen** durch die tatsächliche LAN-IPv4-Adresse
+des Windows-Admin-PCs (z. B. `ipconfig`). In
+`/mnt/mmcblk0p3/smoke-mesh/data/web.env` eintragen, Webapp neu
+starten. Es sind nur exakte IP-Adressen erlaubt, kein CIDR/Wildcard,
+keine Auswertung von `X-Forwarded-For`. Mehrere exakte IPs
+lassen sich komma-separiert eintragen. Ohne Variable ist die Freigabe
+deaktiviert. `STATUS` und `NAME_GET` bleiben für das LAN möglich.
+
+Diese Ausnahme gilt **nur** für Funk-Knotenbefehle, nicht für
+OTA, Upload, Logger-Steuerung oder die Registrierung von OTA-Zielen.
+Der API-Request hat weiterhin einen CSRF-Token, eine 10-Sekunden-
+Sperrfrist und läuft jeweils nur als ein Job.
+
+Wichtig: IP-Freigabe ist **keine Benutzeranmeldung**. In einem
+unvertrauenswürdigen Netz ist sie unzureichend. HTTP überträgt
+Daten unverschlüsselt. Verwende die Freigabe nur in einem
+abgeschotteten vertrauenswürdigen Administrations-LAN und
+keinesfalls über eine Internet-Portweiterleitung. Für
+vollständige Verwaltung später TLS und echte Authentifizierung
+einführen.
