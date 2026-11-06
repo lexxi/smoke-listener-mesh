@@ -44,12 +44,12 @@ class RotatingSerialLog:
         self.size = path.stat().st_size
 
     def write_line(self, message: str):
-        data = (message + "\\n").encode("utf-8")
+        data = (message + "\n").encode("utf-8")
         if self.max_bytes and self.size and self.size + len(data) > self.max_bytes:
             self.file.close()
             self.part += 1
             self._open()
-        self.file.write(message + "\\n")
+        self.file.write(message + "\n")
         self.size += len(data)
 
     def __exit__(self, *_):
