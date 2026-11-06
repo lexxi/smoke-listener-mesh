@@ -31,7 +31,11 @@ def authorize_request():
     # Remote OTA, gateway controls, release uploads and inventory need loopback.
     if not lan_enabled() or authorized():
         return None
-    if request.method == "GET" and request.path in ("/", "/api/status", "/api/logger/status"):
+    if request.method == "GET" and request.path in (
+        "/", "/nodes", "/ota", "/api/status", "/api/logger/status",
+        "/api/releases", "/api/remote/config", "/api/remote/job",
+        "/api/remote/gateway-settings", "/api/nodes/registry",
+    ):
         return None
     abort(403)
 
