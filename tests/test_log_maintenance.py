@@ -9,7 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "web"))
 sys.path.insert(0, str(ROOT / "scripts"))
 from log_retention import cleanup_logs
-from logging import RotatingSerialLog
+import importlib.util
+spec = importlib.util.spec_from_file_location("smoke_serial_logger", ROOT / "scripts" / "logging.py")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+RotatingSerialLog = module.RotatingSerialLog
 
 
 class LogMaintenanceTests(unittest.TestCase):
