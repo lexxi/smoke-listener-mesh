@@ -12,6 +12,7 @@ import zipfile
 import shutil
 import threading
 from pathlib import Path
+from access_control import require_authorized
 from flask import Blueprint, abort, jsonify, request
 from node_role_policy import load_targets
 
@@ -27,8 +28,7 @@ bp = Blueprint("release_library", __name__)
 
 
 def _local():
-    if request.remote_addr not in ("127.0.0.1", "::1"):
-        abort(403)
+    require_authorized()
 
 
 def _manifest(path: Path) -> dict:
