@@ -18,7 +18,6 @@ def local():
 
 @bp.get("/ota")
 def page():
-    local()
     return render_template("ota.html", csrf_token=csrf_token)
 
 
