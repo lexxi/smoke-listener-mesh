@@ -1,13 +1,16 @@
 # Gemeinsame Webapp für Windows und piCore (Raspberry Pi 2)
 
-Status: Entwicklungsbranch, **noch keine Produktivmigration**.
+Status: **in `main` seit PR #10 (07.11.2026)**. Auf dem Raspberry Pi 2
+(piCore 17.0.1, Hostname `picore`) im LAN in Betrieb; Windows bleibt
+weiterhin unterstützt. Remote-OTA auf dem Pi ist noch **nicht** getestet.
 
 ## Prinzip
 
 Eine gemeinsame Codebasis; Betriebssystemunterschiede ausschließlich
 über Konfiguration. Windows-Standard `COM16` bleibt unverändert.
 Firmware-Build und Signierung mit privatem Schlüssel bleiben auf Windows.
-Der Pi übernimmt später nur Logger, Dashboard, Signaturprüfung und Remote-OTA.
+Der Pi betreibt Logger und Dashboard sowie die getestete Knotenverwaltung.
+Signaturprüfung und Remote-OTA auf dem Pi bleiben gesondert zu prüfen.
 
 ### Neue Optionen
 
@@ -46,13 +49,12 @@ für den SSH-Tunnel einen anderen **lokalen** Port, z. B.
 `ssh -L 18088:127.0.0.1:8088 ...` verwenden und dann
 `http://127.0.0.1:18088` öffnen.
 
-Die Webapp und ihre Verwaltungs-APIs haben keine normale
-Benutzeranmeldung. **Nicht** mit `--host 0.0.0.0` öffentlich im
-LAN starten. SSH-Tunnel ist nur für den administrativen Test;
-später gehört ein abgesicherter Reverse Proxy mit Authentifizierung
-und TLS davor.
+Die Webapp hat keine Benutzeranmeldung. Für den laufenden Pi-Betrieb
+ist direkter LAN-Zugriff bewusst aktiviert (`SMOKE_WEB_LAN=1`).
+Auf keinem Fall eine Portweiterleitung ins Internet einrichten.
+Ein SSH-Tunnel bleibt für administrative Tests möglich.
 
-### Mit Linux-USB-Gateway (nach erstem Test)
+### Linux-USB-Gateway (in Betrieb)
 
 Ein lokales, nicht versioniertes `web/data/gateways.pi.json`
 mit der **tatsächlichen** `/dev/serial/by-id/`-Gerätekennung anlegen:
@@ -78,8 +80,9 @@ nur eine Vorlage; die echte Gerätekennung mit
 
 piCore lädt das Root-Dateisystem in den RAM. Das Repository und
 `web/data` liegen hier auf der dauerhaft eingehängten Partition P3.
-Für späteren Dauerbetrieb sollten eine externe Logrotation,
-Dateiberechtigungen, Service-Start und Backups ergänzt werden.
+Autostart, Web-/Rohlogrotation und SQLite-Tagesbackups sind inzwischen
+in Betrieb. Externe Backups, Identitätsprüfung des USB-Geräts und
+Überwachung eines unerwarteten Webserver-Absturzes sind noch offen.
 Die bestehende Webapp schreibt standardmäßig Logdateien unter
 `log/` und SQLite-Daten unter `web/data/` relativ zum Repository.
 
@@ -89,8 +92,11 @@ Die bestehende Webapp schreibt standardmäßig Logdateien unter
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-Für Windows zusätzlich die bestehenden Tests und Logger/Remote-OTA
-gegen `COM16` durchführen. Kein Flash/OTA im Cross-Platform-Test.
+Windows: **97 Tests OK**, Remote-STATUS über COM16 zur Garage bestätigt.
+piCore: **96 Tests OK** vor den letzten Windows-Fixes, alle fünf
+Knotenbefehle getestet; neue SQLite-Verbindungsfixes unter piCore noch
+nicht erneut regressionsgetestet. Kein Firmware-Flash beim
+plattformübergreifenden Test; Remote-OTA auf piCore weiter offen.
 
 
 ## Direkter LAN-Betrieb ohne Login
@@ -102,10 +108,14 @@ Ab diesem Stand ist der **Monitor** über das lokale Netz ohne Passwort erreichb
 mehr benötigt. Alte Einträge in der lokalen Datei dürfen bestehen bleiben,
 werden aber ignoriert.
 
-**Sicherheitsgrenze:** Im LAN sind nur `GET /` und `GET /api/status`
-zugänglich. Die Seiten `/ota` und `/nodes` sind lesbar. Die Funkabfragen `STATUS` und `NAME_GET` sind im LAN erlaubt (separater CSRF-Token, mindestens 10 Sekunden Abstand). Schreibende APIs wie `NAME_SET`, `NAME_RESET`, `RESTART`, Gateway-Konfiguration, Logger-Steuerung und OTA bleiben auf Loopback beschränkt.
-Für administrative Arbeiten
-kann weiterhin ein SSH-Tunnel verwendet werden.
+**Aktuelle Sicherheitsgrenze:** Die Seiten `/`, `/nodes` und `/ota`
+sind im LAN ohne Login lesbar. `STATUS` und `NAME_GET` sind als
+Funkabfragen erlaubt (CSRF-Token und mindestens zehn Sekunden Abstand).
+`NAME_SET`, `NAME_RESET` und `RESTART` funktionieren mit einer
+expliziten IP- oder CIDR-Freigabe über `SMOKE_LAN_NODE_ADMIN_IPS`.
+Firmware-OTA, Uploads, Logger-Steuerung, Inventar- und Gatewayänderungen
+bleiben im direkten LAN gesperrt. Zugriff über Loopback ist separat
+möglich; ein CSRF-Token ist keine Authentisierung.
 
 Keine Portweiterleitung ins Internet; auch die Monitoring-Daten werden
 ohne TLS übertragen. Später kann HTTPS plus Authentifizierung ergänzt werden.
@@ -120,15 +130,23 @@ python -m pip install 'waitress>=3,<4'
 
 Die Startdatei `deploy/picore/start-web.sh` liest
 `/mnt/mmcblk0p3/smoke-mesh/data/web.env` und startet Waitress auf
-`0.0.0.0:8088`. Für piCore den folgenden Befehl **nach dem Mount von P3**
-in `/opt/bootlocal.sh` eintragen:
+`0.0.0.0:8088`. Die aktive `/opt/bootlocal.sh` mountet zunächst P3 und
+startet anschließend die Webapp **mit dem rotierenden Log-Stream**:
 
 ```sh
-su tc -c '/bin/sh /mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh/deploy/picore/start-web.sh' >> /mnt/mmcblk0p3/smoke-mesh/logs/web-server.log 2>&1 &
+# SMOKEMESH_AUTO_MOUNT
+mkdir -p /mnt/mmcblk0p3
+mountpoint -q /mnt/mmcblk0p3 || mount -t ext4 /dev/mmcblk0p3 /mnt/mmcblk0p3
+
+# SMOKEMESH_WEB_AUTOSTART
+su tc -c '/bin/sh /mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh/deploy/picore/start-web.sh' 2>&1 | /mnt/mmcblk0p3/smoke-mesh/venv/bin/python -u /mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh/deploy/picore/rotate-web-stream.py --output /mnt/mmcblk0p3/smoke-mesh/logs/web-server.log --max-kb 1024 --keep 5 &
 ```
 
-Anschließend `sudo filetool.sh -b` und nach einem Reboot Webserver,
-Logger, und Uhrzeit prüfen.
+Änderungen an `/opt/bootlocal.sh` mit `sudo filetool.sh -b`
+persistieren und danach Webserver, Logger, Zeit und Datenbankbackup
+prüfen. `/opt/bootsync.sh` setzt den lokalen Hostnamen über
+`/usr/bin/sethostname picore`; diese Datei ebenfalls mit
+`filetool.sh -b` sichern, falls geändert.
 
 
 ### Schreibende Knotenbefehle: einzelne IPs und CIDR-Netze
@@ -220,7 +238,7 @@ Für Windows weiterhin Standard: kein automatisches Löschen, kein
 Rotieren, solange die Optionen nicht explizit gesetzt sind.
 
 
-## Taegliches SQLite-Backup (piCore, opt-in)
+## Tägliches SQLite-Backup (piCore, opt-in)
 
 Die Monitoring-Datenbank liegt unter `web/data/mesh.db` und
 verwendet SQLite WAL. Eine laufende Datenbank nicht mit `cp` sichern:
@@ -288,7 +306,7 @@ rotiert die Ausgabedatei bei 1024 KiB und bewahrt die letzten fuenf
 abgeschlossenen Generationen auf:
 `web-server.log.1` bis `web-server.log.5`.
 
-**Erst nach einem erfolgreichen Test auf dem Pi:** In
+**Aktiv auf dem Pi:** In
 `/opt/bootlocal.sh` ausschliesslich die bestehende Zeile fuer
 `SMOKEMESH_WEB_AUTOSTART` ersetzen (Mount und andere Zeilen bleiben):
 
@@ -296,11 +314,12 @@ abgeschlossenen Generationen auf:
 su tc -c '/bin/sh /mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh/deploy/picore/start-web.sh' 2>&1 | /mnt/mmcblk0p3/smoke-mesh/venv/bin/python -u /mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh/deploy/picore/rotate-web-stream.py --output /mnt/mmcblk0p3/smoke-mesh/logs/web-server.log --max-kb 1024 --keep 5 &
 ```
 
-Die Pipe muss komplett im Hintergrund laufen (abschliessendes `&`).
-Vor der Aenderung `/opt/bootlocal.sh` sichern; danach mit
-`sudo filetool.sh -b` piCore-persistent speichern und neu starten.
-Das alte Log bleibt erhalten und wird beim Erreichen der Groessengrenze
-rotiert. Der Log-Schreiber beendet sich, wenn die Webapp den
+Die Pipe muss komplett im Hintergrund laufen (abschließendes `&`).
+Vor späteren Änderungen `/opt/bootlocal.sh` sichern; danach mit
+`sudo filetool.sh -b` dauerhaft speichern und neu starten.
+Das alte Log bleibt erhalten und wird beim Erreichen der Größengrenze
+rotiert. **Dieser Grenzwert wurde im Dauerbetrieb bisher nicht erreicht;
+die Rotation wurde in automatisierten Tests geprüft.** Der Log-Schreiber beendet sich, wenn die Webapp den
 Ausgabestrom schliesst.
 
 Nach Reboot kontrollieren:
@@ -312,3 +331,31 @@ ls -lh /mnt/mmcblk0p3/smoke-mesh/logs/web-server.log*
 
 Diese Loesung rotiert ausschliesslich den Webserver-Ausgabestrom,
 nicht die SQLite-Datenbank oder die separaten Mesh-Rohlogs.
+
+
+## Nach PR #10: Stand und sichere Updates
+
+[PR #10](https://github.com/lexxi/smoke-listener-mesh/pull/10)
+wurde mit Merge-Commit `960ecbefae147ecab04be113adb4b3e8601cf0a4`
+nach `main` übernommen. Der Pi-Checkout kann nach einem Statuscheck
+vom bisherigen Feature-Branch auf `main` umgestellt werden:
+
+```sh
+cd /mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh
+git status -sb
+git fetch origin
+# Nur wenn keine lokalen Änderungen vorhanden sind:
+git switch main
+git pull --ff-only origin main
+. /mnt/mmcblk0p3/smoke-mesh/venv/bin/activate
+python -m unittest discover -s tests -p 'test_*.py'
+```
+
+Die lokalen Pi-Dateien `web/data/gateways.pi.json` und `web.env`
+bleiben außerhalb der versionierten Konfiguration. Windows-Arbeitsstände
+mit lokal geänderten Firmware-Headern oder `config/nodes.csv` nicht
+blind mit `git pull` überschreiben.
+
+**Noch nicht abgeschlossen:** Pi-Remote-OTA/Signaturprüfung in Hardware,
+externe SQLite-Sicherung, Rotation beim echten Größenlimit und
+vollständige Sicherheitsvalidierung der Rauchalarmkette.
