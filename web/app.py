@@ -315,8 +315,11 @@ def main():
     if args.log_dir:
         log_dirs.extend(args.log_dir)
     from logger_control import autostart
-    logger_state = autostart()
-    print("Logger:", logger_state["note"], flush=True)
+    if os.environ.get("SMOKE_LOGGER_AUTOSTART", "1") == "0":
+        print("Logger: Autostart disabled (SMOKE_LOGGER_AUTOSTART=0)", flush=True)
+    else:
+        logger_state = autostart()
+        print("Logger:", logger_state["note"], flush=True)
     print("Monitoring:", ", ".join(map(str, log_dirs)), flush=True)
     print("Dashboard: http://%s:%s" % (args.host, args.port), flush=True)
     app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
