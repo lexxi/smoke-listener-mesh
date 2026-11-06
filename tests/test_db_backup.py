@@ -53,6 +53,20 @@ class DatabaseBackupTests(unittest.TestCase):
                 self.assertEqual(con.execute("SELECT COUNT(*) FROM events").fetchone()[0], 6)
             self.assertEqual(len(list(backup_dir.glob("mesh_*.db"))), 7)
 
+    def test_backup_file_can_be_removed_after_connections_close(self):
+        # On Windows unlink fails while sqlite3 connections still hold handles.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "mesh.db"
+            with sqlite3.connect(source) as con:
+                con.execute("CREATE TABLE messages (payload TEXT)")
+            backup_dir = root / "backup"
+            target = backup_database(source, backup_dir, today=dt.date(2026, 11, 6))
+            self.assertEqual(backup_database(source, backup_dir,
+                                             today=dt.date(2026, 11, 6)), target)
+            target.unlink()
+            self.assertFalse(target.exists())
+
     def test_missing_source_and_bad_existing_snapshot(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
