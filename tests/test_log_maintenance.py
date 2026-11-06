@@ -4,6 +4,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "web"))
@@ -28,6 +29,22 @@ class LogMaintenanceTests(unittest.TestCase):
             lines = [line for part in parts for line in part.read_text().splitlines()]
             self.assertEqual(lines, [f"line-{i}" for i in range(5)])
             self.assertTrue(all(p.stat().st_size <= 20 for p in parts))
+
+    def test_serial_logger_writes_real_received_line(self):
+        # Exercise main(), not only RotatingSerialLog, to catch stale file.write().
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "mesh_test.log"
+            connection = MagicMock()
+            connection.__enter__.return_value.readline.side_effect = [
+                b"sample-heartbeat\\n", KeyboardInterrupt()
+            ]
+            with patch.object(module.serial, "Serial", return_value=connection):
+                with patch.object(sys, "argv", ["logging.py", "--port", "FAKE",
+                                                "--out", str(target), "--rotate-mb", "1",
+                                                "--quiet-lines"]):
+                    module.main()
+            self.assertIn("sample-heartbeat", target.read_text())
+            self.assertIn("[LOGGER] Connected", target.read_text())
 
     def test_dry_run_and_protect_newest(self):
         with tempfile.TemporaryDirectory() as temp:
