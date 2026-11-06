@@ -363,6 +363,26 @@ def main():
                 import time
                 time.sleep(3600)
         threading.Thread(target=cleanup_worker, name="log-retention", daemon=True).start()
+    # Optional daily consistent online SQLite snapshots; Windows remains unchanged.
+    backup_dir = os.environ.get("SMOKE_DB_BACKUP_DIR", "").strip()
+    if backup_dir:
+        from db_backup import backup_database
+        keep_backups = int(os.environ.get("SMOKE_DB_BACKUP_KEEP", "7"))
+        if not 1 <= keep_backups <= 365:
+            parser.error("SMOKE_DB_BACKUP_KEEP must be between 1 and 365")
+        def backup_worker():
+            import time
+            while True:
+                try:
+                    saved = backup_database(db_path, Path(backup_dir), keep=keep_backups)
+                    print("SQLite backup:", saved, flush=True)
+                except FileNotFoundError:
+                    # The dashboard creates mesh.db on its first status request.
+                    pass
+                except Exception as exc:
+                    print("SQLite backup error:", exc, flush=True)
+                time.sleep(3600)
+        threading.Thread(target=backup_worker, name="sqlite-backup", daemon=True).start()
     print("Monitoring:", ", ".join(map(str, log_dirs)), flush=True)
     print("Dashboard: http://%s:%s" % (args.host, args.port), flush=True)
     if args.server == "waitress":
