@@ -3,7 +3,6 @@
 import argparse
 import datetime as dt
 import time
-import os
 from pathlib import Path
 
 import serial
@@ -102,13 +101,13 @@ def main():
                             if not line:
                                 continue
                             msg = f"{stamp()} {line}"
-                            file.write(msg + "\n")
+                            file.write_line(msg)
                             if not args.quiet_lines:
                                 print(msg, flush=True)
                 except (serial.SerialException, OSError) as exc:
                     msg = f"{stamp()} [LOGGER] Disconnected: {exc}; retry in {args.retry}s"
                     print(msg, flush=True)
-                    file.write(msg + "\n")
+                    file.write_line(msg)
                     time.sleep(args.retry)
     except KeyboardInterrupt:
         print("\nStopped by user.")
