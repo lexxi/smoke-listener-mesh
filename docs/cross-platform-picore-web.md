@@ -93,49 +93,41 @@ Für Windows zusätzlich die bestehenden Tests und Logger/Remote-OTA
 gegen `COM16` durchführen. Kein Flash/OTA im Cross-Platform-Test.
 
 
-## Direkter LAN-Betrieb und persistenter Bootstart
+## Direkter LAN-Betrieb ohne Login
 
-Für direkten Browserzugriff (kein SSH-Tunnel) hat der Entwicklungsbranch
-eine optionale Passwortsperre. Der Default unter Windows bleibt
-`127.0.0.1` ohne LAN-Modus. Für den Pi wird Waitress verwendet.
-Im lokalen LAN ist HTTP **nicht verschlüsselt**; keine Portweiterleitung
-zum Internet, kein untrusted WLAN. Für dauerhaften administrativen
-Betrieb ist zusätzlich HTTPS einzuplanen.
+Ab diesem Stand ist der **Monitor** über das lokale Netz ohne Passwort erreichbar:
+`http://192.168.98.39:8088/`. Dafür `SMOKE_WEB_LAN=1` in
+`/mnt/mmcblk0p3/smoke-mesh/data/web.env` setzen.
+`SMOKE_WEB_PASSWORD_HASH` und `SMOKE_WEB_SECRET_KEY` werden nicht
+mehr benötigt. Alte Einträge in der lokalen Datei dürfen bestehen bleiben,
+werden aber ignoriert.
 
-Auf dem Pi einmalig:
+**Sicherheitsgrenze:** Im LAN sind nur `GET /` und `GET /api/status`
+zugänglich. Alle weiteren Seiten und APIs (OTA, Gateway, Knotenregistrierung,
+Logger-Steuerung, Firmware-Uploads) erfordern eine Loopback-Verbindung.
+Das Dashboard enthält noch Links auf die gesperrten Verwaltungsseiten;
+dort ist aus dem LAN ein HTTP 403 erwartbar. Für administrative Arbeiten
+kann weiterhin ein SSH-Tunnel verwendet werden.
+
+Keine Portweiterleitung ins Internet; auch die Monitoring-Daten werden
+ohne TLS übertragen. Später kann HTTPS plus Authentifizierung ergänzt werden.
+
+### Dauerbetrieb mit Waitress
 
 ```sh
 cd /mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh
 . /mnt/mmcblk0p3/smoke-mesh/venv/bin/activate
 python -m pip install 'waitress>=3,<4'
-mkdir -p /mnt/mmcblk0p3/smoke-mesh/data /mnt/mmcblk0p3/smoke-mesh/logs
 ```
 
-Die Datei `/mnt/mmcblk0p3/smoke-mesh/data/web.env` wird **nur lokal**
-angelegt, Modus `0600`, z. B.:
-
-```sh
-SMOKE_WEB_LAN=1
-SMOKE_WEB_PASSWORD_HASH='scrypt:...'
-SMOKE_WEB_SECRET_KEY='...'
-SMOKE_GATEWAYS_FILE='/mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh/web/data/gateways.pi.json'
-```
-
-Passworthash mit
-`werkzeug.security.generate_password_hash(getpass(...))` und
-Cookie-Secret mit `secrets.token_urlsafe(48)` erzeugen. Niemals
-ein Klartextpasswort oder den privaten OTA-Signierschlüssel speichern.
-
-Der versionierte Startbefehl liegt unter
-`deploy/picore/start-web.sh`; dieser muss als `tc` laufen und P3
-muss vorher gemountet sein. Den Start in `/opt/bootlocal.sh`
-**nach** dem vorhandenen P3-Mount ergänzen:
+Die Startdatei `deploy/picore/start-web.sh` liest
+`/mnt/mmcblk0p3/smoke-mesh/data/web.env` und startet Waitress auf
+`0.0.0.0:8088`. Für piCore den folgenden Befehl **nach dem Mount von P3**
+in `/opt/bootlocal.sh` eintragen:
 
 ```sh
 su tc -c '/bin/sh /mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh/deploy/picore/start-web.sh' >> /mnt/mmcblk0p3/smoke-mesh/logs/web-server.log 2>&1 &
 ```
 
-Anschließend `sudo filetool.sh -b` und Reboot-Prüfung.
-Die Konfigurationsdatei auf P3 bleibt ohne `filetool` bestehen.
-Vermeide einen zweiten gleichzeitig laufenden Flask-Prozess:
-der USB-Port darf nur vom einen gestarteten Logger geöffnet werden.
+Anschließend `sudo filetool.sh -b` und nach einem Reboot Webserver,
+Logger, und Uhrzeit prüfen.
