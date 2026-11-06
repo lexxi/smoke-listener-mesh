@@ -362,6 +362,7 @@ def main():
     parser = argparse.ArgumentParser(description="Local Smoke Mesh web dashboard")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8088)
+    parser.add_argument("--server", choices=("flask", "waitress"), default="flask")
     parser.add_argument("--log-dir", action="append", type=Path,
                         help="Additional directory with mesh_*.log (repeatable)")
     args = parser.parse_args()
@@ -377,7 +378,11 @@ def main():
         print("Logger:", logger_state["note"], flush=True)
     print("Monitoring:", ", ".join(map(str, log_dirs)), flush=True)
     print("Dashboard: http://%s:%s" % (args.host, args.port), flush=True)
-    app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
+    if args.server == "waitress":
+        from waitress import serve
+        serve(app, host=args.host, port=args.port, threads=4)
+    else:
+        app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
     main()
