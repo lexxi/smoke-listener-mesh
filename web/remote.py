@@ -26,6 +26,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "tools" / "ota" / "remote_ota.py"
 bp = Blueprint("remote_ota", __name__)
 csrf = secrets.token_urlsafe(32)
+lan_read_csrf = secrets.token_urlsafe(32)
+lan_last_read_action = 0.0
+LAN_READ_COOLDOWN_SECONDS = 10.0
 lock = threading.RLock()
 process = None
 job = {
@@ -198,7 +201,7 @@ def config():
         "logger_gateway": LOGGER_PORT,
         "gateways": [{"port": port, "name": info[0], "node": info[1]}
                      for port, info in TRUSTED_GATEWAYS.items()],
-        "csrf": csrf if authorized() else None,
+        "csrf": csrf if authorized() else lan_read_csrf,
         "notice": "v0.6.11+ auf Gateway und Ziel erforderlich. Fern-OTA ist bis zum Hardwaretest experimentell.",
     })
 
@@ -297,10 +300,16 @@ def start():
 
 @bp.post("/api/remote/node-action")
 def node_action():
-    _local()
-    if request.headers.get("X-Remote-CSRF") != csrf:
+    global lan_last_read_action
+    is_admin = authorized()
+    expected_csrf = csrf if is_admin else lan_read_csrf
+    if request.headers.get("X-Remote-CSRF") != expected_csrf:
         return jsonify({"error": "CSRF-Prüfung fehlgeschlagen"}), 403
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "JSON-Objekt erwartet"}), 400
+    if not is_admin and data.get("action") not in ("STATUS", "NAME_GET"):
+        return jsonify({"error": "Nur STATUS und NAME_GET im LAN erlaubt"}), 403
     target, port, action, name = (data.get("target"), data.get("gateway"),
                                   data.get("action"), data.get("name", ""))
     if not isinstance(target, str) or not re.fullmatch(r"[0-9A-F]{16}", target):
@@ -317,6 +326,11 @@ def node_action():
     with lock:
         if job["state"] == "running":
             return jsonify({"error": "Ein OTA- oder Managementvorgang läuft bereits"}), 409
+        if not is_admin:
+            now = time.monotonic()
+            if now - lan_last_read_action < LAN_READ_COOLDOWN_SECONDS:
+                return jsonify({"error": "Funkabfrage: mindestens 10 Sekunden Abstand"}), 429
+            lan_last_read_action = now
         job.update({
             "id": secrets.token_hex(8), "state": "running", "mode": "node_" + action,
             "started": __import__("datetime").datetime.now().astimezone().isoformat(timespec="seconds"),
