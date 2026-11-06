@@ -343,6 +343,26 @@ def main():
     else:
         logger_state = autostart()
         print("Logger:", logger_state["note"], flush=True)
+    # Opt-in cleanup for piCore. The Windows default does no retention.
+    retention_days = int(os.environ.get("SMOKE_LOG_RETENTION_DAYS", "0"))
+    if retention_days:
+        from log_retention import cleanup_logs
+        retention_mb = int(os.environ.get("SMOKE_LOG_MAX_MB", "512"))
+        if not 1 <= retention_days <= 3650 or not 1 <= retention_mb <= 10240:
+            parser.error("Invalid SMOKE_LOG_RETENTION_DAYS or SMOKE_LOG_MAX_MB")
+        def cleanup_worker():
+            while True:
+                try:
+                    removed = cleanup_logs(ROOT / "log", days=retention_days,
+                                           max_mb=retention_mb, apply=True)
+                    if removed:
+                        print("Log retention: deleted", len(removed),
+                              "completed log files", flush=True)
+                except Exception as exc:
+                    print("Log retention error:", exc, flush=True)
+                import time
+                time.sleep(3600)
+        threading.Thread(target=cleanup_worker, name="log-retention", daemon=True).start()
     print("Monitoring:", ", ".join(map(str, log_dirs)), flush=True)
     print("Dashboard: http://%s:%s" % (args.host, args.port), flush=True)
     if args.server == "waitress":
