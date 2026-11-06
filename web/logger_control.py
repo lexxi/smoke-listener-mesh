@@ -101,8 +101,14 @@ def _start_owned_locked():
     diagnostics = output / ("logger_control_" + dt.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log")
     output_handle = diagnostics.open("a", encoding="utf-8", buffering=1)
     try:
+        args = [sys.executable, "-u", str(LOGGER), "--port", PORT, "--out", str(session)]
+        rotate_mb = int(__import__("os").environ.get("SMOKE_LOG_ROTATE_MB", "0"))
+        if not 0 <= rotate_mb <= 1024:
+            raise ValueError("SMOKE_LOG_ROTATE_MB must be between 0 and 1024")
+        if rotate_mb:
+            args.extend(["--rotate-mb", str(rotate_mb), "--quiet-lines"])
         process = subprocess.Popen(
-            [sys.executable, "-u", str(LOGGER), "--port", PORT, "--out", str(session)],
+            args,
             cwd=ROOT, stdin=subprocess.DEVNULL,
             stdout=output_handle, stderr=subprocess.STDOUT,
         )
