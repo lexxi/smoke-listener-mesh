@@ -14,7 +14,7 @@ import threading
 import time
 from pathlib import Path
 
-from access_control import require_authorized, authorized
+from access_control import require_authorized, authorized, lan_node_write_allowed
 from flask import Blueprint, abort, jsonify, request, send_file, Response
 
 from release_library import STORE, PUBLIC_KEY, GUARD, _identity, _verify
@@ -202,7 +202,8 @@ def config():
         "gateways": [{"port": port, "name": info[0], "node": info[1]}
                      for port, info in TRUSTED_GATEWAYS.items()],
         "csrf": csrf if authorized() else lan_read_csrf,
-        "lan_read_only": not authorized(),
+        "lan_read_only": not (authorized() or lan_node_write_allowed()),
+        "lan_node_admin": bool(lan_node_write_allowed()),
         "notice": "v0.6.11+ auf Gateway und Ziel erforderlich. Fern-OTA ist bis zum Hardwaretest experimentell.",
     })
 
@@ -309,8 +310,10 @@ def node_action():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"error": "JSON-Objekt erwartet"}), 400
-    if not is_admin and data.get("action") not in ("STATUS", "NAME_GET"):
-        return jsonify({"error": "Nur STATUS und NAME_GET im LAN erlaubt"}), 403
+    action_allowed = data.get("action") in ("STATUS", "NAME_GET")
+    node_admin_allowed = lan_node_write_allowed()
+    if not is_admin and not action_allowed and not node_admin_allowed:
+        return jsonify({"error": "Knotenänderungen nur vom freigegebenen Admin-Rechner erlaubt"}), 403
     target, port, action, name = (data.get("target"), data.get("gateway"),
                                   data.get("action"), data.get("name", ""))
     if not isinstance(target, str) or not re.fullmatch(r"[0-9A-F]{16}", target):
@@ -330,7 +333,7 @@ def node_action():
         if not is_admin:
             now = time.monotonic()
             if now - lan_last_read_action < LAN_READ_COOLDOWN_SECONDS:
-                return jsonify({"error": "Funkabfrage: mindestens 10 Sekunden Abstand"}), 429
+                return jsonify({"error": "Funkverwaltung: mindestens 10 Sekunden Abstand"}), 429
             lan_last_read_action = now
         job.update({
             "id": secrets.token_hex(8), "state": "running", "mode": "node_" + action,
