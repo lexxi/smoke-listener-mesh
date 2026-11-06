@@ -10,7 +10,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
-from access_control import require_authorized
+from access_control import require_authorized, authorized
 from flask import Blueprint, abort, jsonify, request
 from gateway_config import LOGGER_PORT, LOGGER_NAME
 
@@ -165,9 +165,11 @@ def resume_after_remote_ota(was_running):
 
 @bp.get("/api/logger/status")
 def status():
-    local()
     with guard:
-        return jsonify(status_data())
+        data = status_data()
+        if not authorized():
+            data.pop("token", None)
+        return jsonify(data)
 
 
 @bp.post("/api/logger/start")
