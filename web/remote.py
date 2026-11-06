@@ -202,7 +202,7 @@ def config():
         "gateways": [{"port": port, "name": info[0], "node": info[1]}
                      for port, info in TRUSTED_GATEWAYS.items()],
         "csrf": csrf if authorized() else lan_read_csrf,
-        "lan_read_only": not (authorized() or lan_node_write_allowed()),
+        "lan_read_only": not authorized(),
         "lan_node_admin": bool(lan_node_write_allowed()),
         "notice": "v0.6.11+ auf Gateway und Ziel erforderlich. Fern-OTA ist bis zum Hardwaretest experimentell.",
     })
