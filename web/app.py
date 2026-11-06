@@ -37,6 +37,8 @@ def authorize_request():
         "/api/remote/gateway-settings", "/api/nodes/registry",
     ):
         return None
+    if request.method == "POST" and request.path == "/api/remote/node-action":
+        return None  # Endpoint separately enforces STATUS/NAME_GET and LAN-specific CSRF.
     abort(403)
 
 from ota import bp as ota_blueprint
