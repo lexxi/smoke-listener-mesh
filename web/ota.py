@@ -5,6 +5,7 @@ Active remote OTA endpoints are defined in web/remote.py.
 from __future__ import annotations
 
 import secrets
+from access_control import require_authorized
 from flask import Blueprint, abort, jsonify, render_template, request
 
 bp = Blueprint("ota", __name__)
@@ -12,8 +13,7 @@ csrf_token = secrets.token_urlsafe(32)
 
 
 def local():
-    if request.remote_addr not in ("127.0.0.1", "::1"):
-        abort(403)
+    require_authorized()
 
 
 @bp.get("/ota")
