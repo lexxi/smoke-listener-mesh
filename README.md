@@ -4,7 +4,7 @@ Experimentelles Mesh-System auf **ESP32-C3 SuperMini** zur zusätzlichen
 akustischen Erkennung der Pieptöne unveränderter Rauchwarnmelder. Das Projekt
 kombiniert Mikrofon-Prototypen, authentifizierte ESP-NOW-Telemetrie,
 Mesh-Weiterleitung, einen dedizierten USB-Gateway und eine lokale
-**Windows-Webapp für Knotenverwaltung und signierte Remote-Firmwareupdates**.
+**plattformübergreifende Webapp (Windows/piCore) für Knotenverwaltung und signierte Remote-Firmwareupdates**.
 
 > **Sicherheit:** Keine zertifizierte Brandmeldeanlage, kein Rauchwarnmelder
 > und kein Ersatz für normgerechte Rauchwarnmelder. HEARTBEAT, OTA-Erfolg
@@ -13,7 +13,7 @@ Mesh-Weiterleitung, einen dedizierten USB-Gateway und eine lokale
 > Die Mikrofon-Alarmdetektion ist noch nicht als vollständiges
 > sicherheitsrelevantes Gesamtsystem validiert.
 
-## Aktueller Projektstand (05.11.2026)
+## Aktueller Projektstand (07.11.2026)
 
 | Bereich | Aktueller Stand |
 | --- | --- |
@@ -23,14 +23,15 @@ Mesh-Weiterleitung, einen dedizierten USB-Gateway und eine lokale
 | Akustik | INMP441-basierte Ton-/Piepsdiagnostik erprobt; komplette Alarmkette noch nicht validiert |
 | Remote-Verwaltung | STATUS, NAME GET/SET/RESET, RESTART und Remote-OTA über einen autorisierten Gateway |
 | Dedizierter Gateway | **COM16**, Node-ID `00000CEC7E6E27AC`, vom Webserver verwalteter USB-Logger |
-| Webapp | **Dashboard v0.4.0** (Flask): Discover, Inventar/Standort, OTA-Freigabe, Gateway-Einstellungen, Loggerstatus, Firmware-Releases |
+| Webapp | **Dashboard v0.4.0** (Flask/Waitress): Windows und piCore, Discover, Inventar/Standort, Gateway/Logger, Releases |
 | OTA | Zielgebundene, signierte Firmwaremanifeste; maximal **fünf** freigegebene Empfänger neben dem USB-Gateway |
-| Nachgewiesen | Knotenregistrierung, Standortänderung, COM16-Verwaltung, Logger-Reconnect und die Webapp-Funktionen aus PR #4 in der Windows-Testinstallation |
-| Noch offen | Automatische Übernahme des Inventarnamens per NAME SET, vollständige Alarm-/Mikrofonvalidierung, Batterie- und Buzzer-Integration |
+| Nachgewiesen | Windows: 97 Tests und Remote-STATUS über COM16; piCore: Gateway, Heartbeats, STATUS, NAME_GET/SET/RESET, RESTART, Logrotation-/Backup-Grundfunktionen |
+| Noch offen | Pi-Remote-OTA/Signaturprüfung in der Praxis, tatsächliches Erreichen der Rotationsgrößen, kombinierte Inventarnamen-Übernahme (separater Feature-Branch), Alarm-/Mikrofonvalidierung, Batterie/Buzzer |
 
 **Die aktuellen Bedienanleitungen sind:**
 
-- [Webapp / Windows – Schnellstart, Knoten und Gateway](web/README.md)
+- [Webapp – Windows-Schnellstart, Knoten und Gateway](web/README.md)
+- [piCore – Installation, Boot, LAN-Freigabe, Rotation und SQLite-Backup](docs/cross-platform-picore-web.md)
 - [Knotenregistrierung, USB-Logger, Gateway-Verwaltung und Tests](docs/web-node-registration.md)
 - [Hardware und INMP441-Verdrahtung](docs/hardware.md)
 - [Signierte Releases und Sicherheitsgrundlagen](docs/ota-signing.md)
@@ -79,6 +80,39 @@ ausgesteckt ist, bleibt der Python-Prozess im Reconnect-Modus aktiv.
 Die Webapp warnt in diesem Fall, dass Knotenstatusdaten nicht aktuell
 sind. Eine erfolgreiche COM-Verbindung bestätigt noch nicht
 kryptografisch die Identität des angesteckten ESP32.
+
+## piCore (Raspberry Pi 2) – Betrieb seit PR #10
+
+Seit [PR #10](https://github.com/lexxi/smoke-listener-mesh/pull/10)
+ist die gemeinsame Webapp in `main`. Der Raspberry Pi 2 mit piCore
+17.0.1 betreibt den USB-Gateway unter dem Hostnamen `picore` und stellt
+das Dashboard im vertrauenswürdigen LAN unter
+`http://picore:8088` bzw. `http://192.168.98.39:8088` bereit.
+`picore` muss dafür per DNS auflösbar sein.
+
+Die Pi-Konfiguration liegt **außerhalb von Git** in
+`/mnt/mmcblk0p3/smoke-mesh/data/web.env`. Die Gateway-JSON kann über
+`SMOKE_GATEWAYS_FILE` auf den stabilen Linux-Gerätepfad unter
+`/dev/serial/by-id/` verweisen. Unter Windows bleibt `COM16` der
+unveränderte Standard.
+
+Im LAN sind STATUS und NAME_GET möglich. `NAME_SET`, `NAME_RESET`
+und `RESTART` erfordern eine explizite Freigabe über
+`SMOKE_LAN_NODE_ADMIN_IPS`, wahlweise einzelne IPv4/IPv6-Adressen,
+CIDR-Netze oder beides. Diese IP-basierte Erlaubnis ist **keine
+Benutzeranmeldung**. Registry-Schreibzugriffe, Loggersteuerung, Uploads
+und Remote-OTA werden dadurch nicht freigeschaltet.
+
+Für piCore sind optional eingerichtet: Rohlog-Rotation (10 MiB),
+Aufbewahrung (30 Tage/512 MiB), Webserver-Logrotation (1 MiB plus
+fünf Generationen), tägliches konsistentes SQLite-Backup
+(sieben Tagesstände). Die Backup-Dateien liegen aktuell auf derselben
+SD-Karte und sind deshalb kein Ersatz für ein externes Backup.
+Der Webserver wird mit Waitress über `/opt/bootlocal.sh` gestartet.
+**Die Logrotation beim tatsächlichen Grenzwert und Remote-OTA unter
+piCore sind noch nicht praktisch validiert.**
+
+Siehe die [vollständige piCore-Betriebsanleitung](docs/cross-platform-picore-web.md).
 
 ## Knoten registrieren und Standort pflegen
 
@@ -221,20 +255,22 @@ Regressionstests:
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-Die neuen Webapp- und COM16-Funktionen wurden am **05.11.2026**
-mit der Windows-Testinstallation geprüft und in
-[PR #4](https://github.com/lexxi/smoke-listener-mesh/pull/4)
+Windows/COM16-Funktionen wurden in [PR #4](https://github.com/lexxi/smoke-listener-mesh/pull/4)
+übernommen. Die gemeinsame Windows/piCore-Codebasis wurde nach 97
+Windows-Regressionstests und erfolgreichem Windows-Remote-STATUS
+sowie den piCore-Funktionstests am 07.11.2026 mit
+[PR #10](https://github.com/lexxi/smoke-listener-mesh/pull/10)
 nach `main` übernommen.
 
 ## Sicherheitsgrenzen und offene Arbeiten
 
 Die Webapp bindet standardmäßig nur an `127.0.0.1`.
-**Keine Benutzeranmeldung vorhanden:** nicht ungeschützt ins
-LAN oder Internet stellen. Für Schreibaktionen bestehen zusätzliche
-lokale Zugriffs- und CSRF-Prüfungen, aber das ersetzt keine
-Benutzerauthentisierung.
+**Keine Benutzeranmeldung vorhanden:** der Pi ist im vertrauenswürdigen
+LAN ohne Login erreichbar. Einzelne Knotenbefehle sind dort nur per
+IP-/CIDR-Freigabe erlaubt. Diese Prüfung und CSRF ersetzen keine
+Benutzerauthentisierung. **Keine Portweiterleitung ins Internet.**
 
-**Offen:** Hardwaretest und Merge der Namensübernahme;
+**Offen:** Hardwaretest und Merge der kombinierten Namensübernahme bei Registrierung;
 Identitätsprüfung des angesteckten USB-Gateways; vollständige
 End-to-End-Validierung der akustischen Erkennung und Alarmweiterleitung;
 Stromversorgung/Batterielaufzeit, Buzzer und Gehäuse.
