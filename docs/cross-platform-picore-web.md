@@ -169,3 +169,52 @@ abgeschotteten vertrauenswürdigen Administrations-LAN und
 keinesfalls über eine Internet-Portweiterleitung. Für
 vollständige Verwaltung später TLS und echte Authentifizierung
 einführen.
+
+
+## Logrotation und Aufbewahrung (piCore, opt-in)
+
+Der USB-Logger schreibt seine aktuelle Datei fortlaufend. Externes
+Umbenennen/Abschneiden der offenen Datei ist nicht sicher. Deshalb kann
+der Logger selbst nach jeweils 10 MiB eine neue `mesh_*.log`-Datei
+mit Suffix `_part0001`, `_part0002` usw. öffnen.
+
+In der **lokalen** `/mnt/mmcblk0p3/smoke-mesh/data/web.env`
+für piCore ergänzen:
+
+```sh
+SMOKE_LOG_ROTATE_MB='10'
+SMOKE_LOG_RETENTION_DAYS='30'
+SMOKE_LOG_MAX_MB='512'
+```
+
+- Jeder Raw-Log-Teil erhält eine Größenbegrenzung von 10 MiB.
+- Ein Hintergrundlauf prüft stündlich `<repo>/log/` auf abgeschlossene
+  `mesh_*.log`- und `logger_control_*.log`-Dateien.
+- Abgeschlossene Logs älter als 30 Tage werden gelöscht; bei mehr
+  als 512 MiB werden die ältesten abgeschlossenen Logs zuerst gelöscht.
+- Die jeweils neuesten Dateien beider Typen und erkennbare offene
+  Prozessdateien bleiben geschützt. Bei nur aktiven Dateien kann das
+  Limit vorübergehend überschritten werden.
+- Mit aktivierter Rotation werden die empfangenen Rohdaten nicht
+  zusätzlich zeilenweise ins Diagnoseprotokoll kopiert.
+- Die SQLite-Datenbank `web/data/mesh.db`, `web-server.log`
+  und `web/data/ota_jobs/` werden **nicht** bereinigt. Für deren
+  Wachstum/Backup braucht es eine separate Strategie.
+- Ohne diese Variablen bleiben die bisherigen Windows-Defaults
+  vollständig unverändert.
+
+Vor der Aktivierung trockene Vorschau (löscht nichts):
+
+```sh
+cd /mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh
+. /mnt/mmcblk0p3/smoke-mesh/venv/bin/activate
+python web/log_retention.py --dir log --days 30 --max-mb 512
+```
+
+Der Dienst verwendet später dieselben Regeln mit aktivem Löschen.
+Beim Übergang zu einem neuen Chunk zeigt die Log-Auswahl des Dashboards
+die Teile als einzelne Sessions. Ein Backup der Rohlogs ist bei Bedarf
+vor der Aktivierung anzulegen.
+
+Für Windows weiterhin Standard: kein automatisches Löschen, kein
+Rotieren, solange die Optionen nicht explizit gesetzt sind.
