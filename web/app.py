@@ -56,19 +56,18 @@ def login():
 
 
 def _login_html(csrf, message=""):
-    from markupsafe import escape
-    return """<!doctype html><html lang="de"><meta charset="utf-8">
+    from flask import render_template_string
+    return render_template_string("""<!doctype html><html lang="de"><meta charset="utf-8">
 <title>Smoke Mesh Anmeldung</title><style>
 body{background:#0c1422;color:#e6edf7;font:16px system-ui;margin:10vh auto;max-width:400px;padding:24px}
 input,button{box-sizing:border-box;display:block;width:100%;font:inherit;padding:12px;margin:12px 0;border-radius:7px}
 input{background:#18283d;border:1px solid #4a607c;color:white}
 button{background:#2c537c;color:white;border:0;cursor:pointer}
 </style><h1>Smoke Mesh Monitor</h1><p>Administrator-Anmeldung</p>
-<p role="alert">""" + str(escape(message)) + """</p>
-<form method="post" action="/login"><input type="hidden" name="csrf" value="""" + str(escape(csrf)) + """">
+<p role="alert">{{ message }}</p>
+<form method="post" action="/login"><input type="hidden" name="csrf" value="{{ csrf }}">
 <label for="password">Passwort</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
-<button type="submit">Anmelden</button></form></html>"""
-
+<button type="submit">Anmelden</button></form></html>""", csrf=csrf, message=message)
 
 @app.post("/logout")
 def logout():
