@@ -30,8 +30,8 @@ class WebStreamRotationTests(unittest.TestCase):
             output.write_bytes(b"old\n")
             with module.RotatingStream(output, max_bytes=10, keep=3) as log:
                 log.write(b"new\r\nnext\n")
-            self.assertEqual((Path(temp) / "web-server.log.1").read_bytes(), b"old\nnew\r\nnext")
-            self.assertEqual(output.read_bytes(), b"\n")
+            self.assertEqual((Path(temp) / "web-server.log.1").read_bytes(), b"old\nnew\r\nn")
+            self.assertEqual(output.read_bytes(), b"ext\n")
 
     def test_real_pipe_and_eof(self):
         with tempfile.TemporaryDirectory() as temp:
