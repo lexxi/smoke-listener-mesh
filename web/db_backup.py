@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as dt
 import os
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 
@@ -24,7 +25,7 @@ def backup_database(source: Path, destination_dir: Path, *, keep: int = 7,
     target = destination_dir / f"mesh_{date:%Y%m%d}.db"
     if target.exists():
         # Never overwrite a successful backup of the same day.
-        with sqlite3.connect(f"file:{target}?mode=ro", uri=True) as check:
+        with closing(sqlite3.connect(f"file:{target}?mode=ro", uri=True)) as check:
             if check.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                 raise RuntimeError(f"Existing daily backup is corrupt: {target}")
         return target
@@ -33,8 +34,8 @@ def backup_database(source: Path, destination_dir: Path, *, keep: int = 7,
     if temporary.exists():
         raise FileExistsError(temporary)
     try:
-        with sqlite3.connect(f"file:{source}?mode=ro", uri=True, timeout=30) as original:
-            with sqlite3.connect(temporary) as snapshot:
+        with closing(sqlite3.connect(f"file:{source}?mode=ro", uri=True, timeout=30)) as original:
+            with closing(sqlite3.connect(temporary)) as snapshot:
                 original.backup(snapshot, pages=128, sleep=0.05)
                 if snapshot.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                     raise RuntimeError("Backup failed SQLite integrity check")
