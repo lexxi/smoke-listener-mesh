@@ -1,7 +1,11 @@
-# Webapp: Knotenverwaltung, Gateway und Logger (Stand 05.11.2026)
+# Webapp: Knotenverwaltung, Gateway und Logger (Stand 07.11.2026)
 
-Diese Funktionen sind seit **PR #4** in `main` und wurden auf der
-Windows-Testinstallation praktisch geprüft. Die aktuellen Seiten:
+Die Windows-Grundfunktionen sind seit **PR #4** in `main`.
+Die gemeinsame Windows-/piCore-Webapp wurde mit
+[PR #10](https://github.com/lexxi/smoke-listener-mesh/pull/10)
+gemergt; Windows-Regression: 97 Tests OK und STATUS über COM16 geprüft.
+Die piCore-spezifischen Schritte stehen in der
+[piCore-Anleitung](cross-platform-picore-web.md). Die aktuellen Seiten:
 
 - [Monitor](http://127.0.0.1:8088/) – Knotenstatus, USB-Logger und Empfangslogs
 - [Knotenverwaltung](http://127.0.0.1:8088/nodes) – Discover, Gerätebefehle, Stammdaten und Gateways
@@ -175,10 +179,17 @@ Zusätzlich in der Windows-Webapp prüfen:
 6. Gateway-Eintrag ergänzen/entfernen: Speichern und Neustart der Webapp
    kontrollieren; COM16 muss als dedizierter Logger erhalten bleiben.
 
-Die Schritte wurden für PR #4 auf der Windows-Testinstallation geprüft.
-Sie ersetzen keinen End-to-End-Test der Rauchalarm-Erkennung.
+Die Windows-Schritte wurden für PR #4 praktisch geprüft;
+STATUS über COM16 wurde auch nach PR #10 bestätigt.
+Auf piCore wurden STATUS, NAME GET/SET/RESET und RESTART erfolgreich
+getestet. Remote-OTA auf dem Pi bleibt ungeprüft.
+Diese Schritte ersetzen keinen End-to-End-Test der Rauchalarm-Erkennung.
 
 ## Noch offen
+
+- Remote-OTA auf piCore inklusive Signaturprüfung praktisch validieren.
+- Externes Backup der Pi-Daten einrichten; derzeit liegen die
+  sieben SQLite-Tagesstände auf derselben SD-Karte.
 
 - Kombinierte Registrierung / `NAME SET` auf Hardware testen und den
   Feature-Branch danach mergen.
