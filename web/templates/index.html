@@ -171,8 +171,8 @@ async function refreshLogger(){
     'USB-Gateway verbindet sich mit '+j.port+'. Knotenstatus derzeit nicht aktuell.':
     'Gateway-Logger gestoppt: Knotenstatus derzeit nicht aktuell. '+j.note;
 
-  $('logger-start').disabled=j.running||j.ota_reserved;
-  $('logger-stop').disabled=!j.running||j.ota_reserved;
+  $('logger-start').disabled=!loggerCsrf||j.running||j.ota_reserved;
+  $('logger-stop').disabled=!loggerCsrf||!j.running||j.ota_reserved;
   $('logger-start').title=j.running?'Logger läuft bereits – zuerst stoppen':loggerName+'-Logger starten';
   $('logger-stop').title=j.running?'Laufenden Web-Logger stoppen':'Kein Logger über die Webapp gestartet';
  } catch(e){$('logger-state').textContent='Fehler: '+e.message;$('logger-start').disabled=true;$('logger-stop').disabled=true}
