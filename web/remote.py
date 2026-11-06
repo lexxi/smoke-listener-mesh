@@ -14,6 +14,7 @@ import threading
 import time
 from pathlib import Path
 
+from access_control import require_authorized
 from flask import Blueprint, abort, jsonify, request, send_file, Response
 
 from release_library import STORE, PUBLIC_KEY, GUARD, _identity, _verify
@@ -36,8 +37,7 @@ MAX_LINES = 450
 
 
 def _local():
-    if request.remote_addr not in ("127.0.0.1", "::1"):
-        abort(403)
+    require_authorized()
 
 
 def _verify_release(release_id):
