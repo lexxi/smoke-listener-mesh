@@ -10,8 +10,19 @@ import re
 import tempfile
 from pathlib import Path
 
-CONFIG_FILE = Path(__file__).with_name("gateways.json")
-MANAGED_FILE = Path(__file__).with_name("data") / "managed_gateways.json"
+CONFIG_FILE = Path(os.environ.get("SMOKE_GATEWAYS_FILE", str(Path(__file__).with_name("gateways.json"))))
+MANAGED_FILE = Path(os.environ.get("SMOKE_MANAGED_GATEWAYS_FILE", str(Path(__file__).with_name("data") / "managed_gateways.json")))
+
+def normalize_gateway_port(port: str) -> str:
+    """Allow existing Windows COM ports and local Linux serial devices only."""
+    if not isinstance(port, str):
+        raise ValueError("Gateway-Port muss eine Zeichenkette sein")
+    if re.fullmatch(r"COM[1-9][0-9]*", port, re.I):
+        return port.upper()
+    if (re.fullmatch(r"/dev/serial/by-id/[A-Za-z0-9_.:+@-]+", port) or
+            re.fullmatch(r"/dev/tty(?:ACM|USB)[0-9]+", port)):
+        return port
+    raise ValueError("Ungueltiger Gateway-Port (COMx oder /dev/serial/by-id/...)")
 
 
 def load_gateway_config(path: Path = CONFIG_FILE):
@@ -22,8 +33,7 @@ def load_gateway_config(path: Path = CONFIG_FILE):
     gateways = {}
     nodes = set()
     for port, entry in payload["gateways"].items():
-        if not isinstance(port, str) or not re.fullmatch(r"COM[1-9][0-9]*", port, re.I):
-            raise ValueError("gateways.json: ungueltiger COM-Port")
+        port = normalize_gateway_port(port)
         if not isinstance(entry, dict):
             raise ValueError("gateways.json: Gateway-Eintrag muss ein Objekt sein")
         name, node = entry.get("name"), entry.get("node")
@@ -31,15 +41,15 @@ def load_gateway_config(path: Path = CONFIG_FILE):
             raise ValueError("gateways.json: Gateway-Name fehlt")
         if not isinstance(node, str) or not re.fullmatch(r"[0-9A-F]{16}", node) or int(node, 16) == 0:
             raise ValueError("gateways.json: ungueltige Knoten-ID")
-        port = port.upper()
         if port in gateways or node in nodes:
             raise ValueError("gateways.json: COM-Port oder Knoten-ID doppelt")
         gateways[port] = (name.strip(), node)
         nodes.add(node)
     logger_port = payload.get("logger_gateway")
-    if not isinstance(logger_port, str) or logger_port.upper() not in gateways:
-        raise ValueError("gateways.json: 'logger_gateway' muss ein registrierter COM-Port sein")
-    return logger_port.upper(), gateways
+    logger_port = normalize_gateway_port(logger_port)
+    if logger_port not in gateways:
+        raise ValueError("gateways.json: logger_gateway muss ein registrierter Gateway-Port sein")
+    return logger_port, gateways
 
 
 LOGGER_PORT, TRUSTED_GATEWAYS = load_gateway_config()
@@ -65,13 +75,11 @@ def save_optional_gateways(gateways: list[dict]) -> None:
         port = item.get("port")
         name = item.get("name")
         node = item.get("node")
-        if not isinstance(port, str) or not re.fullmatch(r"COM[1-9][0-9]*", port, re.I):
-            raise ValueError("Gateway benoetigt gueltigen COM-Port")
+        port = normalize_gateway_port(port)
         if not isinstance(name, str) or not name.strip() or len(name.strip()) > 40:
             raise ValueError("Gateway-Name muss 1 bis 40 Zeichen enthalten")
         if not isinstance(node, str) or not re.fullmatch(r"[0-9A-F]{16}", node) or int(node, 16) == 0:
             raise ValueError("Gateway benoetigt 16-stellige Node-ID in Grossbuchstaben")
-        port = port.upper()
         if port in entries or node == dedicated_entry["node"] or any(x["node"] == node for x in entries.values()):
             raise ValueError("Doppelte COM-Port- oder Node-ID-Zuordnung")
         entries[port] = {"name": name.strip(), "node": node}
@@ -116,7 +124,7 @@ def set_default_remote_gateway(port: str, path: Path = CONFIG_FILE) -> str:
     """Persist a validated remote preference without modifying tracked gateways.json."""
     if not isinstance(port, str):
         raise ValueError("Gateway-Port fehlt")
-    port = port.upper()
+    port = normalize_gateway_port(port)
     _, gateways = load_gateway_config(path)
     if port not in gateways:
         raise ValueError("Gateway ist nicht konfiguriert")
