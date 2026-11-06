@@ -14,7 +14,7 @@ import threading
 import time
 from pathlib import Path
 
-from access_control import require_authorized
+from access_control import require_authorized, authorized
 from flask import Blueprint, abort, jsonify, request, send_file, Response
 
 from release_library import STORE, PUBLIC_KEY, GUARD, _identity, _verify
@@ -186,7 +186,6 @@ def download_log():
 
 @bp.get("/api/remote/config")
 def config():
-    _local()
     try:
         targets = sorted(load_targets())
         target_error = None
@@ -199,14 +198,13 @@ def config():
         "logger_gateway": LOGGER_PORT,
         "gateways": [{"port": port, "name": info[0], "node": info[1]}
                      for port, info in TRUSTED_GATEWAYS.items()],
-        "csrf": csrf,
+        "csrf": csrf if authorized() else None,
         "notice": "v0.6.11+ auf Gateway und Ziel erforderlich. Fern-OTA ist bis zum Hardwaretest experimentell.",
     })
 
 
 @bp.get("/api/remote/gateway-settings")
 def gateway_settings():
-    _local()
     payload = current_gateway_payload()
     active = [{"port": port, "name": info[0], "node": info[1]}
               for port, info in TRUSTED_GATEWAYS.items()]
@@ -260,7 +258,6 @@ def set_default_gateway():
 
 @bp.get("/api/remote/job")
 def current_job():
-    _local()
     with lock:
         return jsonify(dict(job))
 
