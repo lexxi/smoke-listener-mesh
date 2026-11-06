@@ -275,3 +275,40 @@ externes Backup ist weiterhin sinnvoll. Keine automatische Datenloeschung
 aus `receptions` oder `transmissions`; alte Backup-Dateien werden auf
 sieben Generationen begrenzt. Windows bleibt ohne explizite
 Konfiguration unveraendert.
+
+
+## Begrenztes piCore-Webserver-Log
+
+`web-server.log` wird bisher durch `/opt/bootlocal.sh` dauerhaft
+als offene Datei beschrieben. Umbenennen/Loeschen der laufenden Datei
+mit einem externen Rotator ist deshalb ungeeignet. Unter piCore wird
+stattdessen der stdout/stderr-Strom durch
+`deploy/picore/rotate-web-stream.py` geleitet. Der kleine Python-Prozess
+rotiert die Ausgabedatei bei 1024 KiB und bewahrt die letzten fuenf
+abgeschlossenen Generationen auf:
+`web-server.log.1` bis `web-server.log.5`.
+
+**Erst nach einem erfolgreichen Test auf dem Pi:** In
+`/opt/bootlocal.sh` ausschliesslich die bestehende Zeile fuer
+`SMOKEMESH_WEB_AUTOSTART` ersetzen (Mount und andere Zeilen bleiben):
+
+```sh
+su tc -c '/bin/sh /mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh/deploy/picore/start-web.sh' 2>&1 | /mnt/mmcblk0p3/smoke-mesh/venv/bin/python -u /mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh/deploy/picore/rotate-web-stream.py --output /mnt/mmcblk0p3/smoke-mesh/logs/web-server.log --max-kb 1024 --keep 5 &
+```
+
+Die Pipe muss komplett im Hintergrund laufen (abschliessendes `&`).
+Vor der Aenderung `/opt/bootlocal.sh` sichern; danach mit
+`sudo filetool.sh -b` piCore-persistent speichern und neu starten.
+Das alte Log bleibt erhalten und wird beim Erreichen der Groessengrenze
+rotiert. Der Log-Schreiber beendet sich, wenn die Webapp den
+Ausgabestrom schliesst.
+
+Nach Reboot kontrollieren:
+```sh
+ps | grep -E 'rotate-web-stream|web/app.py'
+tail -n 15 /mnt/mmcblk0p3/smoke-mesh/logs/web-server.log
+ls -lh /mnt/mmcblk0p3/smoke-mesh/logs/web-server.log*
+```
+
+Diese Loesung rotiert ausschliesslich den Webserver-Ausgabestrom,
+nicht die SQLite-Datenbank oder die separaten Mesh-Rohlogs.
