@@ -218,3 +218,60 @@ vor der Aktivierung anzulegen.
 
 Für Windows weiterhin Standard: kein automatisches Löschen, kein
 Rotieren, solange die Optionen nicht explizit gesetzt sind.
+
+
+## Taegliches SQLite-Backup (piCore, opt-in)
+
+Die Monitoring-Datenbank liegt unter `web/data/mesh.db` und
+verwendet SQLite WAL. Eine laufende Datenbank nicht mit `cp` sichern:
+`web/db_backup.py` verwendet stattdessen die SQLite-Online-Backup-API.
+
+Auf dem Pi in der lokalen
+`/mnt/mmcblk0p3/smoke-mesh/data/web.env` ergaenzen:
+
+```sh
+SMOKE_DB_BACKUP_DIR='/mnt/mmcblk0p3/smoke-mesh/backups/sqlite'
+SMOKE_DB_BACKUP_KEEP='7'
+```
+
+Mit Neustart des Webservers ist die Sicherung aktiv. Beim Start und
+anschliessend stuendlich prueft der Webserver, ob fuer den aktuellen
+UTC-Tag bereits `mesh_YYYYMMDD.db` vorhanden ist. Pro UTC-Tag
+wird maximal ein konsistentes Backup erstellt. Fehler werden ins
+`web-server.log` geschrieben und beim naechsten Lauf erneut versucht.
+Bei noch fehlender Quelldatenbank wird die Sicherung nach deren
+Erstellung nachgeholt. Backups werden vor Veroeffentlichung mittels
+`PRAGMA integrity_check` ueberprueft. Erst nach erfolgreicher
+Sicherung werden ueberzaehlige alte Backups geloescht.
+Das Backup-Verzeichnis befindet sich ausserhalb des Git-Repos.
+
+Manuelle einmalige Sicherung ohne aktivierten Hintergrundjob:
+
+```sh
+cd /mnt/mmcblk0p3/smoke-mesh/app/smoke-listener-mesh
+. /mnt/mmcblk0p3/smoke-mesh/venv/bin/activate
+python - <<'PY'
+from pathlib import Path
+import sys
+sys.path.insert(0, 'web')
+from db_backup import backup_database
+print(backup_database(
+    Path('web/data/mesh.db'),
+    Path('/mnt/mmcblk0p3/smoke-mesh/backups/sqlite'), keep=7))
+PY
+```
+
+Pruefung nach Webserver-Neustart:
+
+```sh
+ls -lh /mnt/mmcblk0p3/smoke-mesh/backups/sqlite/
+grep 'SQLite backup' /mnt/mmcblk0p3/smoke-mesh/logs/web-server.log | tail -5
+```
+
+**Wichtig:** Die Sicherungen liegen auf derselben SD-Karte und schuetzen
+nur gegen versehentliche Datenbankbeschaedigung bzw. Datenverlust durch
+Softwarefehler, nicht gegen einen Defekt der SD-Karte. Ein regelmaessiges
+externes Backup ist weiterhin sinnvoll. Keine automatische Datenloeschung
+aus `receptions` oder `transmissions`; alte Backup-Dateien werden auf
+sieben Generationen begrenzt. Windows bleibt ohne explizite
+Konfiguration unveraendert.
