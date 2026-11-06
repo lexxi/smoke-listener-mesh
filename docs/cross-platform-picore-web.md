@@ -103,10 +103,8 @@ mehr benötigt. Alte Einträge in der lokalen Datei dürfen bestehen bleiben,
 werden aber ignoriert.
 
 **Sicherheitsgrenze:** Im LAN sind nur `GET /` und `GET /api/status`
-zugänglich. Alle weiteren Seiten und APIs (OTA, Gateway, Knotenregistrierung,
-Logger-Steuerung, Firmware-Uploads) erfordern eine Loopback-Verbindung.
-Das Dashboard enthält noch Links auf die gesperrten Verwaltungsseiten;
-dort ist aus dem LAN ein HTTP 403 erwartbar. Für administrative Arbeiten
+zugänglich. Die Seiten `/ota` und `/nodes` sind lesbar. Die Funkabfragen `STATUS` und `NAME_GET` sind im LAN erlaubt (separater CSRF-Token, mindestens 10 Sekunden Abstand). Schreibende APIs wie `NAME_SET`, `NAME_RESET`, `RESTART`, Gateway-Konfiguration, Logger-Steuerung und OTA bleiben auf Loopback beschränkt.
+Für administrative Arbeiten
 kann weiterhin ein SSH-Tunnel verwendet werden.
 
 Keine Portweiterleitung ins Internet; auch die Monitoring-Daten werden
