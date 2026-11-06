@@ -11,8 +11,8 @@ import threading
 from contextlib import closing
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request, session, redirect, url_for, abort, make_response
-from access_control import lan_enabled, authorized, verify_password, validate_login_csrf, new_login_csrf, check_configuration
+from flask import Flask, jsonify, render_template, request, abort
+from access_control import lan_enabled, authorized, check_configuration
 from dashboard_version import DASHBOARD_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,56 +23,17 @@ TIME = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\s+")
 LOCAL = dt.datetime.now().astimezone().tzinfo
 app = Flask(__name__)
 check_configuration()
-if lan_enabled():
-    app.secret_key = os.environ["SMOKE_WEB_SECRET_KEY"]
-    app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict")
 
 
 @app.before_request
 def authorize_request():
-    if not lan_enabled() or request.endpoint == "login":
+    # Direct LAN exposure is limited to the monitor and its read-only status.
+    # Remote OTA, gateway controls, release uploads and inventory need loopback.
+    if not lan_enabled() or authorized():
         return None
-    if authorized():
+    if request.method == "GET" and request.path in ("/", "/api/status"):
         return None
-    if request.path.startswith("/api/"):
-        return jsonify({"error": "Anmeldung erforderlich"}), 401
-    return redirect(url_for("login"))
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if not lan_enabled():
-        abort(404)
-    if request.method == "POST":
-        if not validate_login_csrf(request.form.get("csrf", "")):
-            abort(403)
-        password = request.form.get("password", "")
-        if verify_password(password):
-            session.clear()
-            session["smoke_authenticated"] = True
-            return redirect(url_for("index"))
-        return make_response(_login_html(new_login_csrf(), "Passwort nicht korrekt."), 401)
-    return _login_html(new_login_csrf())
-
-
-def _login_html(csrf, message=""):
-    from flask import render_template_string
-    return render_template_string("""<!doctype html><html lang="de"><meta charset="utf-8">
-<title>Smoke Mesh Anmeldung</title><style>
-body{background:#0c1422;color:#e6edf7;font:16px system-ui;margin:10vh auto;max-width:400px;padding:24px}
-input,button{box-sizing:border-box;display:block;width:100%;font:inherit;padding:12px;margin:12px 0;border-radius:7px}
-input{background:#18283d;border:1px solid #4a607c;color:white}
-button{background:#2c537c;color:white;border:0;cursor:pointer}
-</style><h1>Smoke Mesh Monitor</h1><p>Administrator-Anmeldung</p>
-<p role="alert">{{ message }}</p>
-<form method="post" action="/login"><input type="hidden" name="csrf" value="{{ csrf }}">
-<label for="password">Passwort</label><input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
-<button type="submit">Anmelden</button></form></html>""", csrf=csrf, message=message)
-
-@app.post("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login") if lan_enabled() else "/")
+    abort(403)
 
 from ota import bp as ota_blueprint
 app.register_blueprint(ota_blueprint)
@@ -367,7 +328,7 @@ def main():
                         help="Additional directory with mesh_*.log (repeatable)")
     args = parser.parse_args()
     if args.host not in ("127.0.0.1", "::1", "localhost") and not lan_enabled():
-        parser.error("LAN binding requires SMOKE_WEB_LAN=1 and configured password/secret")
+        parser.error("LAN binding requires SMOKE_WEB_LAN=1 (monitoring-only, privileged APIs localhost-only)")
     if args.log_dir:
         log_dirs.extend(args.log_dir)
     from logger_control import autostart
