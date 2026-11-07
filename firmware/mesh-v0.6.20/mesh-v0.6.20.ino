@@ -690,7 +690,7 @@ constexpr uint64_t MGMT_TRUST_GARAGE=0x000058FE7D6E27ACULL;
 constexpr uint64_t MGMT_TRUST_GATEWAY=0x00000CEC7E6E27ACULL;
 constexpr uint8_t MGMT_STATUS=1,MGMT_ARM=2,MGMT_VERIFY=3,MGMT_ACTIVATE=4,
   MGMT_REBOOT=5,MGMT_CONFIRM=6,MGMT_NAME_GET=7,MGMT_NAME_SET=8,
-  MGMT_NAME_RESET=9,MGMT_RESTART=10;
+  MGMT_NAME_RESET=9,MGMT_RESTART=10,MGMT_BUZZER_TEST=11,MGMT_BUZZER_2X2=12;
 uint64_t mgmtNonce=0;
 uint64_t mgmtTarget=0;
 uint32_t mgmtRequestSession=0,mgmtRebootAt=0,mgmtRequestAt=0;
@@ -713,6 +713,8 @@ const char *mgmtActionName(uint8_t action){
     case MGMT_NAME_SET:return "NAME_SET";
     case MGMT_NAME_RESET:return "NAME_RESET";
     case MGMT_RESTART:return "RESTART";
+    case MGMT_BUZZER_TEST:return "BUZZER_TEST";
+    case MGMT_BUZZER_2X2:return "BUZZER_2X2";
   }
   return "UNKNOWN";
 }
@@ -779,7 +781,7 @@ void mgmtReceive(const OtaFrame &f){
   }
   if(!mgmtAllowed(f.origin) || !ready || apMode || f.total!=1 || f.index!=0)return;
   const uint8_t action=f.data[0];
-  if(action<MGMT_STATUS || action>MGMT_RESTART)return;
+  if(action<MGMT_STATUS || action>MGMT_BUZZER_2X2)return;
   uint64_t supplied=0;memcpy(&supplied,f.data+2,sizeof(supplied));
   if(action!=MGMT_STATUS && (!mgmtNonce || supplied!=mgmtNonce)){
     mgmtReply(f,2);return;
@@ -840,6 +842,22 @@ void mgmtReceive(const OtaFrame &f){
        !imgRx.otaOpen && !(imgRx.active && !imgRx.complete)) {
       mgmtRebootAt=millis()+1800UL;result=0;
     }
+  } else if(action==MGMT_BUZZER_TEST || action==MGMT_BUZZER_2X2){
+#if SMOKE_FEATURE_BUZZER
+    // Diagnostics only: no alarm packets. Refuse during OTA/boot verification,
+    // AP mode, or when the buzzer has not initialized.
+    const esp_partition_t *running=esp_ota_get_running_partition();
+    esp_ota_img_states_t state=ESP_OTA_IMG_UNDEFINED;
+    const bool pending=running &&
+      esp_ota_get_state_partition(running,&state)==ESP_OK &&
+      state==ESP_OTA_IMG_PENDING_VERIFY;
+    if(!pending && !imgRx.otaOpen && !(imgRx.active && !imgRx.complete) &&
+       SmokeBuzzer::available && SmokeBuzzer::mode==SmokeBuzzer::Mode::IDLE){
+      if(action==MGMT_BUZZER_TEST)SmokeBuzzer::test();
+      else SmokeBuzzer::test2x2();
+      result=SmokeBuzzer::mode!=SmokeBuzzer::Mode::IDLE?0:1;
+    }
+#endif
   } else if(action==MGMT_CONFIRM){
     const esp_partition_t *run=esp_ota_get_running_partition();
     esp_ota_img_states_t state=ESP_OTA_IMG_UNDEFINED;
@@ -892,6 +910,8 @@ void mgmtSendSerial(const String &line){
   else if(actionName=="NAME_SET")action=MGMT_NAME_SET;
   else if(actionName=="NAME_RESET")action=MGMT_NAME_RESET;
   else if(actionName=="RESTART")action=MGMT_RESTART;
+  else if(actionName=="BUZZER_TEST")action=MGMT_BUZZER_TEST;
+  else if(actionName=="BUZZER_2X2")action=MGMT_BUZZER_2X2;
   if(!action || (action!=MGMT_STATUS && !mgmtHexId(nonceText,nonce)) ||
      (action==MGMT_STATUS && params.length()) ||
      (action==MGMT_NAME_SET && !validName(requestedName)) ||
