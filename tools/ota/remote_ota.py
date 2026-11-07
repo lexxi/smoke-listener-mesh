@@ -19,7 +19,8 @@ from prepare_transfer import build_plan
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 ACTIONS = {"STATUS", "ARM", "VERIFY", "ACTIVATE", "REBOOT", "CONFIRM",
-           "NAME_GET", "NAME_SET", "NAME_RESET", "RESTART"}
+           "NAME_GET", "NAME_SET", "NAME_RESET", "RESTART",
+           "BUZZER_TEST", "BUZZER_2X2"}
 NAME = re.compile(r"[A-Za-z0-9_-]{1,19}\Z")
 REPLY = re.compile(
     r"\[MGMT\] REPLY origin=([0-9A-F]{16}) action=([A-Z_]+) result=(\d+)"
@@ -193,7 +194,8 @@ def deploy(args, plan: dict) -> None:
 def manage(args) -> None:
     if not re.fullmatch(r"[0-9A-F]{16}", args.manage_target or ""):
         raise ValueError("Management target must be a 16-digit uppercase hexadecimal node ID")
-    if args.manage_action not in {"STATUS", "NAME_GET", "NAME_SET", "NAME_RESET", "RESTART"}:
+    if args.manage_action not in {"STATUS", "NAME_GET", "NAME_SET", "NAME_RESET", "RESTART",
+                                  "BUZZER_TEST", "BUZZER_2X2"}:
         raise ValueError("Invalid management action")
     if args.manage_action == "NAME_SET" and not NAME.fullmatch(args.manage_name or ""):
         raise ValueError("Name must be 1..19 characters: A-Z a-z 0-9 - _")
@@ -203,6 +205,8 @@ def manage(args) -> None:
         return
     if numeric(initial["version"]) < (0, 6, 13):
         raise RuntimeError("Target requires v0.6.13+ for remote node management")
+    if args.manage_action in {"BUZZER_TEST", "BUZZER_2X2"} and numeric(initial["version"]) < (0, 6, 20):
+        raise RuntimeError("Buzzer diagnostics require target firmware v0.6.20+")
     if initial["state"] == 1:
         raise RuntimeError("Image PENDING_VERIFY; management refused until OTA confirmed")
     result = mgmt(args.gateway, target, args.manage_action, initial["nonce"],
@@ -217,6 +221,8 @@ def manage(args) -> None:
         if verify["name"] != expected:
             raise RuntimeError("Persisted name readback mismatch")
         print(f"[REMOTE] NAME VERIFIED target={target} name={expected}", flush=True)
+    if args.manage_action in {"BUZZER_TEST", "BUZZER_2X2"}:
+        print(f"[REMOTE] BUZZER START ACCEPTED target={target} action={args.manage_action}; audible output not verified", flush=True)
     if args.manage_action == "RESTART":
         print("[REMOTE] RESTART accepted; checking node comes online again", flush=True)
         time.sleep(8)
@@ -236,7 +242,7 @@ def main() -> int:
     p.add_argument("--activate-staged", action="store_true", help="Reverify and boot previously staged image WITHOUT resending it")
     p.add_argument("--status-only", action="store_true", help="Only interrogate remote node; never flash")
     p.add_argument("--manage-target", help="Node ID for remote name management (no release needed)")
-    p.add_argument("--manage-action", choices=["STATUS","NAME_GET","NAME_SET","NAME_RESET","RESTART"])
+    p.add_argument("--manage-action", choices=["STATUS","NAME_GET","NAME_SET","NAME_RESET","RESTART","BUZZER_TEST","BUZZER_2X2"])
     p.add_argument("--manage-name", default="")
     args = p.parse_args()
     if args.deploy and args.activate_staged:
