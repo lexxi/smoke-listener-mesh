@@ -690,7 +690,8 @@ constexpr uint64_t MGMT_TRUST_GARAGE=0x000058FE7D6E27ACULL;
 constexpr uint64_t MGMT_TRUST_GATEWAY=0x00000CEC7E6E27ACULL;
 constexpr uint8_t MGMT_STATUS=1,MGMT_ARM=2,MGMT_VERIFY=3,MGMT_ACTIVATE=4,
   MGMT_REBOOT=5,MGMT_CONFIRM=6,MGMT_NAME_GET=7,MGMT_NAME_SET=8,
-  MGMT_NAME_RESET=9,MGMT_RESTART=10,MGMT_BUZZER_TEST=11,MGMT_BUZZER_2X2=12;
+  MGMT_NAME_RESET=9,MGMT_RESTART=10,MGMT_BUZZER_TEST=11,MGMT_BUZZER_2X2=12,
+  MGMT_AUDIO_STATUS=13,MGMT_AUDIO_RESET=14;
 uint64_t mgmtNonce=0;
 uint64_t mgmtTarget=0;
 uint32_t mgmtRequestSession=0,mgmtRebootAt=0,mgmtRequestAt=0;
@@ -715,6 +716,8 @@ const char *mgmtActionName(uint8_t action){
     case MGMT_RESTART:return "RESTART";
     case MGMT_BUZZER_TEST:return "BUZZER_TEST";
     case MGMT_BUZZER_2X2:return "BUZZER_2X2";
+    case MGMT_AUDIO_STATUS:return "AUDIO_STATUS";
+    case MGMT_AUDIO_RESET:return "AUDIO_RESET";
   }
   return "UNKNOWN";
 }
@@ -759,6 +762,16 @@ void mgmtReply(const OtaFrame &req,uint8_t result){
   // Name is transmitted within the already authenticated OTA frame.
   // ASCII permitted characters exclude whitespace and delimiters.
   if(validName(nodeName))memcpy(f.data+20,nodeName.c_str(),nodeName.length());
+  // Extension for audio management only; legacy management layout unchanged.
+  // Five little-endian uint32 counters at data[40..59], ready at data[60].
+  if((req.data[0]==MGMT_AUDIO_STATUS || req.data[0]==MGMT_AUDIO_RESET) && result==0) {
+#if SMOKE_FEATURE_AUDIO
+    const SmokeAudio::Counters c=SmokeAudio::snapshot();
+    const uint32_t values[5]={c.accepted,c.rejected,c.groups,c.candidates,c.readErrors};
+    memcpy(f.data+40,values,sizeof(values));
+    f.data[60]=(uint8_t)c.ready;
+#endif
+  }
   if(otaSign(f,f.hmac))otaSend(f);
 }
 void mgmtReceive(const OtaFrame &f){
@@ -770,18 +783,25 @@ void mgmtReceive(const OtaFrame &f){
     memcpy(remoteName,f.data+20,MAX_NAME_LENGTH);
     String safeName=String(remoteName);
     if(!validName(safeName))safeName="(unset)";
-    Serial.printf("[MGMT] REPLY origin=%s action=%s result=%u nonce=%s running=app%u boot=app%u state=%u staged=%u verified=%u peer=%u version=%u.%u.%u%s name=%s\n",
+    Serial.printf("[MGMT] REPLY origin=%s action=%s result=%u nonce=%s running=app%u boot=app%u state=%u staged=%u verified=%u peer=%u version=%u.%u.%u%s name=%s",
       idString(f.origin).c_str(),mgmtActionName(f.data[0]),(unsigned)f.data[1],
       idString(nonce).c_str(),(unsigned)f.data[10],(unsigned)f.data[11],
       (unsigned)f.data[12],(unsigned)f.data[13],(unsigned)f.data[14],
       (unsigned)f.data[15],(unsigned)f.data[16],(unsigned)f.data[17],(unsigned)f.data[18],
       (f.data[19]>=1&&f.data[19]<=8?(String(".")+char('a'+f.data[19]-1)):String("")).c_str(),safeName.c_str());
+    if((f.data[0]==MGMT_AUDIO_STATUS || f.data[0]==MGMT_AUDIO_RESET) && f.data[1]==0) {
+      uint32_t counts[5]={};memcpy(counts,f.data+40,sizeof(counts));
+      Serial.printf(" audio_ready=%u beeps=%lu rejected=%lu groups=%lu candidates=%lu errors=%lu",
+        (unsigned)f.data[60],(unsigned long)counts[0],(unsigned long)counts[1],
+        (unsigned long)counts[2],(unsigned long)counts[3],(unsigned long)counts[4]);
+    }
+    Serial.println();
     mgmtWaiting=false;
     return;
   }
   if(!mgmtAllowed(f.origin) || !ready || apMode || f.total!=1 || f.index!=0)return;
   const uint8_t action=f.data[0];
-  if(action<MGMT_STATUS || action>MGMT_BUZZER_2X2)return;
+  if(action<MGMT_STATUS || action>MGMT_AUDIO_RESET)return;
   uint64_t supplied=0;memcpy(&supplied,f.data+2,sizeof(supplied));
   if(action!=MGMT_STATUS && (!mgmtNonce || supplied!=mgmtNonce)){
     mgmtReply(f,2);return;
@@ -842,6 +862,14 @@ void mgmtReceive(const OtaFrame &f){
        !imgRx.otaOpen && !(imgRx.active && !imgRx.complete)) {
       mgmtRebootAt=millis()+1800UL;result=0;
     }
+  } else if(action==MGMT_AUDIO_STATUS || action==MGMT_AUDIO_RESET) {
+#if SMOKE_FEATURE_AUDIO
+    if(SmokeAudio::snapshot().ready) {
+      result=(action==MGMT_AUDIO_STATUS || SmokeAudio::resetCounters())?0:1;
+    }
+#else
+    result=3;  // audio feature absent
+#endif
   } else if(action==MGMT_BUZZER_TEST || action==MGMT_BUZZER_2X2){
 #if SMOKE_FEATURE_BUZZER
     // Diagnostics only: no alarm packets. Refuse during OTA/boot verification,
@@ -912,6 +940,8 @@ void mgmtSendSerial(const String &line){
   else if(actionName=="RESTART")action=MGMT_RESTART;
   else if(actionName=="BUZZER_TEST")action=MGMT_BUZZER_TEST;
   else if(actionName=="BUZZER_2X2")action=MGMT_BUZZER_2X2;
+  else if(actionName=="AUDIO_STATUS")action=MGMT_AUDIO_STATUS;
+  else if(actionName=="AUDIO_RESET")action=MGMT_AUDIO_RESET;
   if(!action || (action!=MGMT_STATUS && !mgmtHexId(nonceText,nonce)) ||
      (action==MGMT_STATUS && params.length()) ||
      (action==MGMT_NAME_SET && !validName(requestedName)) ||
