@@ -41,7 +41,7 @@ tr.pick{cursor:pointer}tr.pick:hover{background:#20324b}tr.selected{background:#
 <div class="row" style="margin-top:16px"><h3>Hardware-Diagnose (ab v0.6.20)</h3></div>
 <div class="row" style="justify-content:flex-start;gap:10px"><button id="buzzer-test" type="button">Buzzer: Testton</button>
 <button id="buzzer-2x2" type="button">Buzzer: 2×2</button></div>
-<small>Nur über den Admin-SSH-Tunnel. Das Ergebnis bestätigt die Annahme des Testbefehls, nicht die hörbare Ausgabe.
+<small>Nur von einem freigegebenen LAN-Admin-Rechner. Das Ergebnis bestätigt die Annahme des Testbefehls, nicht die hörbare Ausgabe.
 Das 2×2-Muster verwendet 2.000 Hz und prüft nicht den Audiofilter (3.000–3.450 Hz). Kein Rauchalarm.</small>
 </section>
 <section class="card">
@@ -80,7 +80,7 @@ const $=id=>document.getElementById(id);
 let managedGateways=[],loggerGatewayPort='COM16';
 let pendingNameSync=null,registrationBusy=false,registrationMessage='';
 function registrationStatus(message){registrationMessage=message;$('registry-info').textContent=message}
-let lanReadOnly=false,lanNodeAdmin=false;
+let lanReadOnly=false,lanNodeAdmin=false,lanDiagnosticsAdmin=false;
 let nodes=[],gateways=[],csrf='',running=false,lastId=null,registryCsrf='',registryEntries=[],otaTargets=[],gatewayNodes=[],maxOta=5,selectedRegistryId=null;
 function nodeId(mac){
  const parts=(mac||'').toUpperCase().split(':');
@@ -138,7 +138,7 @@ function selection(){
    $('registry-sync-name').checked=!current && !!$('registry-name').value && versionAtLeast(n?.firmware);
  }
  for(const id of ['buzzer-test','buzzer-2x2'])
-   $(id).disabled=running||!n||!g||forbidden||lanReadOnly||!diagnosticVersion(n.firmware);
+   $(id).disabled=running||!n||!g||forbidden||(lanReadOnly&&!lanDiagnosticsAdmin)||!diagnosticVersion(n.firmware);
  $('registry-ota').disabled=lanReadOnly||running||registrationBusy||!n||gatewayNodes.includes(t);
  $('registry-sync-name').disabled=lanReadOnly||running||registrationBusy||!n||!versionAtLeast(n?.firmware)||forbidden;
  $('registry-save').disabled=lanReadOnly||running||registrationBusy||!!pendingNameSync||!n||!t;
@@ -148,7 +148,7 @@ function selection(){
 }
 async function load(){
  const r=await fetch('/api/remote/config',{cache:'no-store'});if(!r.ok)throw Error('Gateway-Konfiguration fehlt');
- const j=await r.json();csrf=j.csrf;lanReadOnly=!!j.lan_read_only;lanNodeAdmin=!!j.lan_node_admin;gateways=j.gateways;
+ const j=await r.json();csrf=j.csrf;lanReadOnly=!!j.lan_read_only;lanNodeAdmin=!!j.lan_node_admin;lanDiagnosticsAdmin=!!j.lan_diagnostics_admin;gateways=j.gateways;
  for(const gw of gateways){const o=document.createElement('option');o.value=gw.port;o.textContent=gw.name+' · '+gw.port;$('gateway').append(o)}
  if(gateways.some(x=>x.port===j.default_gateway))$('gateway').value=j.default_gateway;
  await loadRegistry();await discover();await jobRefresh();
