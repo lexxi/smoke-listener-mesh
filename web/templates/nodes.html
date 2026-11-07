@@ -41,6 +41,11 @@ tr.pick{cursor:pointer}tr.pick:hover{background:#20324b}tr.selected{background:#
 <div class="row" style="margin-top:16px"><h3>Hardware-Diagnose (ab v0.6.20)</h3></div>
 <div class="row" style="justify-content:flex-start;gap:10px"><button id="buzzer-test" type="button">Buzzer: Testton</button>
 <button id="buzzer-2x2" type="button">Buzzer: 2×2</button></div>
+<div class="row" style="justify-content:flex-start;gap:10px;margin-top:10px">
+<button id="audio-status" type="button">Audio: Status</button>
+<button id="audio-reset" type="button" class="danger">Audio: Zähler zurücksetzen</button></div>
+<small>Audio-Status/Zählerrücksetzung ab v0.6.21. Kein Testton und kein Rauchalarm.
+Die Rücksetzung löscht nur Diagnosezähler, nicht die laufende Erkennung.</small>
 <small>Nur von einem freigegebenen LAN-Admin-Rechner. Das Ergebnis bestätigt die Annahme des Testbefehls, nicht die hörbare Ausgabe.
 Das 2×2-Muster verwendet 2.000 Hz und prüft nicht den Audiofilter (3.000–3.450 Hz). Kein Rauchalarm.</small>
 </section>
@@ -91,6 +96,10 @@ function diagnosticVersion(v){
  const a=String(v||'').match(/^(\d+)\.(\d+)\.(\d+)(?:\.[a-h])?$/);
  return !!a && (+a[1]>0 || +a[2]>6 || (+a[2]===6 && +a[3]>=20));
 }
+function audioVersion(v){
+ const a=String(v||'').match(/^(\d+)\.(\d+)\.(\d+)(?:\.[a-h])?$/);
+ return !!a && (+a[1]>0 || +a[2]>6 || (+a[2]===6 && +a[3]>=21));
+}
 function versionAtLeast(v){
  const a=String(v||'').match(/^(\d+)\.(\d+)\.(\d+)(?:\.[a-h])?$/);
  return !!a && (+a[1]>0 || +a[2]>6 || (+a[2]===6 && +a[3]>=13));
@@ -139,6 +148,8 @@ function selection(){
  }
  for(const id of ['buzzer-test','buzzer-2x2'])
    $(id).disabled=running||!n||!g||forbidden||(lanReadOnly&&!lanDiagnosticsAdmin)||!diagnosticVersion(n.firmware);
+ for(const id of ['audio-status','audio-reset'])
+   $(id).disabled=running||!n||!g||forbidden||(lanReadOnly&&!lanDiagnosticsAdmin)||!audioVersion(n.firmware);
  $('registry-ota').disabled=lanReadOnly||running||registrationBusy||!n||gatewayNodes.includes(t);
  $('registry-sync-name').disabled=lanReadOnly||running||registrationBusy||!n||!versionAtLeast(n?.firmware)||forbidden;
  $('registry-save').disabled=lanReadOnly||running||registrationBusy||!!pendingNameSync||!n||!t;
@@ -157,7 +168,7 @@ async function action(a){
  const t=$('target').value,g=$('gateway').value,n=$('name').value.trim();
  if(running||!t||!g)return;
  if(a==='NAME_SET'&&!/^[A-Za-z0-9_-]{1,19}$/.test(n)){alert('Ungültiger Name (1–19 Zeichen A-Z a-z 0-9 - _)');return}
- if((a==='NAME_SET'||a==='NAME_RESET'||a==='RESTART'||a==='BUZZER_TEST'||a==='BUZZER_2X2')&&
+ if((a==='NAME_SET'||a==='NAME_RESET'||a==='RESTART'||a==='BUZZER_TEST'||a==='BUZZER_2X2'||a==='AUDIO_RESET')&&
     !confirm('Ziel: '+t+'\nBefehl: '+a+(a==='NAME_SET'?' '+n:'')+'\nWirklich ausführen?'))return;
  running=true;selection();
  try{
@@ -318,7 +329,7 @@ async function saveGatewayDefault(){
 }
 $('gateway-default').onclick=saveGatewayDefault;
 $('discover').onclick=discover;$('gateway').onchange=selection;$('target').onchange=selection;
-for(const [id,a] of [['status','STATUS'],['get','NAME_GET'],['set','NAME_SET'],['reset','NAME_RESET'],['restart','RESTART'],['buzzer-test','BUZZER_TEST'],['buzzer-2x2','BUZZER_2X2']])
+for(const [id,a] of [['status','STATUS'],['get','NAME_GET'],['set','NAME_SET'],['reset','NAME_RESET'],['restart','RESTART'],['buzzer-test','BUZZER_TEST'],['buzzer-2x2','BUZZER_2X2'],['audio-status','AUDIO_STATUS'],['audio-reset','AUDIO_RESET']])
  $(id).onclick=()=>action(a);
 load().catch(e=>$('message').textContent=e.message);setInterval(jobRefresh,2000);
 </script></body></html>
