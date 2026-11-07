@@ -167,7 +167,8 @@ def _saved_log():
 
 @bp.get("/api/remote/log")
 def full_log():
-    _local()
+    if not ota_admin_allowed():
+        abort(403)
     path = _saved_log()
     if path is None:
         return jsonify({"error": "Noch kein gespeichertes OTA-Protokoll vorhanden."}), 404
@@ -178,7 +179,8 @@ def full_log():
 
 @bp.get("/api/remote/log/download")
 def download_log():
-    _local()
+    if not ota_admin_allowed():
+        abort(403)
     path = _saved_log()
     if path is None:
         return jsonify({"error": "Noch kein gespeichertes OTA-Protokoll vorhanden."}), 404
