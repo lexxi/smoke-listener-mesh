@@ -14,7 +14,7 @@ import threading
 import time
 from pathlib import Path
 
-from access_control import require_authorized, authorized, lan_node_write_allowed
+from access_control import require_authorized, authorized, lan_node_write_allowed, lan_logger_control_allowed
 from flask import Blueprint, abort, jsonify, request, send_file, Response
 
 from release_library import STORE, PUBLIC_KEY, GUARD, _identity, _verify
@@ -204,6 +204,7 @@ def config():
         "csrf": csrf if authorized() else lan_read_csrf,
         "lan_read_only": not authorized(),
         "lan_node_admin": bool(lan_node_write_allowed()),
+        "lan_diagnostics_admin": bool(lan_node_write_allowed() or lan_logger_control_allowed()),
         "notice": "v0.6.11+ auf Gateway und Ziel erforderlich. Fern-OTA ist bis zum Hardwaretest experimentell.",
     })
 
@@ -312,7 +313,9 @@ def node_action():
         return jsonify({"error": "JSON-Objekt erwartet"}), 400
     action_allowed = data.get("action") in ("STATUS", "NAME_GET")
     node_admin_allowed = lan_node_write_allowed()
-    if not is_admin and not action_allowed and not node_admin_allowed:
+    diagnostic_action = data.get("action") in ("BUZZER_TEST", "BUZZER_2X2")
+    diagnostic_admin_allowed = node_admin_allowed or lan_logger_control_allowed()
+    if not is_admin and not action_allowed and not node_admin_allowed and not (diagnostic_action and diagnostic_admin_allowed):
         return jsonify({"error": "Knotenänderungen nur vom freigegebenen Admin-Rechner erlaubt"}), 403
     target, port, action, name = (data.get("target"), data.get("gateway"),
                                   data.get("action"), data.get("name", ""))
@@ -320,7 +323,8 @@ def node_action():
         return jsonify({"error": "Ungültige Knoten-ID"}), 400
     if port not in TRUSTED_GATEWAYS or target == TRUSTED_GATEWAYS[port][1]:
         return jsonify({"error": "Ungültiges Gateway oder Gateway=Ziel"}), 400
-    if action not in ("STATUS", "NAME_GET", "NAME_SET", "NAME_RESET", "RESTART"):
+    if action not in ("STATUS", "NAME_GET", "NAME_SET", "NAME_RESET", "RESTART",
+                      "BUZZER_TEST", "BUZZER_2X2"):
         return jsonify({"error": "Unzulässiger Managementbefehl"}), 400
     if action == "NAME_SET":
         if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,19}", name):
