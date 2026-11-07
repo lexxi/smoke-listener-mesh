@@ -23,8 +23,8 @@ ACTIONS = {"STATUS", "ARM", "VERIFY", "ACTIVATE", "REBOOT", "CONFIRM",
            "BUZZER_TEST", "BUZZER_2X2", "AUDIO_STATUS", "AUDIO_RESET"}
 NAME = re.compile(r"[A-Za-z0-9_-]{1,19}\Z")
 AUDIO_FIELDS = re.compile(
-    r"\\baudio_ready=([01]) beeps=(\\d+) rejected=(\\d+) "
-    r"groups=(\\d+) candidates=(\\d+) errors=(\\d+)(?:\\s|$)"
+    r"\baudio_ready=([01]) beeps=(\d+) rejected=(\d+) "
+    r"groups=(\d+) candidates=(\d+) errors=(\d+)(?:\s|$)"
 )
 REPLY = re.compile(
     r"\[MGMT\] REPLY origin=([0-9A-F]{16}) action=([A-Z0-9_]+) result=(\d+)"
