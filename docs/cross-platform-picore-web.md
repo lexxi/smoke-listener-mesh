@@ -113,8 +113,9 @@ sind im LAN ohne Login lesbar. `STATUS` und `NAME_GET` sind als
 Funkabfragen erlaubt (CSRF-Token und mindestens zehn Sekunden Abstand).
 `NAME_SET`, `NAME_RESET` und `RESTART` funktionieren mit einer
 expliziten IP- oder CIDR-Freigabe über `SMOKE_LAN_NODE_ADMIN_IPS`.
-Firmware-OTA, Uploads, Logger-Steuerung, Inventar- und Gatewayänderungen
-bleiben im direkten LAN gesperrt. Zugriff über Loopback ist separat
+Firmware-OTA, Uploads, Inventar- und Gatewayänderungen bleiben im direkten LAN
+gesperrt. Logger-Start/-Stop kann optional für ausdrücklich freigegebene
+Client-IP-Adressen aktiviert werden (siehe unten). Zugriff über Loopback ist separat
 möglich; ein CSRF-Token ist keine Authentisierung.
 
 Keine Portweiterleitung ins Internet; auch die Monitoring-Daten werden
@@ -177,6 +178,30 @@ Nach Konfigurationsänderungen die Webapp neu starten.
 
 Diese Ausnahme gilt **nur** für Funk-Knotenbefehle, nicht für
 OTA, Upload, Logger-Steuerung oder die Registrierung von OTA-Zielen.
+
+### Logger-Start/-Stop im LAN (opt-in)
+
+Die Logger-Buttons werden bei direktem LAN-Zugriff standardmäßig
+absichtlich deaktiviert. Für einen einzelnen vertrauenswürdigen
+Administrationsrechner in `/mnt/mmcblk0p3/smoke-mesh/data/web.env` setzen:
+
+```sh
+SMOKE_LAN_LOGGER_IPS='192.168.98.50'
+```
+
+Adresse durch die tatsächliche Client-IP ersetzen; mehrere IPs und
+kanonische CIDR-Netze werden kommasepariert unterstützt. Ohne diese
+Variable bleibt die Funktion gesperrt. Nach Änderung den Webserver
+neu starten, anschließend die Monitorseite neu laden. Der Loggerstatus
+ist weiterhin für alle LAN-Clients lesbar; den CSRF-Token erhalten nur
+Loopback und freigegebene Client-IP-Adressen. Start/Stop ist bei
+OTA-Portreservierung gesperrt (HTTP 409); nur der von der Webapp gestartete
+Logger wird beendet. Diese Freigabe gibt **keinen** Zugriff auf OTA,
+Release-Uploads oder andere Verwaltungsoperationen.
+
+Die IP-Freigabe plus CSRF-Token ist keine echte Authentisierung. Im
+unvertrauenswürdigen Netz stattdessen ausschließlich über einen
+SSH-Tunnel auf `127.0.0.1:8088` administrieren.
 Der API-Request hat weiterhin einen CSRF-Token, eine 10-Sekunden-
 Sperrfrist und läuft jeweils nur als ein Job.
 
