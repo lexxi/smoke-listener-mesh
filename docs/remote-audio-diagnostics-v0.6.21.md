@@ -47,7 +47,7 @@ SMOKE_LAN_NODE_ADMIN_IPS='192.168.98.0/24'
 ```
 
 Berechtigte Logger-Admin-IPs können wie bisher auch Diagnoseaktionen
-ausführen. Firmware-Upload und Remote-OTA bleiben gesondert geschützt.
+ausführen. Signierte Release-Uploads und Remote-OTA sind für das Node-Admin-Netz\nfreigegeben. Die Logger-Admin-Liste allein reicht dafür nicht. Die Uploads\nwerden weiterhin serverseitig signatur- und zielgebunden geprüft.\n\n**Sicherheit:** Eine CIDR-Freigabe ist keine Anmeldung: Jeder Rechner\nim freigegebenen Netz könnte Updates anstoßen. Deshalb nur für ein\nvertrauenswürdiges, isoliertes Admin-Netz verwenden. Der HTTP-Zugang\nist ohne zusätzliche Absicherung nicht verschlüsselt.
 Keine neue Branch-/SSH-Tunnel-Infrastruktur notwendig.
 
 ## Benötigte Firmware und Upgrade-Reihenfolge
