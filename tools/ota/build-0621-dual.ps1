@@ -23,9 +23,19 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $sketchDir = Join-Path $repo "firmware\mesh-v0.6.21"
 $sketch = Join-Path $sketchDir "mesh-v0.6.21.ino"
 $signer = Join-Path $repo "tools\ota\sign_release.py"
+$priorHeaders = Join-Path $repo "firmware\mesh-v0.6.20"
+# Device-local secrets are untracked. Reuse existing v0.6.20 headers if the
+# new sketch directory has not been provisioned manually.
+$deviceHeaders = @{}
+foreach ($header in @("mesh_secrets.h", "ota_public_key.h")) {
+  $here = Join-Path $sketchDir $header
+  $previous = Join-Path $priorHeaders $header
+  if (Test-Path -LiteralPath $here) { $deviceHeaders[$header] = $here }
+  elseif (Test-Path -LiteralPath $previous) { $deviceHeaders[$header] = $previous }
+  else { throw "Fehlender lokaler Header: $header (v0.6.21 oder v0.6.20)" }
+}
 if (-not $Python) { $Python = Join-Path $repo "myenv\Scripts\python.exe" }
-foreach ($file in @($sketch,$signer,(Join-Path $sketchDir "mesh_secrets.h"),
-                   (Join-Path $sketchDir "ota_public_key.h"),$Python)) {
+foreach ($file in @($sketch,$signer,$Python)) {
   if (-not (Test-Path -LiteralPath $file)) { throw "Fehlende Voraussetzung: $file" }
 }
 if (-not $BuildOnly) {
@@ -59,7 +69,8 @@ foreach ($profile in $profiles) {
   New-Item -ItemType Directory -Force -Path $source,$work,$export,$package | Out-Null
   foreach ($header in @("audio_monitor.h","buzzer_diagnostic.h","feature_config.h",
                          "ota_auth.h","ota_version.h","mesh_secrets.h","ota_public_key.h")) {
-    Copy-Item -LiteralPath (Join-Path $sketchDir $header) -Destination (Join-Path $source $header)
+    $sourceHeader = if ($deviceHeaders.ContainsKey($header)) {$deviceHeaders[$header]} else {(Join-Path $sketchDir $header)}
+    Copy-Item -LiteralPath $sourceHeader -Destination (Join-Path $source $header)
   }
   $builtSource = $original.Replace($marker,('#define SMOKE_FIRMWARE_VERSION "'+$profile.Version+'"'))
   $isolatedSketch = Join-Path $source "mesh-v0.6.21.ino"
