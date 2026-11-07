@@ -10,7 +10,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
-from access_control import require_authorized, authorized
+from access_control import require_authorized, authorized, lan_logger_control_allowed
 from flask import Blueprint, abort, jsonify, request
 from gateway_config import LOGGER_PORT, LOGGER_NAME
 
@@ -27,7 +27,8 @@ note = "Logger noch nicht gestartet."
 
 
 def local():
-    require_authorized()
+    if not (authorized() or lan_logger_control_allowed()):
+        require_authorized()
 
 
 def running():
@@ -173,7 +174,7 @@ def resume_after_remote_ota(was_running):
 def status():
     with guard:
         data = status_data()
-        if not authorized():
+        if not (authorized() or lan_logger_control_allowed()):
             data.pop("token", None)
         return jsonify(data)
 
