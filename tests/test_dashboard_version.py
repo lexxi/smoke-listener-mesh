@@ -17,7 +17,9 @@ class DashboardVersionTests(unittest.TestCase):
         app = (ROOT / "web" / "app.py").read_text(encoding="utf-8")
         self.assertIn("Dashboard v{{ dashboard_version }}", template)
         self.assertNotIn("Dashboard v0.4.0", template)
-        self.assertIn('render_template("index.html", dashboard_version=DASHBOARD_VERSION)', app)
+        self.assertIn('render_template("index.html", dashboard_version=DASHBOARD_VERSION,', app)
+        self.assertIn('git_branch=repository_branch(ROOT)', app)
+        self.assertIn('{{ git_branch }}', template)
 
 
 if __name__ == "__main__":
