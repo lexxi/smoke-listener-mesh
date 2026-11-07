@@ -14,7 +14,7 @@ import threading
 import time
 from pathlib import Path
 
-from access_control import require_authorized, authorized, lan_node_write_allowed, lan_logger_control_allowed
+from access_control import require_authorized, authorized, lan_node_write_allowed, lan_logger_control_allowed, ota_admin_allowed
 from flask import Blueprint, abort, jsonify, request, send_file, Response
 
 from release_library import STORE, PUBLIC_KEY, GUARD, _identity, _verify
@@ -201,7 +201,7 @@ def config():
         "logger_gateway": LOGGER_PORT,
         "gateways": [{"port": port, "name": info[0], "node": info[1]}
                      for port, info in TRUSTED_GATEWAYS.items()],
-        "csrf": csrf if authorized() else lan_read_csrf,
+        "csrf": csrf if ota_admin_allowed() else lan_read_csrf,
         "lan_read_only": not authorized(),
         "lan_node_admin": bool(lan_node_write_allowed()),
         "lan_diagnostics_admin": bool(lan_node_write_allowed() or lan_logger_control_allowed()),
@@ -270,7 +270,8 @@ def current_job():
 
 @bp.post("/api/remote/start")
 def start():
-    _local()
+    if not ota_admin_allowed():
+        abort(403)
     if request.headers.get("X-Remote-CSRF") != csrf:
         return jsonify({"error": "CSRF-Prüfung fehlgeschlagen"}), 403
     data = request.get_json(silent=True) or {}
