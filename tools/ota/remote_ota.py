@@ -23,7 +23,7 @@ ACTIONS = {"STATUS", "ARM", "VERIFY", "ACTIVATE", "REBOOT", "CONFIRM",
            "BUZZER_TEST", "BUZZER_2X2"}
 NAME = re.compile(r"[A-Za-z0-9_-]{1,19}\Z")
 REPLY = re.compile(
-    r"\[MGMT\] REPLY origin=([0-9A-F]{16}) action=([A-Z_]+) result=(\d+)"
+    r"\[MGMT\] REPLY origin=([0-9A-F]{16}) action=([A-Z0-9_]+) result=(\d+)"
     r" nonce=([0-9A-F]{16}) running=app(\d+) boot=app(\d+)"
     r" state=(\d+) staged=(\d+) verified=(\d+) peer=(\d+)"
     r" version=(\d+\.\d+\.\d+(?:\.[a-h])?)(?: name=([A-Za-z0-9_-]{1,19}|\(unset\)))?"
