@@ -2,15 +2,15 @@
 
 Status: **in `main` seit PR #10 (07.11.2026)**. Auf dem Raspberry Pi 2
 (piCore 17.0.1, Hostname `picore`) im LAN in Betrieb; Windows bleibt
-weiterhin unterstützt. Remote-OTA auf dem Pi ist noch **nicht** getestet.
+weiterhin unterstützt. Remote-OTA wurde auf piCore am Testknoten erfolgreich getestet (v0.6.19.b und v0.6.20.b).
 
 ## Prinzip
 
 Eine gemeinsame Codebasis; Betriebssystemunterschiede ausschließlich
 über Konfiguration. Windows-Standard `COM16` bleibt unverändert.
 Firmware-Build und Signierung mit privatem Schlüssel bleiben auf Windows.
-Der Pi betreibt Logger und Dashboard sowie die getestete Knotenverwaltung.
-Signaturprüfung und Remote-OTA auf dem Pi bleiben gesondert zu prüfen.
+Der Pi betreibt Logger, Dashboard, Knotenverwaltung und die erfolgreich getestete
+Signaturprüfung samt Remote-OTA. Die private Signaturerstellung bleibt auf Windows.
 
 ### Neue Optionen
 
@@ -92,11 +92,25 @@ Die bestehende Webapp schreibt standardmäßig Logdateien unter
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-Windows: **97 Tests OK**, Remote-STATUS über COM16 zur Garage bestätigt.
-piCore: **96 Tests OK** vor den letzten Windows-Fixes, alle fünf
-Knotenbefehle getestet; neue SQLite-Verbindungsfixes unter piCore noch
-nicht erneut regressionsgetestet. Kein Firmware-Flash beim
-plattformübergreifenden Test; Remote-OTA auf piCore weiter offen.
+Historische Validierung des Cross-Platform-PR: Windows **97 Tests OK**,
+piCore **96 Tests OK** vor späteren Korrekturen. Diese Zahlen beziehen sich
+nur auf den damaligen Entwicklungsstand.
+
+Aktueller Nachweis vom **07.11.2026**:
+- Windows: **104 Python-Tests OK** vor den später hinzugefügten
+  Regressionstests.
+- piCore: vollständige signierte Remote-OTA-Übertragung, VERIFY,
+  ACTIVATE_STAGED und bestätigter Boot von `0.6.19.b`; zusätzlicher
+  Neustart meldete erneut `state=2` und `peer=True`.
+- Danach signierter Remote-OTA-Wechsel auf `0.6.20.b` am Testknoten
+  `000020D37E6E27AC`, Abschluss `running=boot=0 state=2 peer=True`.
+- USB-Gateway aktualisiert auf `0.6.20.c`; beide Remote-Buzzer-Befehle
+  über die normale LAN-Webapp erfolgreich getestet.
+- Details: `docs/picore-remote-ota-v0.6.19b-test.md` und
+  `docs/remote-buzzer-diagnostics-v0.6.20.md`.
+
+Nicht nachgewiesen: Rollback unter Fehlerbedingungen und komplette
+Rauchalarm-/Audio-End-to-End-Funktion.
 
 
 ## Direkter LAN-Betrieb ohne Login
@@ -381,6 +395,6 @@ bleiben außerhalb der versionierten Konfiguration. Windows-Arbeitsstände
 mit lokal geänderten Firmware-Headern oder `config/nodes.csv` nicht
 blind mit `git pull` überschreiben.
 
-**Noch nicht abgeschlossen:** Pi-Remote-OTA/Signaturprüfung in Hardware,
-externe SQLite-Sicherung, Rotation beim echten Größenlimit und
-vollständige Sicherheitsvalidierung der Rauchalarmkette.
+**Noch nicht abgeschlossen:** Remote-Audio-Diagnose, Rollback unter
+Fehlerbedingungen, externe SQLite-Sicherung, Rotation beim echten
+Größenlimit und vollständige Sicherheitsvalidierung der Rauchalarmkette.
