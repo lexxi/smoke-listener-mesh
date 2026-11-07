@@ -306,7 +306,7 @@ def start():
 def node_action():
     global lan_last_read_action
     is_admin = authorized()
-    expected_csrf = csrf if is_admin else lan_read_csrf
+    expected_csrf = csrf if ota_admin_allowed() else lan_read_csrf
     if request.headers.get("X-Remote-CSRF") != expected_csrf:
         return jsonify({"error": "CSRF-Prüfung fehlgeschlagen"}), 403
     data = request.get_json(silent=True)
