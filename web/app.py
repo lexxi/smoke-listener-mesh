@@ -14,6 +14,7 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request, abort
 from access_control import lan_enabled, authorized, lan_logger_control_allowed, check_configuration
 from dashboard_version import DASHBOARD_VERSION
+from git_info import repository_branch
 
 ROOT = Path(__file__).resolve().parents[1]
 RX = re.compile(r"\[RX\]\s+(.*)")
@@ -320,7 +321,8 @@ def node_admin():
 
 @app.get("/")
 def index():
-    return render_template("index.html", dashboard_version=DASHBOARD_VERSION)
+    return render_template("index.html", dashboard_version=DASHBOARD_VERSION,
+                           git_branch=repository_branch(ROOT))
 
 @app.get("/api/status")
 def status():
