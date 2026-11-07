@@ -18,15 +18,15 @@ Mesh-Weiterleitung, einen dedizierten USB-Gateway und eine lokale
 | Bereich | Aktueller Stand |
 | --- | --- |
 | Geräte | ESP32-C3 SuperMini; ein dedizierter USB-Gateway sowie mehrere Mesh-Empfänger |
-| Firmware | **v0.6.16**, Build-Profile `a`–`h`; Kombinationen aus Core, Audio, Gateway und Config-AP |
+| Firmware | Produktivknoten überwiegend **0.6.16.h**; Testknoten **0.6.20.b**, USB-Gateway **0.6.20.c**. **v0.6.21** für Remote-Audio-Diagnose implementiert, noch nicht gebaut/getestet |
 | Mesh | ESP-NOW, HMAC-geschützte Pakete, Heartbeats, Relay/TTL und Duplikatunterdrückung |
 | Akustik | INMP441-basierte Ton-/Piepsdiagnostik erprobt; komplette Alarmkette noch nicht validiert |
-| Remote-Verwaltung | STATUS, NAME GET/SET/RESET, RESTART und Remote-OTA über einen autorisierten Gateway |
-| Dedizierter Gateway | **COM16**, Node-ID `00000CEC7E6E27AC`, vom Webserver verwalteter USB-Logger |
+| Remote-Verwaltung | STATUS, NAME GET/SET/RESET, RESTART, signierte Remote-OTA; Buzzer-Test und 2×2 erfolgreich über LAN-Webapp; AUDIO_STATUS/RESET ab v0.6.21 vorbereitet |
+| Dedizierter Gateway | Node-ID `00000CEC7E6E27AC`, auf piCore über `/dev/serial/by-id/...` angebunden, vom Webserver verwalteter USB-Logger |
 | Webapp | **Dashboard v0.4.0** (Flask/Waitress): Windows und piCore, Discover, Inventar/Standort, Gateway/Logger, Releases |
 | OTA | Zielgebundene, signierte Firmwaremanifeste; maximal **fünf** freigegebene Empfänger neben dem USB-Gateway |
-| Nachgewiesen | Windows: 97 Tests und Remote-STATUS über COM16; piCore: Gateway, Heartbeats, STATUS, NAME_GET/SET/RESET, RESTART, Logrotation-/Backup-Grundfunktionen |
-| Noch offen | Pi-Remote-OTA/Signaturprüfung in der Praxis, tatsächliches Erreichen der Rotationsgrößen, kombinierte Inventarnamen-Übernahme (separater Feature-Branch), Alarm-/Mikrofonvalidierung, Batterie/Buzzer |
+| Nachgewiesen | piCore: signierte Remote-OTA auf Testknoten, Gateway-USB-Flash, Buzzer-Test und 2×2 über normale LAN-Webapp mit bestätigter ESP-NOW-Antwort |
+| Noch offen | v0.6.21-Build/Signatur- und Hardwaretest für AUDIO_STATUS/RESET, Audiokette/Alarmweiterleitung, Batterie, externe Sicherung/Rotation unter Grenzwertbedingungen |
 
 **Die aktuellen Bedienanleitungen sind:**
 
@@ -35,6 +35,8 @@ Mesh-Weiterleitung, einen dedizierten USB-Gateway und eine lokale
 - [Knotenregistrierung, USB-Logger, Gateway-Verwaltung und Tests](docs/web-node-registration.md)
 - [Hardware und INMP441-Verdrahtung](docs/hardware.md)
 - [Signierte Releases und Sicherheitsgrundlagen](docs/ota-signing.md)
+- [Remote-Buzzer-Diagnose v0.6.20 – erfolgreicher Hardwaretest](docs/remote-buzzer-diagnostics-v0.6.20.md)
+- [Remote-Audio-Diagnose v0.6.21 – Umsetzung und Testplan](docs/remote-audio-diagnostics-v0.6.21.md)
 
 Ältere Dokumente und Firmwarestände bleiben als **Entwicklungsarchiv**
 im Repository. Frühere Texte zu v0.5.5 sowie zu den ersten Remote-OTA-
