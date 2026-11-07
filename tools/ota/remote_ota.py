@@ -20,8 +20,12 @@ ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 ACTIONS = {"STATUS", "ARM", "VERIFY", "ACTIVATE", "REBOOT", "CONFIRM",
            "NAME_GET", "NAME_SET", "NAME_RESET", "RESTART",
-           "BUZZER_TEST", "BUZZER_2X2"}
+           "BUZZER_TEST", "BUZZER_2X2", "AUDIO_STATUS", "AUDIO_RESET"}
 NAME = re.compile(r"[A-Za-z0-9_-]{1,19}\Z")
+AUDIO_FIELDS = re.compile(
+    r"\\baudio_ready=([01]) beeps=(\\d+) rejected=(\\d+) "
+    r"groups=(\\d+) candidates=(\\d+) errors=(\\d+)(?:\\s|$)"
+)
 REPLY = re.compile(
     r"\[MGMT\] REPLY origin=([0-9A-F]{16}) action=([A-Z0-9_]+) result=(\d+)"
     r" nonce=([0-9A-F]{16}) running=app(\d+) boot=app(\d+)"
@@ -84,7 +88,21 @@ def mgmt(port_name: str, target: str, action: str = "STATUS",
                     "verified": bool(int(d[8])), "peer": bool(int(d[9])),
                     "version": d[10], "name": d[11],
                 }
-                print("[REMOTE] STATUS " + " ".join(f"{k}={v}" for k, v in status.items()), flush=True)
+                if action in {"AUDIO_STATUS", "AUDIO_RESET"} and status["result"] == 0:
+                    audio = AUDIO_FIELDS.search(line)
+                    if not audio:
+                        raise RuntimeError("Missing audio counters in authenticated management reply")
+                    status["audio"] = dict(zip(
+                        ("ready", "beeps", "rejected", "groups", "candidates", "errors"),
+                        map(int, audio.groups()),
+                    ))
+                print("[REMOTE] STATUS " + " ".join(
+                    f"{k}={v}" for k, v in status.items() if k != "audio"
+                ), flush=True)
+                if "audio" in status:
+                    print("[REMOTE] AUDIO " + " ".join(
+                        f"{k}={v}" for k, v in status["audio"].items()
+                    ), flush=True)
                 if status["result"] != 0:
                     raise RuntimeError(f"{action} refused by target (result={status['result']}); inspect remote status")
                 return status
@@ -195,7 +213,7 @@ def manage(args) -> None:
     if not re.fullmatch(r"[0-9A-F]{16}", args.manage_target or ""):
         raise ValueError("Management target must be a 16-digit uppercase hexadecimal node ID")
     if args.manage_action not in {"STATUS", "NAME_GET", "NAME_SET", "NAME_RESET", "RESTART",
-                                  "BUZZER_TEST", "BUZZER_2X2"}:
+                                  "BUZZER_TEST", "BUZZER_2X2", "AUDIO_STATUS", "AUDIO_RESET"}:
         raise ValueError("Invalid management action")
     if args.manage_action == "NAME_SET" and not NAME.fullmatch(args.manage_name or ""):
         raise ValueError("Name must be 1..19 characters: A-Z a-z 0-9 - _")
@@ -207,6 +225,8 @@ def manage(args) -> None:
         raise RuntimeError("Target requires v0.6.13+ for remote node management")
     if args.manage_action in {"BUZZER_TEST", "BUZZER_2X2"} and numeric(initial["version"]) < (0, 6, 20):
         raise RuntimeError("Buzzer diagnostics require target firmware v0.6.20+")
+    if args.manage_action in {"AUDIO_STATUS", "AUDIO_RESET"} and numeric(initial["version"]) < (0, 6, 21):
+        raise RuntimeError("Audio diagnostics require target firmware v0.6.21+")
     if initial["state"] == 1:
         raise RuntimeError("Image PENDING_VERIFY; management refused until OTA confirmed")
     result = mgmt(args.gateway, target, args.manage_action, initial["nonce"],
@@ -223,6 +243,8 @@ def manage(args) -> None:
         print(f"[REMOTE] NAME VERIFIED target={target} name={expected}", flush=True)
     if args.manage_action in {"BUZZER_TEST", "BUZZER_2X2"}:
         print(f"[REMOTE] BUZZER START ACCEPTED target={target} action={args.manage_action}; audible output not verified", flush=True)
+    if args.manage_action in {"AUDIO_STATUS", "AUDIO_RESET"}:
+        print(f"[REMOTE] AUDIO {'COUNTERS RESET' if args.manage_action == 'AUDIO_RESET' else 'STATUS OK'} target={target}", flush=True)
     if args.manage_action == "RESTART":
         print("[REMOTE] RESTART accepted; checking node comes online again", flush=True)
         time.sleep(8)
@@ -242,7 +264,7 @@ def main() -> int:
     p.add_argument("--activate-staged", action="store_true", help="Reverify and boot previously staged image WITHOUT resending it")
     p.add_argument("--status-only", action="store_true", help="Only interrogate remote node; never flash")
     p.add_argument("--manage-target", help="Node ID for remote name management (no release needed)")
-    p.add_argument("--manage-action", choices=["STATUS","NAME_GET","NAME_SET","NAME_RESET","RESTART","BUZZER_TEST","BUZZER_2X2"])
+    p.add_argument("--manage-action", choices=["STATUS","NAME_GET","NAME_SET","NAME_RESET","RESTART","BUZZER_TEST","BUZZER_2X2","AUDIO_STATUS","AUDIO_RESET"])
     p.add_argument("--manage-name", default="")
     args = p.parse_args()
     if args.deploy and args.activate_staged:
