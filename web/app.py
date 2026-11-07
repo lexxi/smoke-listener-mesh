@@ -38,6 +38,10 @@ def authorize_request():
         "/api/remote/gateway-settings", "/api/nodes/registry",
     ):
         return None
+    if request.method == "GET" and request.path in (
+        "/api/remote/log", "/api/remote/log/download"
+    ) and lan_ota_admin_allowed():
+        return None  # Full OTA logs are visible only to trusted node-admin clients.
     if request.method == "POST" and request.path in (
         "/api/releases/upload", "/api/releases/upload-bundle", "/api/remote/start"
     ) and lan_ota_admin_allowed():
