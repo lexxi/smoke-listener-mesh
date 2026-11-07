@@ -53,6 +53,18 @@ def lan_node_write_allowed() -> bool:
     return _ip_in_allowlist("SMOKE_LAN_NODE_ADMIN_IPS")
 
 
+def lan_ota_admin_allowed() -> bool:
+    """Opt-in: trusted LAN administrator clients may upload signed releases and start OTA.
+
+    Reuses the node-admin CIDR allowlist, not the logger-only allowlist.
+    This is network-level trust, not user authentication.
+    """
+    return lan_node_write_allowed()
+
+
+def ota_admin_allowed() -> bool:
+    return authorized() or lan_ota_admin_allowed()
+
 def require_authorized() -> None:
     if not authorized():
         abort(403)
