@@ -313,7 +313,7 @@ def node_action():
         return jsonify({"error": "JSON-Objekt erwartet"}), 400
     action_allowed = data.get("action") in ("STATUS", "NAME_GET")
     node_admin_allowed = lan_node_write_allowed()
-    diagnostic_action = data.get("action") in ("BUZZER_TEST", "BUZZER_2X2")
+    diagnostic_action = data.get("action") in ("BUZZER_TEST", "BUZZER_2X2", "AUDIO_STATUS", "AUDIO_RESET")
     diagnostic_admin_allowed = node_admin_allowed or lan_logger_control_allowed()
     if not is_admin and not action_allowed and not node_admin_allowed and not (diagnostic_action and diagnostic_admin_allowed):
         return jsonify({"error": "Knotenänderungen nur vom freigegebenen Admin-Rechner erlaubt"}), 403
@@ -324,7 +324,7 @@ def node_action():
     if port not in TRUSTED_GATEWAYS or target == TRUSTED_GATEWAYS[port][1]:
         return jsonify({"error": "Ungültiges Gateway oder Gateway=Ziel"}), 400
     if action not in ("STATUS", "NAME_GET", "NAME_SET", "NAME_RESET", "RESTART",
-                      "BUZZER_TEST", "BUZZER_2X2"):
+                      "BUZZER_TEST", "BUZZER_2X2", "AUDIO_STATUS", "AUDIO_RESET"):
         return jsonify({"error": "Unzulässiger Managementbefehl"}), 400
     if action == "NAME_SET":
         if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,19}", name):
