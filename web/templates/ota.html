@@ -69,6 +69,7 @@ async function load(){
     fetch('/api/remote/config',{cache:'no-store'}).then(r=>r.json())
   ]);
   csrf=lib.upload_csrf;remoteCsrf=config.csrf;
+  if(!csrf)$('bundle-message').textContent='Nur freigegebene Admin-Rechner dürfen signierte Releases hochladen.';
   nodeTargets=config.node_targets||[];targetConfigError=config.target_config_error||null;
   const previous=$('release').value;
   // Sort semantic numeric versions newest first (e.g. 0.6.14 before 0.6.9).
@@ -139,7 +140,7 @@ $('save-default-gateway').addEventListener('click',async()=>{
 $('gateway').addEventListener('change',renderSelection);
 $('bundle-upload').addEventListener('submit',async e=>{
  e.preventDefault();
- if(!csrf)return;
+ if(!csrf){$('bundle-message').textContent='Upload gesperrt: Dieser Rechner ist nicht im freigegebenen Admin-Netz (SMOKE_LAN_NODE_ADMIN_IPS).';return;}
  const file=$('bundle').files[0];if(!file)return;
  $('bundle-button').disabled=true;
  $('bundle-message').textContent='Prüfe alle Signaturen und Dateien im Paket …';
@@ -155,7 +156,7 @@ $('bundle-upload').addEventListener('submit',async e=>{
  finally{$('bundle-button').disabled=false}
 });
 $('upload').addEventListener('submit',async e=>{
- e.preventDefault();if(!csrf)return;
+ e.preventDefault();if(!csrf){$('upload-message').textContent='Upload gesperrt: Admin-Netz nicht freigegeben.';return;}
  const bin=$('bin').files[0],manifest=$('manifest').files[0];if(!bin||!manifest)return;
  $('upload-button').disabled=true;$('upload-message').textContent='Prüfe Image und Signatur …';
  try{
