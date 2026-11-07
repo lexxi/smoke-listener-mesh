@@ -320,8 +320,11 @@ def node_action():
         return jsonify({"error": "Ungültige Knoten-ID"}), 400
     if port not in TRUSTED_GATEWAYS or target == TRUSTED_GATEWAYS[port][1]:
         return jsonify({"error": "Ungültiges Gateway oder Gateway=Ziel"}), 400
-    if action not in ("STATUS", "NAME_GET", "NAME_SET", "NAME_RESET", "RESTART"):
+    if action not in ("STATUS", "NAME_GET", "NAME_SET", "NAME_RESET", "RESTART",
+                      "BUZZER_TEST", "BUZZER_2X2"):
         return jsonify({"error": "Unzulässiger Managementbefehl"}), 400
+    if action in ("BUZZER_TEST", "BUZZER_2X2") and not is_admin:
+        return jsonify({"error": "Remote-Buzzer nur über den lokalen Admin-Tunnel erlaubt"}), 403
     if action == "NAME_SET":
         if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,19}", name):
             return jsonify({"error": "Name: 1–19 Zeichen A-Z a-z 0-9 - _"}), 400
