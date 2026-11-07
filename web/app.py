@@ -12,7 +12,7 @@ from contextlib import closing
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, abort
-from access_control import lan_enabled, authorized, lan_logger_control_allowed, check_configuration
+from access_control import lan_enabled, authorized, lan_logger_control_allowed, lan_ota_admin_allowed, check_configuration
 from dashboard_version import DASHBOARD_VERSION
 from git_info import repository_branch
 
@@ -28,8 +28,8 @@ check_configuration()
 
 @app.before_request
 def authorize_request():
-    # Direct LAN exposure is limited to the monitor and its read-only status.
-    # Remote OTA, gateway controls, release uploads and inventory need loopback.
+    # Monitoring is public on LAN. Signed-release upload and OTA start are
+    # explicitly restricted to trusted node-admin IP/CIDR clients.
     if not lan_enabled() or authorized():
         return None
     if request.method == "GET" and request.path in (
@@ -38,6 +38,10 @@ def authorize_request():
         "/api/remote/gateway-settings", "/api/nodes/registry",
     ):
         return None
+    if request.method == "POST" and request.path in (
+        "/api/releases/upload", "/api/releases/upload-bundle", "/api/remote/start"
+    ) and lan_ota_admin_allowed():
+        return None  # The endpoint checks its own CSRF and signed-release rules.
     if request.method == "POST" and request.path in (
         "/api/logger/start", "/api/logger/stop"
     ) and lan_logger_control_allowed():
