@@ -61,6 +61,7 @@ progress{width:86%;height:18px}
 <script>
 const $=id=>document.getElementById(id);
 let csrf=null,remoteCsrf=null,releases=[],running=false,nodeTargets=[],targetConfigError=null,gatewayList=[];
+const versionParts=v=>v.split('.').slice(0,3).map(Number);
 async function load(){
  try{
   const [lib,config]=await Promise.all([
@@ -71,7 +72,6 @@ async function load(){
   nodeTargets=config.node_targets||[];targetConfigError=config.target_config_error||null;
   const previous=$('release').value;
   // Sort semantic numeric versions newest first (e.g. 0.6.14 before 0.6.9).
-  const versionParts=v=>v.split('.').slice(0,3).map(Number);
   const compareVersions=(a,b)=>{
    const left=versionParts(a),right=versionParts(b);
    for(let i=0;i<3;i++){
