@@ -1,8 +1,39 @@
-# Remote-Audio-Diagnose v0.6.21 – Implementiert, Hardwaretest ausständig
+# Remote-Audio-Diagnose v0.6.21 – Hardwaretest erfolgreich
 
-Stand: 07.11.2026. Implementierung in `main`; **noch keine erfolgreiche
-Kompilierung, Signierung oder Prüfung am ESP32-C3 für v0.6.21 bestätigt**.
-Die bestehende v0.6.20.b/.c-Firmware kennt diese beiden Befehle nicht.
+Stand: 07.11.2026. Beide Firmwareprofile wurden gebaut und signiert.
+Testknoten `0.6.21.b` wurde über signierte Stage-only-OTA, VERIFY und
+Aktivierung erfolgreich auf `state=2` (VALID) gebracht; USB-Gateway
+`0.6.21.c` wurde per USB aktualisiert. Beide Geräte sind im Mesh online.
+Die alten Firmwarestände v0.6.20.b/.c kennen die Audio-Befehle nicht.
+
+## Bestätigter Hardwaretest (07.11.2026)
+
+Testziel: `000020D37E6E27AC` (Testknoten), Gateway:
+`00000CEC7E6E27AC` (piCore USB-Logger). Alle drei Aktionen liefen über
+die normale LAN-Knotenverwaltung mit authentifizierten ESP-NOW-Antworten.
+
+| Aktion | Messwerte | Ergebnis |
+| --- | --- | --- |
+| Erstes `AUDIO_STATUS` | `ready=1 beeps=1 rejected=5 groups=1 candidates=0 errors=0` | Erfolgreich |
+| `AUDIO_RESET` | `ready=1 beeps=0 rejected=0 groups=0 candidates=0 errors=0` | Erfolgreich |
+| Zweites `AUDIO_STATUS` | `ready=1 beeps=0 rejected=2 groups=0 candidates=0 errors=0` | Erfolgreich |
+
+`rejected=2` bei der Kontrollabfrage belegt neue Diagnoseaktivität
+**nach** der Rücksetzung. Ein einzelner Ereigniszähler allein beweist
+allerdings nicht die korrekte Erkennung eines realen Rauchalarms.
+In allen Fällen `result=0`, Firmware `0.6.21.b`,
+`running=boot=1`, `state=2`, `peer=True`.
+Der Gateway-Logger wurde nach den Befehlen wieder freigegeben.
+
+Das v0.6.21-Dual-Build erzeugte: Testknoten `1.020.608` Bytes,
+Gateway `991.600` Bytes, Release-Verzeichnis
+`C:\\mesh-ota-test\\release-0621-dual-v2`.
+Der Testknoten wurde erfolgreich staged übertragen (`SHA256_OK`),
+verifiziert, aktiviert und nach Mesh-Check bestätigt.
+
+Noch **nicht** nachgewiesen: 3.200-Hz-Testmuster, kompletter Alarmweg,
+Audio-Erkennung eines realen Rauchmeldermusters und erneuter
+Buzzer-Regressionstest nach dem v0.6.21-Update.
 
 ## Ziel und Funktionen
 
@@ -81,7 +112,7 @@ Ausgabe standardmäßig in
 **Erst nach erfolgreichem Build, Signaturprüfung, OTA und USB-Flash**
 werden die Audio-Buttons aktiviert (Firmware-Erkennung ab 0.6.21).
 
-## Hardwaretest (noch offen)
+## Reproduzierbarer Hardwaretest (bereits durchgeführt; weitere Prüfungen offen)
 
 1. Python-Regressionstests ausführen, v. a.
    `tests/test_remote_audio_management.py`.
