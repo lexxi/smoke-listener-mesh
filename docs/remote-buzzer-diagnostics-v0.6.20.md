@@ -17,9 +17,10 @@ messbar war. Die Erkennung des INMP441 filtert 3.000–3.450 Hz: Der bestehende
 - USB-Gateway muss ebenfalls mit v0.6.20 und `FEATURE_GATEWAY=1`
   aktualisiert werden; das bisherige v0.6.16.c-Gateway kann die neuen
   Aktionsnamen nicht über die serielle Schnittstelle interpretieren.
-- Webapp mit den Änderungen aus dieser Branch; Fernsteuerung ausschließlich
-  über den Admin-SSH-Tunnel, beispielsweise
-  `ssh -N -L 18088:127.0.0.1:8088 tc@picore`.
+- Webapp direkt im LAN: Buzzer-Aktionen werden nur für explizit freigegebene
+  Admin-Client-IPs gemäß `SMOKE_LAN_NODE_ADMIN_IPS` oder der vorhandenen
+  Logger-Admin-Freigabe `SMOKE_LAN_LOGGER_IPS` zugelassen. Keine allgemeine
+  LAN-Freigabe und keine Änderung an der OTA-Schreibsperre.
 - Die bisherige Konfiguration für authentifiziertes ESP-NOW-Mesh und
   vertrauenswürdige Gateways bleibt unverändert.
 
@@ -38,8 +39,8 @@ fehlender Buzzer-Unterstützung abgewiesen.
    Der Logger muss dafür gestoppt und der Port freigegeben werden.
 4. Auf piCore die Webapp aktualisieren. Vorher Daten/Umgebung sichern;
    die Webapp nach dem Git-Pull neu starten.
-5. Auf `/nodes` Testknoten und Gateway wählen, ausschließlich im
-   Admin-Tunnel „Buzzer: Testton“ und „Buzzer: 2×2“ auslösen.
+5. Auf `/nodes` Testknoten und Gateway wählen, vom freigegebenen Admin-Rechner über die normale LAN-Webapp
+   „Buzzer: Testton“ und „Buzzer: 2×2“ auslösen.
 6. Im Jobprotokoll `BUZZER START ACCEPTED` prüfen und das akustische
    Ergebnis separat protokollieren.
 
