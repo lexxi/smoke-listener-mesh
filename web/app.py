@@ -12,7 +12,7 @@ from contextlib import closing
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, abort
-from access_control import lan_enabled, authorized, check_configuration
+from access_control import lan_enabled, authorized, lan_logger_control_allowed, check_configuration
 from dashboard_version import DASHBOARD_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +37,10 @@ def authorize_request():
         "/api/remote/gateway-settings", "/api/nodes/registry",
     ):
         return None
+    if request.method == "POST" and request.path in (
+        "/api/logger/start", "/api/logger/stop"
+    ) and lan_logger_control_allowed():
+        return None  # Logger-only allowlist; endpoint also verifies CSRF.
     if request.method == "POST" and request.path == "/api/remote/node-action":
         return None  # Endpoint separately enforces STATUS/NAME_GET and LAN-specific CSRF.
     abort(403)
