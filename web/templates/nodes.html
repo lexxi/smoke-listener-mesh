@@ -38,6 +38,11 @@ tr.pick{cursor:pointer}tr.pick:hover{background:#20324b}tr.selected{background:#
 <button id="set">NAME SET</button><button id="reset" class="danger">NAME RESET</button>
 <button id="restart" class="danger">Neustart</button></div>
 <small>Neustart ist ein eigener Befehl, unabhängig von OTA-Aktivierung. Nicht während eines Firmwareupdates ausführen.</small>
+<div class="row" style="margin-top:16px"><h3>Hardware-Diagnose (ab v0.6.20)</h3></div>
+<div class="row"><button id="buzzer-test" type="button">Buzzer: Testton</button>
+<button id="buzzer-2x2" type="button">Buzzer: 2×2</button></div>
+<small>Nur über den Admin-SSH-Tunnel. Das Ergebnis bestätigt die Annahme des Testbefehls, nicht die hörbare Ausgabe.
+Das 2×2-Muster verwendet 2.000 Hz und prüft nicht den Audiofilter (3.000–3.450 Hz). Kein Rauchalarm.</small>
 </section>
 <section class="card">
 <h2>3 · Knoten registrieren</h2>
@@ -81,6 +86,10 @@ function nodeId(mac){
  const parts=(mac||'').toUpperCase().split(':');
  return parts.length===6&&parts.every(x=>/^[0-9A-F]{2}$/.test(x))?
     parts.reverse().join('').padStart(16,'0'):null;
+}
+function diagnosticVersion(v){
+ const a=String(v||'').match(/^(\d+)\.(\d+)\.(\d+)(?:\.[a-h])?$/);
+ return !!a && (+a[1]>0 || +a[2]>6 || (+a[2]===6 && +a[3]>=20));
 }
 function versionAtLeast(v){
  const a=String(v||'').match(/^(\d+)\.(\d+)\.(\d+)(?:\.[a-h])?$/);
@@ -128,6 +137,8 @@ function selection(){
    $('registry-ota').checked=otaTargets.includes(t);
    $('registry-sync-name').checked=!current && !!$('registry-name').value && versionAtLeast(n?.firmware);
  }
+ for(const id of ['buzzer-test','buzzer-2x2'])
+   $(id).disabled=running||!n||!g||forbidden||lanReadOnly||!diagnosticVersion(n.firmware);
  $('registry-ota').disabled=lanReadOnly||running||registrationBusy||!n||gatewayNodes.includes(t);
  $('registry-sync-name').disabled=lanReadOnly||running||registrationBusy||!n||!versionAtLeast(n?.firmware)||forbidden;
  $('registry-save').disabled=lanReadOnly||running||registrationBusy||!!pendingNameSync||!n||!t;
@@ -146,7 +157,7 @@ async function action(a){
  const t=$('target').value,g=$('gateway').value,n=$('name').value.trim();
  if(running||!t||!g)return;
  if(a==='NAME_SET'&&!/^[A-Za-z0-9_-]{1,19}$/.test(n)){alert('Ungültiger Name (1–19 Zeichen A-Z a-z 0-9 - _)');return}
- if((a==='NAME_SET'||a==='NAME_RESET'||a==='RESTART')&&
+ if((a==='NAME_SET'||a==='NAME_RESET'||a==='RESTART'||a==='BUZZER_TEST'||a==='BUZZER_2X2')&&
     !confirm('Ziel: '+t+'\nBefehl: '+a+(a==='NAME_SET'?' '+n:'')+'\nWirklich ausführen?'))return;
  running=true;selection();
  try{
@@ -307,7 +318,7 @@ async function saveGatewayDefault(){
 }
 $('gateway-default').onclick=saveGatewayDefault;
 $('discover').onclick=discover;$('gateway').onchange=selection;$('target').onchange=selection;
-for(const [id,a] of [['status','STATUS'],['get','NAME_GET'],['set','NAME_SET'],['reset','NAME_RESET'],['restart','RESTART']])
+for(const [id,a] of [['status','STATUS'],['get','NAME_GET'],['set','NAME_SET'],['reset','NAME_RESET'],['restart','RESTART'],['buzzer-test','BUZZER_TEST'],['buzzer-2x2','BUZZER_2X2']])
  $(id).onclick=()=>action(a);
 load().catch(e=>$('message').textContent=e.message);setInterval(jobRefresh,2000);
 </script></body></html>
