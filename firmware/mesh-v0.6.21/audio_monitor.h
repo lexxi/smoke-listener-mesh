@@ -28,11 +28,37 @@ static uint16_t loudFrames=0,validFrames=0;
 static float frequencySum=0;
 static uint8_t sequenceCount=0;
 static uint32_t accepted=0,rejected=0,groups=0,candidates=0,readErrors=0;
+static portMUX_TYPE metricsMux=portMUX_INITIALIZER_UNLOCKED;
+
+// Only audio task writes detection state. Management reads/reset counters
+// atomically without touching an ongoing detection or I2S task.
+struct Counters {
+  uint32_t accepted, rejected, groups, candidates, readErrors;
+  bool ready;
+};
+inline void bump(uint32_t &counter) {
+  portENTER_CRITICAL(&metricsMux);
+  ++counter;
+  portEXIT_CRITICAL(&metricsMux);
+}
+inline Counters snapshot() {
+  portENTER_CRITICAL(&metricsMux);
+  Counters c={accepted,rejected,groups,candidates,readErrors,initialized};
+  portEXIT_CRITICAL(&metricsMux);
+  return c;
+}
+inline bool resetCounters() {
+  portENTER_CRITICAL(&metricsMux);
+  bool ok=initialized;
+  if(ok) accepted=rejected=groups=candidates=readErrors=0;
+  portEXIT_CRITICAL(&metricsMux);
+  return ok;
+}
 
 inline void clearMetrics() { loudFrames=0;validFrames=0;frequencySum=0; }
 inline void finishGroup() {
   if(sequenceCount==0)return;
-  ++groups;
+  bump(groups);
   Serial.printf("[AUDIO] GROUP beeps=%u diagnostic_only=1\n",(unsigned)sequenceCount);
   sequenceCount=0;previousEnd=0;
 }
@@ -61,8 +87,8 @@ inline void finishBeep(uint32_t endTime) {
   const bool valid=duration>=MIN_BEEP_MS&&duration<=MAX_BEEP_MS&&match>=MIN_MATCH_PERCENT;
   Serial.printf("[AUDIO] BEEP duration_ms=%lu freq_hz=%.0f match_pct=%.0f valid=%u\n",
     (unsigned long)duration,freq,match,(unsigned)valid);
-  if(!valid){++rejected;clearMetrics();return;}
-  ++accepted;
+  if(!valid){bump(rejected);clearMetrics();return;}
+  bump(accepted);
   if(sequenceCount) {
     uint32_t gap=beepStart-previousEnd;
     if(gap<MIN_GAP_MS||gap>MAX_GAP_MS)finishGroup();
@@ -70,7 +96,7 @@ inline void finishBeep(uint32_t endTime) {
   ++sequenceCount;
   previousEnd=endTime;
   if(sequenceCount==3) {
-    ++candidates;
+    bump(candidates);
     Serial.println("[AUDIO] ALARM_CANDIDATE DIAGNOSTIC_ONLY NO_MESH_ALARM");
   }
   clearMetrics();
@@ -101,7 +127,7 @@ inline void process(int count) {
     }
     if(now-lastLoud>=SILENCE_MS)finishBeep(lastLoud+32);
     else if(now-beepStart>MAX_BEEP_MS+200){
-      active=false;++rejected;clearMetrics();
+      active=false;bump(rejected);clearMetrics();
       Serial.println("[AUDIO] BEEP_TIMEOUT");
     }
   }
@@ -131,7 +157,9 @@ inline bool init() {
     i2s_driver_uninstall(I2S_NUM_0);
     return false;
   }
+  portENTER_CRITICAL(&metricsMux);
   initialized=true;
+  portEXIT_CRITICAL(&metricsMux);
   return true;
 }
 inline void task(void*) {
@@ -143,17 +171,19 @@ inline void task(void*) {
     const esp_err_t err=i2s_read(I2S_NUM_0,samples,sizeof(samples),&bytesRead,pdMS_TO_TICKS(250));
     if(err==ESP_OK && bytesRead>=sizeof(int32_t))process((int)(bytesRead/sizeof(int32_t)));
     else {
-      ++readErrors;
-      if(readErrors==1 || readErrors%100==0)
-        Serial.printf("[AUDIO] READ_ERROR count=%lu err=%d\n",(unsigned long)readErrors,(int)err);
+      bump(readErrors);
+      const uint32_t errors=snapshot().readErrors;
+      if(errors==1 || errors%100==0)
+        Serial.printf("[AUDIO] READ_ERROR count=%lu err=%d\n",(unsigned long)errors,(int)err);
       vTaskDelay(pdMS_TO_TICKS(20));
     }
     uint32_t now=millis();
     if((uint32_t)(now-lastStats)>=30000UL){
       lastStats=now;
+      const Counters c=snapshot();
       Serial.printf("[AUDIO] STATS beeps=%lu rejected=%lu groups=%lu candidates=%lu errors=%lu mesh_alarm=disabled\n",
-        (unsigned long)accepted,(unsigned long)rejected,(unsigned long)groups,
-        (unsigned long)candidates,(unsigned long)readErrors);
+        (unsigned long)c.accepted,(unsigned long)c.rejected,(unsigned long)c.groups,
+        (unsigned long)c.candidates,(unsigned long)c.readErrors);
     }
   }
 }
